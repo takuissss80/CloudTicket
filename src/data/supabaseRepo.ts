@@ -3,7 +3,7 @@ import { unirReceta } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Pago, PrintJob, Producto, Repartidor, Sucursal, Usuario, Zona,
+  MovimientoCaja, Pago, PrintJob, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
 } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -17,7 +17,16 @@ const num = (v: unknown) => (v == null ? 0 : Number(v))
 const numOpt = (v: unknown) => (v == null ? undefined : Number(v))
 const opt = <T,>(v: T | null | undefined) => (v == null ? undefined : v)
 
-const mapCaja = (r: Row): Caja => ({ id: r.id, turno: r.turno, estado: r.estado, abiertaAt: r.abierta_at, cerradaAt: opt(r.cerrada_at) })
+const mapCaja = (r: Row): Caja => ({
+  id: r.id, turno: r.turno, estado: r.estado, abiertaAt: r.abierta_at, cerradaAt: opt(r.cerrada_at),
+  dineroInicial: num(r.dinero_inicial), abiertaPor: opt(r.abierta_por_usuario), cerradaPor: opt(r.cerrada_por_usuario),
+  observaciones: opt(r.observaciones), dineroCierre: numOpt(r.dinero_cierre), diferencia: numOpt(r.diferencia),
+  totales: r.estado === 'cerrada' && r.efectivo_teorico != null ? {
+    cantComandas: r.cant_comandas ?? 0, cantAnuladas: r.cant_anuladas ?? 0, totalVentas: num(r.total_ventas),
+    ventasEfectivo: num(r.ventas_efectivo), totalIngresos: num(r.total_ingresos), totalGastos: num(r.total_gastos),
+    totalEgresos: num(r.total_egresos), totalSueldos: num(r.total_sueldos), efectivoTeorico: num(r.efectivo_teorico),
+  } : undefined,
+})
 const mapSucursal = (r: Row): Sucursal => ({ id: r.id, nombre: r.nombre, esPrincipal: r.es_principal, activa: r.activa })
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
@@ -314,12 +323,37 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const r = ok(await sb.from('cajas').select('*').eq('sucursal_id', sucursalId).eq('estado', 'abierta').maybeSingle())
       return r ? mapCaja(r as Row) : null
     },
-    async abrirCaja(sucursalId, turno) {
-      const { data: u } = await sb.auth.getUser()
-      return mapCaja(ok(await sb.from('cajas').insert({ sucursal_id: sucursalId, turno, abierta_por: u.user?.id ?? null }).select().single()) as Row)
+    async abrirCaja(sucursalId, turno, dineroInicial) {
+      // quién la abre lo completa el trigger trg_usuario_caja()
+      return mapCaja(ok(await sb.from('cajas').insert({ sucursal_id: sucursalId, turno, dinero_inicial: dineroInicial || 0 }).select().single()) as Row)
     },
-    async cerrarCaja(id) {
-      ok(await sb.from('cajas').update({ estado: 'cerrada', cerrada_at: new Date().toISOString() }).eq('id', id))
+    async cerrarCaja(id, dineroCierre, observaciones) {
+      ok(await sb.rpc('cerrar_caja', { p_caja: id, p_dinero_cierre: dineroCierre, p_observaciones: observaciones ?? null }))
+    },
+    async reabrirCaja(id) {
+      ok(await sb.rpc('reabrir_caja', { p_caja: id }))
+    },
+    async listCajas(sucursalId, limit = 60) {
+      return (ok(await sb.from('cajas').select('*').eq('sucursal_id', sucursalId).order('abierta_at', { ascending: false }).limit(limit)) as Row[]).map(mapCaja)
+    },
+    async listMovimientos(cajaId) {
+      const r = ok(await sb.from('caja_movimientos').select('*, tipos_gasto(nombre)').eq('caja_id', cajaId).order('created_at'))
+      return (r as Row[]).map((m): MovimientoCaja => ({
+        id: m.id, tipo: m.tipo, tipoGastoId: opt(m.tipo_gasto_id), tipoGastoNombre: opt(m.tipos_gasto?.nombre),
+        concepto: m.concepto, monto: num(m.monto), creadoPor: opt(m.creado_por_usuario), createdAt: m.created_at,
+      }))
+    },
+    async agregarMovimiento(cajaId, m) {
+      if (!(m.monto > 0)) throw new Error('Poné un monto mayor a cero.')
+      if (!m.concepto.trim()) throw new Error('Poné un concepto.')
+      ok(await sb.from('caja_movimientos').insert({ caja_id: cajaId, tipo: m.tipo, tipo_gasto_id: m.tipoGastoId ?? null, concepto: m.concepto.trim(), monto: m.monto }))
+    },
+    async eliminarMovimiento(id) {
+      const r = ok(await sb.from('caja_movimientos').delete().eq('id', id).select('id')) as Row[]
+      if (!r.length) throw new Error('Solo se borran movimientos con la caja abierta.')
+    },
+    async listTiposGasto() {
+      return (ok(await sb.from('tipos_gasto').select('*').eq('activo', true).order('orden')) as Row[]).map((t): TipoGasto => ({ id: t.id, nombre: t.nombre }))
     },
     async listComandas(cajaId) {
       return (ok(await sb.from('comandas').select(SELECT_COMANDA).eq('caja_id', cajaId).order('numero')) as Row[]).map(mapComanda)
@@ -405,6 +439,7 @@ function traducirError(e: unknown): Error {
   if (err?.code === 'PGRST116') return new Error('No tenés permiso para hacer este cambio, o ese dato ya no existe.')
   if (err?.code === '23505' && m.includes('cajas_una_abierta')) return new Error('Ya hay una caja abierta en este local.')
   if (err?.code === '23503') return new Error('No se puede borrar: está en uso.')
+  for (const t of ['La caja no está abierta', 'Ya hay una caja abierta en este local', 'Solo se puede reabrir la última caja del local', 'Esa caja no está cerrada']) if (m.includes(t)) return new Error(t + '.')
   if (m.includes('repartidor no es de este local')) return new Error('Ese repartidor no es de este local.')
   return new Error(m)
 }

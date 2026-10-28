@@ -1,8 +1,9 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, PrintJob, Producto,
-  Repartidor, Sesion, Sucursal, Usuario, Zona,
+  MovimientoCaja, Repartidor, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
+import { calcularTotales } from '../lib/caja'
 import { importarMenuEjemplo, unirReceta } from '../lib/menu'
 
 /**
@@ -21,6 +22,9 @@ export const USUARIOS_DEMO = [
 
 type ConLocal<T> = T & { sucursalId: string }
 
+const TIPOS_GASTO_DEMO = ['Motos', 'Proveedores varios', 'Pago remito', 'Servicios', 'Alquiler', 'Impuestos', 'Abonos profesionales', 'Varios']
+  .map((nombre, i) => ({ id: `tg-${i}`, nombre }))
+
 interface DB {
   cuenta: { id: string; nombre: string }
   sucursales: Sucursal[]
@@ -32,6 +36,7 @@ interface DB {
   zonas: ConLocal<Zona>[]
   impresoras: ConLocal<Impresora>[]
   repartidores?: ConLocal<Repartidor>[]
+  movimientos?: (MovimientoCaja & { cajaId: string })[]
   cajas: ConLocal<Caja & { ultimoNumero: number }>[]
   comandas: ConLocal<Comanda>[]
   clientes: Cliente[]
@@ -403,27 +408,86 @@ export const localRepo: Repo = {
   async getCajaAbierta(sucursalId) {
     puedeLocal(sucursalId)
     const c = db().cajas.find(x => x.sucursalId === sucursalId && x.estado === 'abierta')
-    return pausa(c ? clon(c) : null)
+    return pausa(c ? clon(sinLocal(c)) : null)
   },
 
-  async abrirCaja(sucursalId, turno) {
+  async abrirCaja(sucursalId, turno, dineroInicial) {
     puedeLocal(sucursalId)
     const d = db()
-    const existente = d.cajas.find(c => c.sucursalId === sucursalId && c.estado === 'abierta')
-    if (existente) return clon(existente)
-    const caja = { id: uid(), sucursalId, turno, estado: 'abierta' as const, abiertaAt: ahora(), ultimoNumero: 0 }
+    if (d.cajas.some(c => c.sucursalId === sucursalId && c.estado === 'abierta')) throw new Error('Ya hay una caja abierta en este local.')
+    const caja = {
+      id: uid(), sucursalId, turno, estado: 'abierta' as const, abiertaAt: ahora(), ultimoNumero: 0,
+      dineroInicial: dineroInicial || 0, abiertaPor: ses().usuario,
+    }
     d.cajas.push(caja)
     guardar()
-    return clon(caja)
+    return clon(sinLocal(caja))
   },
 
-  async cerrarCaja(id) {
-    const c = db().cajas.find(x => x.id === id)
-    if (!c) return
+  async cerrarCaja(id, dineroCierre, observaciones) {
+    const d = db()
+    const c = d.cajas.find(x => x.id === id && x.estado === 'abierta')
+    if (!c) throw new Error('La caja no está abierta')
     puedeLocal(c.sucursalId)
-    c.estado = 'cerrada'; c.cerradaAt = ahora()
+    const totales = calcularTotales(c, d.comandas.filter(x => x.cajaId === id), (d.movimientos ?? []).filter(m => m.cajaId === id))
+    Object.assign(c, {
+      estado: 'cerrada', cerradaAt: ahora(), cerradaPor: ses().usuario, observaciones: observaciones?.trim() || undefined,
+      totales, dineroCierre, diferencia: dineroCierre - totales.efectivoTeorico,
+    })
     guardar()
   },
+
+  async reabrirCaja(id) {
+    const d = db()
+    const c = d.cajas.find(x => x.id === id && x.estado === 'cerrada')
+    if (!c) throw new Error('Esa caja no está cerrada')
+    puedeLocal(c.sucursalId)
+    if (d.cajas.some(x => x.sucursalId === c.sucursalId && x.estado === 'abierta')) throw new Error('Ya hay una caja abierta en este local')
+    if (d.cajas.some(x => x.sucursalId === c.sucursalId && x.abiertaAt > c.abiertaAt)) throw new Error('Solo se puede reabrir la última caja del local')
+    Object.assign(c, { estado: 'abierta', cerradaAt: undefined, cerradaPor: undefined, totales: undefined, dineroCierre: undefined, diferencia: undefined })
+    guardar()
+  },
+
+  async listCajas(sucursalId, limit = 60) {
+    puedeLocal(sucursalId)
+    return pausa(clon(db().cajas.filter(c => c.sucursalId === sucursalId)
+      .sort((a, b) => b.abiertaAt.localeCompare(a.abiertaAt)).slice(0, limit).map(sinLocal)))
+  },
+
+  async listMovimientos(cajaId) {
+    const caja = db().cajas.find(c => c.id === cajaId)
+    if (!caja) return []
+    puedeLocal(caja.sucursalId)
+    return pausa(clon((db().movimientos ?? []).filter(m => m.cajaId === cajaId)))
+  },
+
+  async agregarMovimiento(cajaId, m) {
+    const d = db()
+    const caja = d.cajas.find(c => c.id === cajaId)
+    if (!caja || caja.estado !== 'abierta') throw new Error('La caja no está abierta')
+    puedeLocal(caja.sucursalId)
+    if (!(m.monto > 0)) throw new Error('Poné un monto mayor a cero.')
+    if (!m.concepto.trim()) throw new Error('Poné un concepto.')
+    d.movimientos ??= []
+    d.movimientos.push({
+      ...m, concepto: m.concepto.trim(), id: uid(), cajaId, createdAt: ahora(), creadoPor: ses().usuario,
+      tipoGastoNombre: TIPOS_GASTO_DEMO.find(t => t.id === m.tipoGastoId)?.nombre,
+    })
+    guardar()
+  },
+
+  async eliminarMovimiento(id) {
+    const d = db()
+    const m = (d.movimientos ?? []).find(x => x.id === id)
+    if (!m) return
+    const caja = d.cajas.find(c => c.id === m.cajaId)
+    if (!caja || caja.estado !== 'abierta') throw new Error('Solo se borran movimientos con la caja abierta')
+    puedeLocal(caja.sucursalId)
+    d.movimientos = d.movimientos!.filter(x => x.id !== id)
+    guardar()
+  },
+
+  async listTiposGasto() { return pausa(TIPOS_GASTO_DEMO) },
 
   async listComandas(cajaId) {
     const caja = db().cajas.find(c => c.id === cajaId)

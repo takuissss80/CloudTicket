@@ -119,13 +119,61 @@ export interface Cliente {
   zonaId?: string
 }
 
+/** Totales de una caja (en vivo o la foto guardada al cerrar) */
+export interface TotalesCaja {
+  cantComandas: number
+  cantAnuladas: number
+  totalVentas: number
+  /** Efectivo cobrado, ya sin el vuelto */
+  ventasEfectivo: number
+  totalIngresos: number
+  totalGastos: number
+  totalEgresos: number
+  totalSueldos: number
+  /** inicio + efectivo + ingresos - gastos - egresos - sueldos */
+  efectivoTeorico: number
+}
+
 export interface Caja {
   id: string
   turno: string
   estado: 'abierta' | 'cerrada'
   abiertaAt: string
   cerradaAt?: string
+  dineroInicial: number
+  abiertaPor?: string
+  cerradaPor?: string
+  observaciones?: string
+  /** Solo cajas cerradas */
+  totales?: TotalesCaja
+  dineroCierre?: number
+  diferencia?: number
 }
+
+export type TipoMovimiento = 'ingreso' | 'gasto' | 'egreso' | 'sueldo'
+
+export interface MovimientoCaja {
+  id: string
+  tipo: TipoMovimiento
+  tipoGastoId?: string
+  tipoGastoNombre?: string
+  concepto: string
+  monto: number
+  creadoPor?: string
+  createdAt: string
+}
+
+export interface TipoGasto {
+  id: string
+  nombre: string
+}
+
+export const TIPOS_MOVIMIENTO: { key: TipoMovimiento; label: string; ayuda: string }[] = [
+  { key: 'gasto', label: 'Gasto', ayuda: 'Se pagó algo con la plata de la caja: motos, proveedores, servicios' },
+  { key: 'egreso', label: 'Retiro', ayuda: 'Se sacó efectivo de la caja (al cofre o al dueño)' },
+  { key: 'ingreso', label: 'Ingreso', ayuda: 'Entró efectivo que no es una venta: cambio, aporte' },
+  { key: 'sueldo', label: 'Sueldo', ayuda: 'Pago de sueldo o adelanto en efectivo' },
+]
 
 export interface Componente {
   descripcion: string

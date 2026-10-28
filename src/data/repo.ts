@@ -1,6 +1,6 @@
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
-  Pago, PrintJob, Producto, Repartidor, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
+  MovimientoCaja, Pago, PrintJob, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
 } from '../types'
 
 /** Catálogo listo para vender en un local (precios del local, sin ocultos) */
@@ -91,8 +91,17 @@ export interface Repo {
 
   // ---- Operación de un local
   getCajaAbierta(sucursalId: string): Promise<Caja | null>
-  abrirCaja(sucursalId: string, turno: string): Promise<Caja>
-  cerrarCaja(id: string): Promise<void>
+  abrirCaja(sucursalId: string, turno: string, dineroInicial: number): Promise<Caja>
+  /** Cierra guardando los totales, el efectivo contado y la diferencia */
+  cerrarCaja(id: string, dineroCierre: number, observaciones?: string): Promise<void>
+  /** Solo la última caja del local y si no hay otra abierta */
+  reabrirCaja(id: string): Promise<void>
+  /** Historial, de la más nueva a la más vieja */
+  listCajas(sucursalId: string, limit?: number): Promise<Caja[]>
+  listMovimientos(cajaId: string): Promise<MovimientoCaja[]>
+  agregarMovimiento(cajaId: string, m: Pick<MovimientoCaja, 'tipo' | 'tipoGastoId' | 'concepto' | 'monto'>): Promise<void>
+  eliminarMovimiento(id: string): Promise<void>
+  listTiposGasto(): Promise<TipoGasto[]>
   listComandas(cajaId: string): Promise<Comanda[]>
   crearComanda(cajaId: string, data: NuevaComanda): Promise<Comanda>
   actualizarComanda(id: string, data: NuevaComanda): Promise<Comanda>

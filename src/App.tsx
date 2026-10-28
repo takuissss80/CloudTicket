@@ -7,7 +7,7 @@ import { usePedido } from './store/pedido'
 import { hora } from './lib/format'
 import { Tablero } from './components/Tablero'
 import { TomarPedido } from './components/TomarPedido'
-import { CajaCerrada, CerrarCajaModal } from './components/Caja'
+import { CajaCerrada, CajaPanel } from './components/Caja'
 import { ColaImpresion } from './components/ColaImpresion'
 import { CrearCuenta, Login } from './components/Login'
 import { Administracion } from './components/admin/Administracion'
@@ -77,7 +77,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
               Impresión{enCola ? <span className="ml-2 rounded-full bg-muzza px-2 text-tinta">{enCola} en cola</span> : null}
               {conError ? <span className="ml-2">{conError} con error</span> : null}
             </button>
-            {caja && <Btn onClick={() => setVerCierre(true)}>Cerrar caja</Btn>}
+            {caja && <Btn onClick={() => setVerCierre(true)}>Caja</Btn>}
             <Btn tono="fantasma" title={`Usuario: ${sesion?.usuario}`} onClick={async () => { await salir(); onSalir() }}>
               Salir <span className="hidden text-sm font-normal text-gris md:inline">({sesion?.usuario})</span>
             </Btn>
@@ -90,7 +90,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion onClose={() => setVerAdmin(false)} />}
       {verCola && <ColaImpresion onClose={() => setVerCola(false)} />}
-      {verCierre && <CerrarCajaModal onClose={() => setVerCierre(false)} />}
+      {verCierre && <CajaPanel onClose={() => setVerCierre(false)} />}
       {verReset && (
         <Confirmar
           texto="Estás en modo demo"

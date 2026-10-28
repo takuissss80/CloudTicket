@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { repo } from '../data'
 import type { Catalogo, MenuData } from '../data/repo'
-import type { Caja, Comanda, EstadoComanda, Impresora, NuevaComanda, Pago, PrintJob, Repartidor, Sesion, Sucursal } from '../types'
+import type { Caja, Comanda, EstadoComanda, Impresora, MovimientoCaja, NuevaComanda, Pago, PrintJob, Repartidor, Sesion, Sucursal, TipoGasto } from '../types'
 import { jobsParaComanda, ticketPrueba } from '../lib/ticket'
 import { resolverCatalogo } from '../lib/menu'
 import { usePedido, totales } from './pedido'
@@ -25,6 +25,8 @@ interface AppState {
   comandas: Comanda[]
   impresoras: Impresora[]
   repartidores: Repartidor[]
+  movimientos: MovimientoCaja[]
+  tiposGasto: TipoGasto[]
   printJobs: PrintJob[]
   toasts: Toast[]
 
@@ -33,8 +35,11 @@ interface AppState {
   refrescar(): Promise<void>
   refrescarMenu(): Promise<void>
   salir(): Promise<void>
-  abrirCaja(turno: string): Promise<void>
-  cerrarCaja(): Promise<void>
+  abrirCaja(turno: string, dineroInicial: number): Promise<void>
+  cerrarCaja(dineroCierre: number, observaciones?: string): Promise<boolean>
+  reabrirCaja(id: string): Promise<void>
+  agregarMovimiento(m: Pick<MovimientoCaja, 'tipo' | 'tipoGastoId' | 'concepto' | 'monto'>): Promise<boolean>
+  eliminarMovimiento(id: string): Promise<void>
   guardarPedido(imprimir: boolean): Promise<Comanda | null>
   cambiarEstado(c: Comanda, estado: EstadoComanda): Promise<void>
   marcarCobrada(c: Comanda, cobrada: boolean): Promise<void>
@@ -76,6 +81,8 @@ export const useApp = create<AppState>((set, get) => {
     comandas: [],
     impresoras: [],
     repartidores: [],
+    movimientos: [],
+    tiposGasto: [],
     printJobs: [],
     toasts: [],
 
@@ -99,8 +106,8 @@ export const useApp = create<AppState>((set, get) => {
     async cambiarLocal(id) {
       guardarLocal(id)
       set({ sucursalId: id, caja: null, comandas: [], printJobs: [] })
-      const [impresoras, repartidores] = await Promise.all([repo.listImpresoras(id), repo.listRepartidores(id), get().refrescarMenu()])
-      set({ impresoras, repartidores })
+      const [impresoras, repartidores, tiposGasto] = await Promise.all([repo.listImpresoras(id), repo.listRepartidores(id), repo.listTiposGasto(), get().refrescarMenu()])
+      set({ impresoras, repartidores, tiposGasto })
       await get().refrescar()
     },
 
@@ -119,7 +126,8 @@ export const useApp = create<AppState>((set, get) => {
         caja ? repo.listComandas(caja.id) : Promise.resolve([]),
         repo.listPrintJobs(id, 40),
       ])
-      set({ caja, comandas, printJobs })
+      const movimientos = caja ? await repo.listMovimientos(caja.id) : []
+      set({ caja, comandas, printJobs, movimientos })
     },
 
     async salir() {
@@ -128,24 +136,52 @@ export const useApp = create<AppState>((set, get) => {
       set({ sesion: null, sucursales: [], sucursalId: null, caja: null, comandas: [], menu: menuVacio, cargando: true })
     },
 
-    async abrirCaja(turno) {
+    async abrirCaja(turno, dineroInicial) {
       const id = get().sucursalId
       if (!id) return
       try {
-        const caja = await repo.abrirCaja(id, turno)
+        const caja = await repo.abrirCaja(id, turno, dineroInicial)
         set({ caja })
         await get().refrescar()
         get().avisar(`Caja ${turno.toLowerCase()} abierta`)
       } catch (e) { fallo(e) }
     },
 
-    async cerrarCaja() {
+    async cerrarCaja(dineroCierre, observaciones) {
+      const caja = get().caja
+      if (!caja) return false
+      try {
+        await repo.cerrarCaja(caja.id, dineroCierre, observaciones)
+        set({ caja: null, comandas: [], movimientos: [] })
+        get().avisar('Caja cerrada')
+        return true
+      } catch (e) { fallo(e); return false }
+    },
+
+    async reabrirCaja(id) {
+      try {
+        await repo.reabrirCaja(id)
+        await get().refrescar()
+        get().avisar('Caja reabierta: seguís con la misma numeración')
+      } catch (e) { fallo(e) }
+    },
+
+    async agregarMovimiento(m) {
+      const caja = get().caja
+      if (!caja) return false
+      try {
+        await repo.agregarMovimiento(caja.id, m)
+        set({ movimientos: await repo.listMovimientos(caja.id) })
+        return true
+      } catch (e) { fallo(e); return false }
+    },
+
+    async eliminarMovimiento(id) {
       const caja = get().caja
       if (!caja) return
       try {
-        await repo.cerrarCaja(caja.id)
-        set({ caja: null, comandas: [] })
-        get().avisar('Caja cerrada')
+        await repo.eliminarMovimiento(id)
+        set({ movimientos: await repo.listMovimientos(caja.id) })
       } catch (e) { fallo(e) }
     },
 

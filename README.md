@@ -53,6 +53,21 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
   *Administración → Repartidores* o directo desde el botón de asignar.
 - El cierre de caja muestra los viajes de cada moto y su tiempo promedio.
 
+### Caja
+
+- **Abrir:** elegís el turno y el **dinero al inicio**. Viene sugerido con lo que se contó al
+  cerrar la caja anterior.
+- **Durante el turno**, desde el botón *Caja*: resumen en vivo y carga de **gastos** (con tipo:
+  Motos, Proveedores, Servicios…), **retiros** de efectivo, **ingresos** y **sueldos**.
+- **Total teórico en caja** = inicio + ventas en efectivo cobradas (sin el vuelto) + ingresos
+  − gastos − retiros − sueldos. Lo cobrado por Mercado Pago, tarjeta o transferencia no suma.
+- **Cerrar:** cargás el efectivo contado y queda la **diferencia** (sobra / falta) con una
+  observación. Se guarda una foto de todos los totales, quién cerró y a qué hora.
+- **Reabrir:** la última caja del local se puede reabrir si se cerró por error; sigue con la
+  misma numeración de comandas.
+- **Historial de cajas:** todas las cajas del local con ventas, teórico, contado y diferencia.
+  Cada una tiene su detalle: resumen, comandas y gastos/retiros.
+
 ### Ingredientes y recetas
 
 - Cada ingrediente se mide en **unidades, gramos o mililitros** y tiene un costo de compra
@@ -66,7 +81,7 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden `supabase/migrations/0001_init.sql` y `0002_repartidores.sql` en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001`, `0002`, `0003`…) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si
