@@ -12,80 +12,104 @@ import { ListaMovimientos, ResumenCaja, fechaLarga } from './Caja'
 const colorDif = (d?: number) => (d == null ? 'text-gris' : Math.abs(d) < 0.01 ? 'text-albahaca' : 'text-tomate')
 const textoDif = (d?: number) => (d == null ? '—' : Math.abs(d) < 0.01 ? '$0' : `${d > 0 ? '+' : '−'}${money(Math.abs(d))}`)
 
-/** Historial de cajas del local, con el detalle de cada una */
-export function HistorialCajas({ onClose }: { onClose: () => void }) {
-  const { sucursalId, caja: cajaAbierta, avisar } = useApp()
-  const local = useNombreLocal()
+/** Historial de cajas de un local: lista y detalle (sin encabezado propio) */
+export function HistorialPanel({ sucursalId, onReabierta }: { sucursalId: string; onReabierta?: () => void }) {
+  const { avisar, refrescar, sucursalId: localActivo } = useApp()
   const [cajas, setCajas] = useState<Caja[] | null>(null)
   const [sel, setSel] = useState<Caja | null>(null)
 
   const cargar = useCallback(async () => {
-    if (!sucursalId) return
     try { setCajas(await repo.listCajas(sucursalId, 90)) } catch (e) { avisar(mensajeError(e), 'error') }
   }, [sucursalId, avisar])
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { setCajas(null); setSel(null); cargar() }, [cargar])
 
+  const reabrir = async (c: Caja) => {
+    try {
+      await repo.reabrirCaja(c.id)
+      avisar('Caja reabierta: seguís con la misma numeración')
+      if (sucursalId === localActivo) await refrescar()
+      setSel(null)
+      await cargar()
+      onReabierta?.()
+    } catch (e) { avisar(mensajeError(e), 'error') }
+  }
+
+  if (sel) {
+    return (
+      <div>
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 pt-4">
+          <Btn onClick={() => setSel(null)}>Volver a la lista</Btn>
+          <h2 className="font-cond text-2xl font-bold">Caja {sel.turno.toLowerCase()}, {fechaLarga(sel.abiertaAt)}</h2>
+        </div>
+        <DetalleCaja caja={sel} esUltima={cajas?.[0]?.id === sel.id} hayAbierta={!!cajas?.some(c => c.estado === 'abierta')}
+          onReabrir={() => reabrir(sel)} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl p-4">
+      {!cajas ? <p className="p-8 text-center text-gris">Cargando…</p> : !cajas.length ? (
+        <p className="p-8 text-center text-gris">Todavía no hay cajas en este local.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+          <table className="w-full min-w-[860px] text-left text-[15px]">
+            <thead className="border-b border-linea text-sm text-gris">
+              <tr>
+                <th className="px-3 py-2 font-medium">Fecha</th>
+                <th className="px-3 py-2 font-medium">Turno</th>
+                <th className="px-3 py-2 font-medium">Estado</th>
+                <th className="px-3 py-2 font-medium">Usuario</th>
+                <th className="px-3 py-2 text-right font-medium">Comandas</th>
+                <th className="px-3 py-2 text-right font-medium">Ventas</th>
+                <th className="px-3 py-2 text-right font-medium">Teórico</th>
+                <th className="px-3 py-2 text-right font-medium">Contado</th>
+                <th className="px-3 py-2 text-right font-medium">Diferencia</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-linea">
+              {cajas.map(c => (
+                <tr key={c.id} onClick={() => setSel(c)} className="cursor-pointer hover:bg-harina">
+                  <td className="px-3 py-2.5 font-semibold">{fechaLarga(c.abiertaAt)}</td>
+                  <td className="px-3 py-2.5">{c.turno}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${c.estado === 'abierta' ? 'bg-albahaca text-white' : 'bg-linea text-gris'}`}>{c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-gris">{c.cerradaPor ?? c.abiertaPor ?? ''}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{c.totales?.cantComandas ?? ''}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{c.totales ? money(c.totales.totalVentas) : ''}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{c.totales ? money(c.totales.efectivoTeorico) : ''}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{c.dineroCierre != null ? money(c.dineroCierre) : ''}</td>
+                  <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${colorDif(c.diferencia)}`}>{c.estado === 'cerrada' ? textoDif(c.diferencia) : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Historial a pantalla completa (desde la caja) */
+export function HistorialCajas({ onClose }: { onClose: () => void }) {
+  const sucursalId = useApp(s => s.sucursalId)
+  const local = useNombreLocal()
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-harina">
       <header className="flex flex-wrap items-center gap-3 bg-tinta px-4 py-3 text-white">
-        <button onClick={sel ? () => setSel(null) : onClose} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Volver</button>
-        <h1 className="font-cond text-3xl font-bold leading-none">
-          {sel ? `Caja ${sel.turno.toLowerCase()}, ${fechaLarga(sel.abiertaAt)}` : `Historial de cajas de ${local}`}
-        </h1>
+        <button onClick={onClose} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Volver</button>
+        <h1 className="font-cond text-3xl font-bold leading-none">Historial de cajas de {local}</h1>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {sel ? (
-          <DetalleCaja caja={sel} esUltima={cajas?.[0]?.id === sel.id} hayAbierta={!!cajaAbierta}
-            onReabierta={() => { onClose() }} />
-        ) : (
-          <div className="mx-auto max-w-6xl p-4">
-            {!cajas ? <p className="p-8 text-center text-gris">Cargando…</p> : !cajas.length ? (
-              <p className="p-8 text-center text-gris">Todavía no hay cajas en este local.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
-                <table className="w-full min-w-[860px] text-left text-[15px]">
-                  <thead className="border-b border-linea text-sm text-gris">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Fecha</th>
-                      <th className="px-3 py-2 font-medium">Turno</th>
-                      <th className="px-3 py-2 font-medium">Estado</th>
-                      <th className="px-3 py-2 font-medium">Usuario</th>
-                      <th className="px-3 py-2 text-right font-medium">Comandas</th>
-                      <th className="px-3 py-2 text-right font-medium">Ventas</th>
-                      <th className="px-3 py-2 text-right font-medium">Teórico</th>
-                      <th className="px-3 py-2 text-right font-medium">Contado</th>
-                      <th className="px-3 py-2 text-right font-medium">Diferencia</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-linea">
-                    {cajas.map(c => (
-                      <tr key={c.id} onClick={() => setSel(c)} className="cursor-pointer hover:bg-harina">
-                        <td className="px-3 py-2.5 font-semibold">{fechaLarga(c.abiertaAt)}</td>
-                        <td className="px-3 py-2.5">{c.turno}</td>
-                        <td className="px-3 py-2.5">
-                          <span className={`rounded px-2 py-0.5 text-xs font-bold ${c.estado === 'abierta' ? 'bg-albahaca text-white' : 'bg-linea text-gris'}`}>{c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-gris">{c.cerradaPor ?? c.abiertaPor ?? ''}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{c.totales?.cantComandas ?? ''}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{c.totales ? money(c.totales.totalVentas) : ''}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{c.totales ? money(c.totales.efectivoTeorico) : ''}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{c.dineroCierre != null ? money(c.dineroCierre) : ''}</td>
-                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${colorDif(c.diferencia)}`}>{c.estado === 'cerrada' ? textoDif(c.diferencia) : ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        {sucursalId && <HistorialPanel sucursalId={sucursalId} onReabierta={onClose} />}
       </div>
     </div>
   )
 }
 
-function DetalleCaja({ caja, esUltima, hayAbierta, onReabierta }: { caja: Caja; esUltima: boolean; hayAbierta: boolean; onReabierta: () => void }) {
-  const { reabrirCaja, avisar } = useApp()
+function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir }: { caja: Caja; esUltima: boolean; hayAbierta: boolean; onReabrir: () => void }) {
+  const avisar = useApp(s => s.avisar)
   const [comandas, setComandas] = useState<Comanda[] | null>(null)
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([])
   const [pestana, setPestana] = useState<'resumen' | 'comandas' | 'movimientos'>('resumen')
@@ -145,7 +169,7 @@ function DetalleCaja({ caja, esUltima, hayAbierta, onReabierta }: { caja: Caja; 
       {confirmar && (
         <Confirmar texto="¿Reabrir esta caja?" detalle="Seguís en la misma caja con la misma numeración. El cierre se borra y lo hacés de nuevo al terminar."
           accion="Reabrir caja" tono="pizarra" onNo={() => setConfirmar(false)}
-          onSi={async () => { setConfirmar(false); await reabrirCaja(caja.id); onReabierta() }} />
+          onSi={() => { setConfirmar(false); onReabrir() }} />
       )}
     </div>
   )
