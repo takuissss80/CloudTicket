@@ -434,6 +434,11 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
 function traducirError(e: unknown): Error {
   const err = e as { message?: string; code?: string; details?: string }
   const m = err?.message ?? String(e)
+  // Tabla o función que todavía no existe: falta correr una migración
+  const falta = m.match(/(?:table|function) '?public\.(\w+)/i)
+  if (err?.code === 'PGRST205' || err?.code === 'PGRST202' || (falta && m.includes('schema cache'))) {
+    return new Error(`Falta actualizar la base de datos${falta ? ` (no existe "${falta[1]}")` : ''}. Corré en Supabase → SQL Editor los archivos de supabase/migrations que todavía no corriste, en orden.`)
+  }
   if (err?.code === '42501' || m.includes('row-level security')) return new Error('No tenés permiso para hacer este cambio.')
   // update bloqueado por RLS: no devuelve filas
   if (err?.code === 'PGRST116') return new Error('No tenés permiso para hacer este cambio, o ese dato ya no existe.')
