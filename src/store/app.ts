@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { repo } from '../data'
 import type { Catalogo, MenuData } from '../data/repo'
-import type { Caja, Comanda, EstadoComanda, Impresora, NuevaComanda, PrintJob, Sesion, Sucursal } from '../types'
+import type { Caja, Comanda, EstadoComanda, Impresora, NuevaComanda, Pago, PrintJob, Repartidor, Sesion, Sucursal } from '../types'
 import { jobsParaComanda, ticketPrueba } from '../lib/ticket'
 import { resolverCatalogo } from '../lib/menu'
 import { usePedido, totales } from './pedido'
@@ -24,6 +24,7 @@ interface AppState {
   caja: Caja | null
   comandas: Comanda[]
   impresoras: Impresora[]
+  repartidores: Repartidor[]
   printJobs: PrintJob[]
   toasts: Toast[]
 
@@ -37,6 +38,9 @@ interface AppState {
   guardarPedido(imprimir: boolean): Promise<Comanda | null>
   cambiarEstado(c: Comanda, estado: EstadoComanda): Promise<void>
   marcarCobrada(c: Comanda, cobrada: boolean): Promise<void>
+  asignarRepartidor(c: Comanda, repartidorId: string): Promise<boolean>
+  entregar(c: Comanda, pagos: Pago[], cobrada: boolean): Promise<boolean>
+  cargarRepartidores(): Promise<void>
   reimprimir(c: Comanda): Promise<void>
   anular(c: Comanda): Promise<void>
   imprimirPrueba(i: Impresora): Promise<void>
@@ -71,6 +75,7 @@ export const useApp = create<AppState>((set, get) => {
     caja: null,
     comandas: [],
     impresoras: [],
+    repartidores: [],
     printJobs: [],
     toasts: [],
 
@@ -94,8 +99,8 @@ export const useApp = create<AppState>((set, get) => {
     async cambiarLocal(id) {
       guardarLocal(id)
       set({ sucursalId: id, caja: null, comandas: [], printJobs: [] })
-      const [impresoras] = await Promise.all([repo.listImpresoras(id), get().refrescarMenu()])
-      set({ impresoras })
+      const [impresoras, repartidores] = await Promise.all([repo.listImpresoras(id), repo.listRepartidores(id), get().refrescarMenu()])
+      set({ impresoras, repartidores })
       await get().refrescar()
     },
 
@@ -193,6 +198,30 @@ export const useApp = create<AppState>((set, get) => {
 
     async marcarCobrada(c, cobrada) {
       try { await repo.marcarCobrada(c.id, cobrada); await get().refrescar() } catch (e) { fallo(e) }
+    },
+
+    async asignarRepartidor(c, repartidorId) {
+      try {
+        await repo.asignarRepartidor(c.id, repartidorId)
+        const r = get().repartidores.find(x => x.id === repartidorId)
+        get().avisar(`Comanda #${c.numero} salió con ${r?.nombre ?? 'el repartidor'}`)
+        await get().refrescar()
+        return true
+      } catch (e) { fallo(e); return false }
+    },
+
+    async entregar(c, pagos, cobrada) {
+      try {
+        await repo.entregarComanda(c.id, pagos.filter(p => p.monto > 0), cobrada)
+        get().avisar(`Comanda #${c.numero} entregada`)
+        await get().refrescar()
+        return true
+      } catch (e) { fallo(e); return false }
+    },
+
+    async cargarRepartidores() {
+      const id = get().sucursalId
+      if (id) set({ repartidores: await repo.listRepartidores(id) })
     },
 
     async reimprimir(c) {

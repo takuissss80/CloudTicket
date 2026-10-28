@@ -42,6 +42,17 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 - **Aumentar precios** por categoría con porcentaje y redondeo: en el menú madre sube el
   precio base; en un local sube solo sus precios propios.
 
+### Pedidos y delivery
+
+- **Mostrador:** el pedido queda pendiente hasta que tocás **Entregar pedido**. Ahí confirmás
+  o cambiás la forma de pago (por si el cliente paga distinto al retirar).
+- **Delivery:** primero **Asignar delivery** (elegís la moto). Desde ese momento corre un
+  contador de minutos en la tarjeta (en rojo pasados los 30). Recién con la moto asignada
+  aparece **Entregar pedido**, con la forma de pago final. Queda guardado cuánto tardó.
+- Los **repartidores** (nombre, DNI y teléfono) se cargan por local en
+  *Administración → Repartidores* o directo desde el botón de asignar.
+- El cierre de caja muestra los viajes de cada moto y su tiempo promedio.
+
 ### Ingredientes y recetas
 
 - Cada ingrediente se mide en **unidades, gramos o mililitros** y tiene un costo de compra
@@ -55,7 +66,7 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré `supabase/migrations/0001_init.sql` en el SQL Editor (o `supabase db push`).
+2. Corré en orden `supabase/migrations/0001_init.sql` y `0002_repartidores.sql` en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si

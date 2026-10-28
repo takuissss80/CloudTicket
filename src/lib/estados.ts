@@ -1,16 +1,32 @@
-import type { Comanda, EstadoComanda } from '../types'
-import { ESTADOS } from '../types'
+import type { Comanda } from '../types'
+import { minutosDesde } from './format'
 
-/** Flujo de estados por tipo de comanda */
-export const flujo: Record<Comanda['tipo'], EstadoComanda[]> = {
-  mostrador: ['pendiente', 'en_preparacion', 'listo', 'entregado'],
-  delivery: ['pendiente', 'en_preparacion', 'listo', 'en_camino', 'entregado'],
+/**
+ * Flujo simplificado:
+ *   mostrador: pendiente -> entregado
+ *   delivery:  pendiente -> en camino (moto asignada) -> entregado
+ */
+export type AccionComanda = 'entregar' | 'asignar' | null
+
+export function accionPendiente(c: Comanda): AccionComanda {
+  if (c.estado === 'entregado' || c.estado === 'anulada') return null
+  if (c.tipo === 'mostrador') return 'entregar'
+  return c.repartidorId ? 'entregar' : 'asignar'
 }
 
-export function siguienteEstado(c: Comanda): EstadoComanda | null {
-  const f = flujo[c.tipo]
-  const i = f.indexOf(c.estado)
-  return i >= 0 && i < f.length - 1 ? f[i + 1] : null
+export function etiquetaEstado(c: Comanda) {
+  if (c.estado === 'anulada') return 'Anulada'
+  if (c.estado === 'entregado') return 'Entregado'
+  if (c.tipo === 'delivery') return c.repartidorId ? 'En camino' : 'Sin moto'
+  return 'Pendiente'
 }
 
-export const etiquetaEstado = (e: EstadoComanda) => ESTADOS.find(x => x.key === e)?.label ?? e
+/** Minutos de viaje de la moto: en curso o el total si ya se entregó */
+export function minutosDelivery(c: Comanda, ahora = Date.now()) {
+  if (!c.asignadaAt) return null
+  const fin = c.entregadaAt ? new Date(c.entregadaAt).getTime() : ahora
+  return minutosDesde(c.asignadaAt, fin)
+}
+
+/** Más de esto en la calle se marca en rojo */
+export const MINUTOS_ALERTA_DELIVERY = 30

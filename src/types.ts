@@ -174,12 +174,26 @@ export interface Comanda {
   cobrada: boolean
   pagos: Pago[]
   items: ItemComanda[]
+  /** Delivery: moto asignada y cuándo salió */
+  repartidorId?: string
+  repartidorNombre?: string
+  asignadaAt?: string
+  entregadaAt?: string
   createdAt: string
   updatedAt: string
 }
 
 /** Datos para crear una comanda (sin campos que asigna el sistema) */
-export type NuevaComanda = Omit<Comanda, 'id' | 'numero' | 'estado' | 'createdAt' | 'updatedAt' | 'cajaId'>
+export type NuevaComanda = Omit<Comanda, 'id' | 'numero' | 'estado' | 'createdAt' | 'updatedAt' | 'cajaId' | 'repartidorId' | 'repartidorNombre' | 'asignadaAt' | 'entregadaAt'>
+
+/** Moto / repartidor de un local */
+export interface Repartidor {
+  id: string
+  nombre: string
+  dni?: string
+  telefono?: string
+  activo: boolean
+}
 
 export interface Impresora {
   id: string

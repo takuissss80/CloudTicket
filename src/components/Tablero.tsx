@@ -4,24 +4,25 @@ import { useApp } from '../store/app'
 import { usePedido } from '../store/pedido'
 import { hora, minutosDesde, money } from '../lib/format'
 import { ComandaDetalle } from './ComandaDetalle'
-import { etiquetaEstado, siguienteEstado } from '../lib/estados'
+import { AsignarRepartidorModal, EntregarModal } from './Entrega'
+import { MINUTOS_ALERTA_DELIVERY, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
 
-const colorEstado: Record<Comanda['estado'], string> = {
-  pendiente: 'bg-muzza text-tinta',
-  en_preparacion: 'bg-pizarra text-white',
-  listo: 'bg-albahaca text-white',
-  en_camino: 'bg-tomate text-white',
-  entregado: 'bg-linea text-gris',
-  anulada: 'bg-tinta text-white',
+function colorEstado(c: Comanda) {
+  if (c.estado === 'anulada') return 'bg-tinta text-white'
+  if (c.estado === 'entregado') return 'bg-linea text-gris'
+  if (c.tipo === 'delivery') return c.repartidorId ? 'bg-pizarra text-white' : 'bg-tomate text-white'
+  return 'bg-muzza text-tinta'
 }
 
-function TarjetaComanda({ c, onAbrir, ahora }: { c: Comanda; onAbrir: () => void; ahora: number }) {
-  const cambiarEstado = useApp(s => s.cambiarEstado)
-  const sig = siguienteEstado(c)
+export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
+
+function TarjetaComanda({ c, onAbrir, onAccion, ahora }: { c: Comanda; onAbrir: () => void; onAccion: (a: AccionTablero) => void; ahora: number }) {
+  const accion = accionPendiente(c)
   const mins = minutosDesde(c.createdAt, ahora)
   const cerrada = c.estado === 'entregado' || c.estado === 'anulada'
   const demorada = !cerrada && mins >= 40
   const unidades = c.items.reduce((s, i) => s + i.cantidad, 0)
+  const viaje = minutosDelivery(c, ahora)
 
   return (
     <article className={`ticket-edge relative bg-white shadow-sm transition ${cerrada ? 'opacity-55' : ''}`}>
@@ -45,19 +46,26 @@ function TarjetaComanda({ c, onAbrir, ahora }: { c: Comanda; onAbrir: () => void
           {c.items.length > 4 && <li className="text-gris">y {c.items.length - 4} más</li>}
         </ul>
 
+        {c.repartidorNombre && viaje != null && (
+          <div className={`mt-2 flex items-center justify-between rounded-lg px-3 py-1.5 ${c.entregadaAt ? 'bg-harina text-gris' : viaje >= MINUTOS_ALERTA_DELIVERY ? 'bg-tomate text-white' : 'bg-pizarra-claro text-pizarra'}`}>
+            <span className="font-semibold">Moto: {c.repartidorNombre}</span>
+            <span className="font-cond text-2xl font-bold tabular-nums">{c.entregadaAt ? `tardó ${viaje}′` : `${viaje}′`}</span>
+          </div>
+        )}
+
         <div className="mt-2 flex items-center gap-2 border-t border-dashed border-linea pt-2">
-          <span className={`rounded px-2 py-0.5 text-xs font-bold ${colorEstado[c.estado]}`}>{etiquetaEstado(c.estado)}</span>
+          <span className={`rounded px-2 py-0.5 text-xs font-bold ${colorEstado(c)}`}>{etiquetaEstado(c)}</span>
           {c.horaEntrega && <span className="rounded bg-tomate-claro px-2 py-0.5 text-xs font-bold text-tomate">Para {c.horaEntrega}</span>}
           <span className="ml-auto text-sm text-gris">{unidades} u.</span>
           <span className="font-cond text-xl font-bold tabular-nums">{money(c.total)}</span>
           {!c.cobrada && c.estado !== 'anulada' && <span className="rounded bg-tomate px-1.5 py-0.5 text-xs font-bold text-white">A cobrar</span>}
         </div>
       </button>
-      {sig && c.estado !== 'anulada' && (
+      {accion && (
         <div className="px-4 pt-2">
-          <button onClick={() => cambiarEstado(c, sig)}
-            className="h-9 w-full rounded-lg bg-harina text-sm font-semibold text-tinta hover:bg-linea">
-            Pasar a {etiquetaEstado(sig).toLowerCase()}
+          <button onClick={() => onAccion({ tipo: accion, id: c.id })}
+            className={`h-11 w-full rounded-lg font-cond text-lg font-bold ${accion === 'asignar' ? 'bg-tomate text-white hover:brightness-110' : 'bg-albahaca text-white hover:brightness-110'}`}>
+            {accion === 'asignar' ? 'Asignar delivery' : 'Entregar pedido'}
           </button>
         </div>
       )}
@@ -70,15 +78,17 @@ export function Tablero() {
   const nuevo = usePedido(s => s.nuevo)
   const [verCerradas, setVerCerradas] = useState(false)
   const [seleccion, setSeleccion] = useState<string | null>(null)
+  const [accion, setAccion] = useState<AccionTablero | null>(null)
   const [ahora, setAhora] = useState(Date.now())
 
-  useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 30000); return () => clearInterval(t) }, [])
+  useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 15000); return () => clearInterval(t) }, [])
 
   const visibles = comandas
     .filter(c => verCerradas || (c.estado !== 'entregado' && c.estado !== 'anulada'))
     .sort((a, b) => b.numero - a.numero)
   const cerradas = comandas.filter(c => c.estado === 'entregado' || c.estado === 'anulada').length
   const sel = comandas.find(c => c.id === seleccion)
+  const accionSel = comandas.find(c => c.id === accion?.id)
 
   const columna = (tipo: TipoComanda) => {
     const lista = visibles.filter(c => c.tipo === tipo)
@@ -96,7 +106,7 @@ export function Tablero() {
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-          {lista.map(c => <TarjetaComanda key={c.id} c={c} ahora={ahora} onAbrir={() => setSeleccion(c.id)} />)}
+          {lista.map(c => <TarjetaComanda key={c.id} c={c} ahora={ahora} onAbrir={() => setSeleccion(c.id)} onAccion={setAccion} />)}
         </div>
         {!lista.length && (
           <button onClick={() => nuevo(tipo)} className="w-full rounded-xl border-2 border-dashed border-linea py-10 text-center text-gris hover:border-gris">
@@ -119,7 +129,9 @@ export function Tablero() {
         {columna('mostrador')}
         {columna('delivery')}
       </div>
-      {sel && <ComandaDetalle comanda={sel} onClose={() => setSeleccion(null)} />}
+      {sel && <ComandaDetalle comanda={sel} onClose={() => setSeleccion(null)} onAccion={a => { setSeleccion(null); setAccion(a) }} />}
+      {accionSel && accion?.tipo === 'asignar' && <AsignarRepartidorModal comanda={accionSel} onClose={() => setAccion(null)} />}
+      {accionSel && accion?.tipo === 'entregar' && <EntregarModal comanda={accionSel} onClose={() => setAccion(null)} />}
     </div>
   )
 }

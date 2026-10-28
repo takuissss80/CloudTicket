@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FORMAS_PAGO } from '../types'
 import { useApp } from '../store/app'
 import { fecha, hora, money } from '../lib/format'
+import { minutosDelivery } from '../lib/estados'
 import { Btn, Modal } from './ui'
 
 const TURNOS = ['Mañana', 'Tarde', 'Noche']
@@ -49,6 +50,14 @@ export function CerrarCajaModal({ onClose }: { onClose: () => void }) {
       return s + c.pagos.filter(p => p.forma === f.key).reduce((a, p) => a + p.monto * factor, 0)
     }, 0),
   })).filter(f => f.monto > 0)
+  // Viajes por moto: cantidad y tiempo promedio
+  const motos = new Map<string, { viajes: number; minutos: number }>()
+  for (const c of validas) {
+    const m = c.entregadaAt ? minutosDelivery(c) : null
+    if (!c.repartidorNombre || m == null) continue
+    const x = motos.get(c.repartidorNombre) ?? { viajes: 0, minutos: 0 }
+    motos.set(c.repartidorNombre, { viajes: x.viajes + 1, minutos: x.minutos + m })
+  }
 
   return (
     <Modal
@@ -78,6 +87,16 @@ export function CerrarCajaModal({ onClose }: { onClose: () => void }) {
           <ul className="divide-y divide-linea rounded-xl bg-white ring-1 ring-linea">
             {porForma.map(f => (
               <li key={f.key} className="flex justify-between px-4 py-2.5"><span>{f.label}</span><b className="tabular-nums">{money(f.monto)}</b></li>
+            ))}
+          </ul>
+        )}
+        {motos.size > 0 && (
+          <ul className="divide-y divide-linea rounded-xl bg-white ring-1 ring-linea">
+            {[...motos].map(([nombre, m]) => (
+              <li key={nombre} className="flex justify-between px-4 py-2.5">
+                <span>{nombre}: {m.viajes} {m.viajes === 1 ? 'viaje' : 'viajes'}</span>
+                <span className="tabular-nums text-gris">promedio {Math.round(m.minutos / m.viajes)} min</span>
+              </li>
             ))}
           </ul>
         )}

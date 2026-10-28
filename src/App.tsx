@@ -71,7 +71,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
             {repo.modo === 'demo' && (
               <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza">Modo demo</button>
             )}
-            <Btn onClick={() => setVerAdmin(true)}>{esAdmin ? 'Administración' : 'Menú del local'}</Btn>
+            <Btn onClick={() => setVerAdmin(true)}>{esAdmin ? 'Administración' : 'Menú y repartidores'}</Btn>
             <button onClick={() => setVerCola(true)}
               className={`h-10 rounded-lg px-3 font-semibold ring-1 ${conError ? 'bg-tomate text-white ring-tomate' : 'bg-white ring-linea hover:bg-harina'}`}>
               Impresión{enCola ? <span className="ml-2 rounded-full bg-muzza px-2 text-tinta">{enCola} en cola</span> : null}

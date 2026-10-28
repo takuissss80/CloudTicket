@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { Comanda } from '../types'
 import { FORMAS_PAGO } from '../types'
-import { etiquetaEstado, flujo, siguienteEstado } from '../lib/estados'
+import { accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
+import type { AccionTablero } from './Tablero'
 import { useApp, useNombreLocal } from '../store/app'
 import { usePedido } from '../store/pedido'
 import { construirTicket } from '../lib/ticket'
@@ -9,13 +10,14 @@ import { hora, money } from '../lib/format'
 import { Btn, Confirmar, Modal } from './ui'
 import { TicketPreview } from './TicketPreview'
 
-export function ComandaDetalle({ comanda, onClose }: { comanda: Comanda; onClose: () => void }) {
-  const { cambiarEstado, reimprimir, anular, marcarCobrada, impresoras, catalogo, printJobs } = useApp()
+export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comanda; onClose: () => void; onAccion: (a: AccionTablero) => void }) {
+  const { reimprimir, anular, marcarCobrada, impresoras, catalogo, printJobs } = useApp()
   const sucursal = useNombreLocal()
   const editar = usePedido(s => s.editar)
   const [confirmarAnular, setConfirmarAnular] = useState(false)
   const c = comanda
-  const sig = siguienteEstado(c)
+  const accion = accionPendiente(c)
+  const viaje = minutosDelivery(c)
   const anulada = c.estado === 'anulada'
 
   const ticket = useMemo(() => construirTicket(c, {
@@ -35,9 +37,12 @@ export function ComandaDetalle({ comanda, onClose }: { comanda: Comanda; onClose
           <div className="ml-auto flex flex-wrap gap-2">
             {!anulada && <Btn onClick={() => { editar(c); onClose() }}>Editar pedido</Btn>}
             <Btn onClick={() => reimprimir(c)}>Reimprimir</Btn>
-            {sig && !anulada && (
-              <Btn tono="albahaca" onClick={() => { cambiarEstado(c, sig); if (sig === 'entregado') onClose() }}>
-                Pasar a {etiquetaEstado(sig).toLowerCase()}
+            {c.tipo === 'delivery' && c.repartidorId && accion && (
+              <Btn onClick={() => onAccion({ tipo: 'asignar', id: c.id })}>Cambiar moto</Btn>
+            )}
+            {accion && (
+              <Btn tono={accion === 'asignar' ? 'tomate' : 'albahaca'} onClick={() => onAccion({ tipo: accion, id: c.id })}>
+                {accion === 'asignar' ? 'Asignar delivery' : 'Entregar pedido'}
               </Btn>
             )}
           </div>
@@ -46,17 +51,15 @@ export function ComandaDetalle({ comanda, onClose }: { comanda: Comanda; onClose
     >
       <div className="grid gap-6 p-5 md:grid-cols-[1fr_auto]">
         <div className="space-y-5">
-          <section>
-            <div className="mb-2 text-sm font-medium text-gris">Estado</div>
-            <div className="flex flex-wrap gap-1.5">
-              {flujo[c.tipo].map(e => (
-                <button key={e} disabled={anulada} onClick={() => cambiarEstado(c, e)}
-                  className={`h-9 rounded-full px-3.5 text-sm font-semibold ${c.estado === e ? 'bg-tinta text-white' : 'bg-white text-tinta ring-1 ring-linea hover:bg-harina'} disabled:opacity-50`}>
-                  {etiquetaEstado(e)}
-                </button>
-              ))}
-              {anulada && <span className="h-9 rounded-full bg-tomate px-3.5 py-1.5 text-sm font-semibold text-white">Anulada</span>}
-            </div>
+          <section className="flex flex-wrap items-center gap-3">
+            <span className={`rounded-full px-3.5 py-1.5 text-sm font-bold ${anulada ? 'bg-tomate text-white' : c.estado === 'entregado' ? 'bg-linea text-gris' : 'bg-tinta text-white'}`}>{etiquetaEstado(c)}</span>
+            {c.repartidorNombre && (
+              <span className="text-[15px]">
+                Moto: <b>{c.repartidorNombre}</b>{c.asignadaAt ? `, salió ${hora(c.asignadaAt)}` : ''}
+                {viaje != null && <>{c.entregadaAt ? `, tardó ${viaje} min` : `, hace ${viaje} min`}</>}
+              </span>
+            )}
+            {c.entregadaAt && <span className="text-[15px] text-gris">Entregado {hora(c.entregadaAt)}</span>}
           </section>
 
           {(c.clienteNombre || c.direccion) && (

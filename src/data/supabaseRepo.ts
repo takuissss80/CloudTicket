@@ -3,7 +3,7 @@ import { unirReceta } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  PrintJob, Producto, Sucursal, Usuario, Zona,
+  Pago, PrintJob, Producto, Repartidor, Sucursal, Usuario, Zona,
 } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -23,6 +23,9 @@ const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.co
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
 const mapCategoria = (c: Row): Categoria => ({
   id: c.id, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa, sucursalId: opt(c.sucursal_id),
+})
+const mapRepartidor = (r: Row): Repartidor => ({
+  id: r.id, nombre: r.nombre, dni: opt(r.dni), telefono: opt(r.telefono), activo: r.activo,
 })
 const mapCliente = (c: Row): Cliente => ({
   id: c.id, nombre: c.nombre, telefono: opt(c.telefono), direccion: opt(c.direccion),
@@ -60,6 +63,8 @@ function mapComanda(r: Row): Comanda {
     costoEnvio: num(r.costo_envio), subtotal: num(r.subtotal), descuento: num(r.descuento),
     adicional: num(r.adicional), total: num(r.total), observaciones: opt(r.observaciones),
     horaEntrega: opt(r.hora_entrega), cobrada: r.cobrada, createdAt: r.created_at, updatedAt: r.updated_at,
+    repartidorId: opt(r.repartidor_id), repartidorNombre: opt(r.repartidores?.nombre),
+    asignadaAt: opt(r.asignada_at), entregadaAt: opt(r.entregada_at),
     pagos: (r.pagos ?? []).map((p: Row) => ({ forma: p.forma, monto: num(p.monto) })),
     items: (r.comanda_items ?? [])
       .sort((a: Row, b: Row) => a.orden - b.orden)
@@ -79,7 +84,7 @@ const comandaRow = (d: NuevaComanda) => ({
   hora_entrega: d.horaEntrega ?? null, cobrada: d.cobrada,
 })
 
-const SELECT_COMANDA = '*, comanda_items(*), pagos(*)'
+const SELECT_COMANDA = '*, comanda_items(*), pagos(*), repartidores(nombre)'
 const SELECT_PRODUCTO = '*, recetas(*), promo_fijos!promo_fijos_promo_id_fkey(*), promo_slots(*)'
 
 export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { headers?: Record<string, string> }): Repo & { client: SupabaseClient } {
@@ -292,6 +297,18 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       }))
     },
 
+    async listRepartidores(sucursalId) {
+      return (ok(await sb.from('repartidores').select('*').eq('sucursal_id', sucursalId).order('nombre')) as Row[]).map(mapRepartidor)
+    },
+    async guardarRepartidor(sucursalId, r) {
+      if (!r.nombre.trim()) throw new Error('Poné el nombre del repartidor.')
+      const row = { sucursal_id: sucursalId, nombre: r.nombre.trim(), dni: r.dni || null, telefono: r.telefono || null, activo: r.activo }
+      const x = r.id
+        ? ok(await sb.from('repartidores').update(row).eq('id', r.id).select().single())
+        : ok(await sb.from('repartidores').insert(row).select().single())
+      return mapRepartidor(x as Row)
+    },
+
     // ---- Operación
     async getCajaAbierta(sucursalId) {
       const r = ok(await sb.from('cajas').select('*').eq('sucursal_id', sucursalId).eq('estado', 'abierta').maybeSingle())
@@ -321,6 +338,14 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     async cambiarEstado(id, estado) { ok(await sb.from('comandas').update({ estado }).eq('id', id)) },
     async marcarCobrada(id, cobrada) { ok(await sb.from('comandas').update({ cobrada }).eq('id', id)) },
+    async asignarRepartidor(comandaId, repartidorId) {
+      ok(await sb.from('comandas').update({ repartidor_id: repartidorId, asignada_at: new Date().toISOString(), estado: 'en_camino' }).eq('id', comandaId))
+    },
+    async entregarComanda(comandaId, pagos: Pago[], cobrada) {
+      ok(await sb.from('pagos').delete().eq('comanda_id', comandaId))
+      if (pagos.length) ok(await sb.from('pagos').insert(pagos.map(p => ({ comanda_id: comandaId, forma: p.forma, monto: p.monto }))))
+      ok(await sb.from('comandas').update({ cobrada, estado: 'entregado', entregada_at: new Date().toISOString() }).eq('id', comandaId))
+    },
 
     async buscarClientes(q: BusquedaCliente) {
       let query = sb.from('clientes').select('*').limit(20)
@@ -380,5 +405,6 @@ function traducirError(e: unknown): Error {
   if (err?.code === 'PGRST116') return new Error('No tenés permiso para hacer este cambio, o ese dato ya no existe.')
   if (err?.code === '23505' && m.includes('cajas_una_abierta')) return new Error('Ya hay una caja abierta en este local.')
   if (err?.code === '23503') return new Error('No se puede borrar: está en uso.')
+  if (m.includes('repartidor no es de este local')) return new Error('Ese repartidor no es de este local.')
   return new Error(m)
 }

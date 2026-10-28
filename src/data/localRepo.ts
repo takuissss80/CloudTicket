@@ -1,7 +1,7 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, PrintJob, Producto,
-  Sesion, Sucursal, Usuario, Zona,
+  Repartidor, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
 import { importarMenuEjemplo, unirReceta } from '../lib/menu'
 
@@ -31,6 +31,7 @@ interface DB {
   ajustes: ConLocal<AjusteLocal>[]
   zonas: ConLocal<Zona>[]
   impresoras: ConLocal<Impresora>[]
+  repartidores?: ConLocal<Repartidor>[]
   cajas: ConLocal<Caja & { ultimoNumero: number }>[]
   comandas: ConLocal<Comanda>[]
   clientes: Cliente[]
@@ -87,6 +88,11 @@ function baseVacia(): DB {
     impresoras: [principal, benavidez].map(s => ({
       id: uid(), sucursalId: s.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48,
     })),
+    repartidores: [
+      { id: uid(), sucursalId: principal.id, nombre: 'Ariel', dni: '35123456', telefono: '1150001111', activo: true },
+      { id: uid(), sucursalId: principal.id, nombre: 'Lucas', dni: '38987654', telefono: '1150002222', activo: true },
+      { id: uid(), sucursalId: benavidez.id, nombre: 'Matías', dni: '40111222', telefono: '1150003333', activo: true },
+    ],
     cajas: [], comandas: [],
     clientes: [
       { id: uid(), nombre: 'Juan Pérez', telefono: '1155551234', direccion: 'Darragueira 1625', entreCalles: 'Palliere y Gandhi' },
@@ -371,6 +377,28 @@ export const localRepo: Repo = {
     return pausa(db().impresoras.filter(i => i.sucursalId === sucursalId).map(sinLocal))
   },
 
+  async listRepartidores(sucursalId) {
+    puedeLocal(sucursalId)
+    return pausa((db().repartidores ?? []).filter(r => r.sucursalId === sucursalId).map(sinLocal))
+  },
+  async guardarRepartidor(sucursalId, r) {
+    puedeLocal(sucursalId)
+    const d = db()
+    d.repartidores ??= []
+    if (!r.nombre.trim()) throw new Error('Poné el nombre del repartidor.')
+    if (r.id) {
+      const x = d.repartidores.find(y => y.id === r.id)
+      if (!x) throw new Error('Repartidor no encontrado')
+      Object.assign(x, r)
+      guardar('comandas')
+      return clon(sinLocal(x))
+    }
+    const nuevo = { ...r, id: uid(), sucursalId }
+    d.repartidores.push(nuevo)
+    guardar('comandas')
+    return clon(sinLocal(nuevo))
+  },
+
   // ---- Operación
   async getCajaAbierta(sucursalId) {
     puedeLocal(sucursalId)
@@ -439,6 +467,27 @@ export const localRepo: Repo = {
     if (!c) return
     puedeLocal(c.sucursalId)
     c.cobrada = cobrada; c.updatedAt = ahora()
+    guardar()
+  },
+
+  async asignarRepartidor(comandaId, repartidorId) {
+    const d = db()
+    const c = d.comandas.find(x => x.id === comandaId)
+    if (!c) throw new Error('Comanda no encontrada')
+    puedeLocal(c.sucursalId)
+    const r = (d.repartidores ?? []).find(x => x.id === repartidorId && x.sucursalId === c.sucursalId)
+    if (!r) throw new Error('Ese repartidor no es de este local')
+    c.repartidorId = r.id; c.repartidorNombre = r.nombre
+    c.asignadaAt = ahora(); c.estado = 'en_camino'; c.updatedAt = ahora()
+    guardar()
+  },
+
+  async entregarComanda(comandaId, pagos, cobrada) {
+    const c = db().comandas.find(x => x.id === comandaId)
+    if (!c) throw new Error('Comanda no encontrada')
+    puedeLocal(c.sucursalId)
+    c.pagos = clon(pagos); c.cobrada = cobrada
+    c.estado = 'entregado'; c.entregadaAt = ahora(); c.updatedAt = ahora()
     guardar()
   },
 

@@ -1,6 +1,6 @@
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
-  PrintJob, Producto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
+  Pago, PrintJob, Producto, Repartidor, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
 } from '../types'
 
 /** Catálogo listo para vender en un local (precios del local, sin ocultos) */
@@ -85,6 +85,9 @@ export interface Repo {
   guardarZona(sucursalId: string, z: Omit<Zona, 'id'> & { id?: string }): Promise<void>
   eliminarZona(id: string): Promise<void>
   listImpresoras(sucursalId: string): Promise<Impresora[]>
+  /** Incluye los inactivos */
+  listRepartidores(sucursalId: string): Promise<Repartidor[]>
+  guardarRepartidor(sucursalId: string, r: Omit<Repartidor, 'id'> & { id?: string }): Promise<Repartidor>
 
   // ---- Operación de un local
   getCajaAbierta(sucursalId: string): Promise<Caja | null>
@@ -95,6 +98,10 @@ export interface Repo {
   actualizarComanda(id: string, data: NuevaComanda): Promise<Comanda>
   cambiarEstado(id: string, estado: EstadoComanda): Promise<void>
   marcarCobrada(id: string, cobrada: boolean): Promise<void>
+  /** Delivery: asigna la moto, pasa a "en camino" y arranca el contador */
+  asignarRepartidor(comandaId: string, repartidorId: string): Promise<void>
+  /** Entrega el pedido con la forma de pago final */
+  entregarComanda(comandaId: string, pagos: Pago[], cobrada: boolean): Promise<void>
   buscarClientes(q: BusquedaCliente): Promise<Cliente[]>
   guardarCliente(c: Omit<Cliente, 'id'> & { id?: string }): Promise<Cliente>
   encolarImpresion(jobs: NuevoPrintJob[]): Promise<void>
