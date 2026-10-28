@@ -3,7 +3,7 @@ import { unirReceta } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  MovimientoCaja, Pago, PrintJob, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
 } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -73,7 +73,7 @@ function mapComanda(r: Row): Comanda {
     adicional: num(r.adicional), total: num(r.total), observaciones: opt(r.observaciones),
     horaEntrega: opt(r.hora_entrega), cobrada: r.cobrada, createdAt: r.created_at, updatedAt: r.updated_at,
     repartidorId: opt(r.repartidor_id), repartidorNombre: opt(r.repartidores?.nombre),
-    asignadaAt: opt(r.asignada_at), entregadaAt: opt(r.entregada_at),
+    asignadaAt: opt(r.asignada_at), entregadaAt: opt(r.entregada_at), sucursalId: opt(r.sucursal_id),
     pagos: (r.pagos ?? []).map((p: Row) => ({ forma: p.forma, monto: num(p.monto) })),
     items: (r.comanda_items ?? [])
       .sort((a: Row, b: Row) => a.orden - b.orden)
@@ -112,6 +112,16 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     const r = await sb.from('perfiles').select('*, cuentas(nombre)').eq('user_id', u.user.id).maybeSingle()
     perfilCache = ok(r) as Row | null
     return perfilCache
+  }
+
+  /** Trae todas las filas de a 1000 (límite de Supabase por consulta) */
+  async function todas<T = Row>(armar: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
+    const out: T[] = []
+    for (let i = 0; ; i += 1000) {
+      const r = ok(await armar(i, i + 999)) as T[]
+      out.push(...r)
+      if (r.length < 1000 || out.length >= 50000) return out
+    }
   }
 
   async function getComanda(id: string) {
@@ -352,6 +362,64 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const r = ok(await sb.from('caja_movimientos').delete().eq('id', id).select('id')) as Row[]
       if (!r.length) throw new Error('Solo se borran movimientos con la caja abierta.')
     },
+    // ---- Stock
+    async getStock(sucursalId) {
+      return (ok(await sb.from('stock').select('*').eq('sucursal_id', sucursalId)) as Row[]).map((x): StockItem => ({
+        ingredienteId: x.ingrediente_id, cantidad: num(x.cantidad), minimo: num(x.minimo),
+      }))
+    },
+    async registrarIngreso(sucursalId, d) {
+      ok(await sb.rpc('registrar_ingreso', {
+        p_sucursal: sucursalId,
+        p_items: d.items.filter(i => i.ingredienteId).map(i => ({ ingrediente_id: i.ingredienteId, cantidad: i.cantidad, costo: i.costo || 0 })),
+        p_proveedor: d.proveedor ?? null, p_comprobante: d.comprobante ?? null, p_observaciones: d.observaciones ?? null,
+        p_actualizar_costo: d.actualizarCosto, p_pagar_con_caja: d.pagarConCaja,
+      }))
+    },
+    async ajustarStock(sucursalId, ingredienteId, tipo, cantidad, motivo) {
+      ok(await sb.rpc('ajustar_stock', { p_sucursal: sucursalId, p_ingrediente: ingredienteId, p_tipo: tipo, p_cantidad: cantidad, p_motivo: motivo ?? null }))
+    },
+    async setStockMinimo(sucursalId, ingredienteId, minimo) {
+      ok(await sb.rpc('set_stock_minimo', { p_sucursal: sucursalId, p_ingrediente: ingredienteId, p_minimo: minimo }))
+    },
+
+    // ---- Reportes
+    async reporteComandas(sucursalIds, desde, hasta) {
+      const r = await todas((a, b) => sb.from('comandas').select(SELECT_COMANDA).in('sucursal_id', sucursalIds)
+        .gte('created_at', desde).lt('created_at', hasta).order('created_at').range(a, b))
+      return r.map(mapComanda)
+    },
+    async reporteMovimientosCaja(sucursalIds, desde, hasta) {
+      const r = await todas((a, b) => sb.from('caja_movimientos').select('*, tipos_gasto(nombre), cajas!inner(sucursal_id, turno, abierta_at)')
+        .in('cajas.sucursal_id', sucursalIds).gte('created_at', desde).lt('created_at', hasta).order('created_at').range(a, b))
+      return r.map((m): MovimientoReporte => ({
+        id: m.id, tipo: m.tipo, tipoGastoId: opt(m.tipo_gasto_id), tipoGastoNombre: opt(m.tipos_gasto?.nombre),
+        concepto: m.concepto, monto: num(m.monto), creadoPor: opt(m.creado_por_usuario), createdAt: m.created_at,
+        sucursalId: m.cajas.sucursal_id, cajaTurno: m.cajas.turno, cajaFecha: m.cajas.abierta_at,
+      }))
+    },
+    async reporteIngresos(sucursalIds, desde, hasta) {
+      const r = await todas((a, b) => sb.from('ingresos_mercaderia').select('*, stock_movimientos(ingrediente_id, cantidad, costo)')
+        .in('sucursal_id', sucursalIds).gte('created_at', desde).lt('created_at', hasta).order('created_at').range(a, b))
+      return r.map((x): IngresoMercaderia => ({
+        id: x.id, sucursalId: x.sucursal_id, proveedor: opt(x.proveedor), comprobante: opt(x.comprobante), observaciones: opt(x.observaciones),
+        total: num(x.total), pagadoConCaja: x.pagado_con_caja, creadoPor: opt(x.creado_por_usuario), createdAt: x.created_at,
+        items: (x.stock_movimientos ?? []).map((m: Row) => ({ ingredienteId: m.ingrediente_id, cantidad: num(m.cantidad), costo: num(m.costo) })),
+      }))
+    },
+    async reporteStockMovimientos(sucursalIds, desde, hasta, tipos) {
+      const r = await todas((a, b) => {
+        let q = sb.from('stock_movimientos').select('*').in('sucursal_id', sucursalIds).gte('created_at', desde).lt('created_at', hasta)
+        if (tipos?.length) q = q.in('tipo', tipos)
+        return q.order('created_at').range(a, b)
+      })
+      return r.map((m): StockMovimiento => ({
+        id: m.id, sucursalId: m.sucursal_id, ingredienteId: m.ingrediente_id, tipo: m.tipo, cantidad: num(m.cantidad),
+        costo: numOpt(m.costo), ingresoId: opt(m.ingreso_id), comandaId: opt(m.comanda_id), motivo: opt(m.motivo),
+        creadoPor: opt(m.creado_por_usuario), createdAt: m.created_at,
+      }))
+    },
+
     async listTiposGasto() {
       return (ok(await sb.from('tipos_gasto').select('*').eq('activo', true).order('orden')) as Row[]).map((t): TipoGasto => ({ id: t.id, nombre: t.nombre }))
     },
@@ -444,7 +512,7 @@ function traducirError(e: unknown): Error {
   if (err?.code === 'PGRST116') return new Error('No tenés permiso para hacer este cambio, o ese dato ya no existe.')
   if (err?.code === '23505' && m.includes('cajas_una_abierta')) return new Error('Ya hay una caja abierta en este local.')
   if (err?.code === '23503') return new Error('No se puede borrar: está en uso.')
-  for (const t of ['La caja no está abierta', 'Ya hay una caja abierta en este local', 'Solo se puede reabrir la última caja del local', 'Esa caja no está cerrada']) if (m.includes(t)) return new Error(t + '.')
+  for (const t of ['Para pagar con la caja tiene que haber una caja abierta', 'Las cantidades tienen que ser mayores a cero', 'La cantidad contada no puede ser negativa', 'La cantidad a decomisar tiene que ser mayor a cero', 'El ingreso no tiene ingredientes', 'La caja no está abierta', 'Ya hay una caja abierta en este local', 'Solo se puede reabrir la última caja del local', 'Esa caja no está cerrada']) if (m.includes(t)) return new Error(t + '.')
   if (m.includes('repartidor no es de este local')) return new Error('Ese repartidor no es de este local.')
   return new Error(m)
 }

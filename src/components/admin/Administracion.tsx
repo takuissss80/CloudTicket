@@ -5,8 +5,9 @@ import { Ingredientes } from './Ingredientes'
 import { Locales } from './Locales'
 import { Repartidores } from './Repartidores'
 import { CajasAdmin } from './CajasAdmin'
+import { Stock } from './Stock'
 
-type Pestana = 'menu' | 'caja' | 'ingredientes' | 'repartidores' | 'locales'
+type Pestana = 'menu' | 'caja' | 'stock' | 'ingredientes' | 'repartidores' | 'locales'
 
 /** Pantalla de administración: menú, ingredientes, locales y usuarios */
 export function Administracion({ onClose }: { onClose: () => void }) {
@@ -15,8 +16,8 @@ export function Administracion({ onClose }: { onClose: () => void }) {
   const [pestana, setPestana] = useState<Pestana>('menu')
 
   const pestanas: { key: Pestana; label: string }[] = esAdmin
-    ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'locales', label: 'Locales y usuarios' }]
-    : [{ key: 'menu', label: 'Menú del local' }, { key: 'caja', label: 'Caja' }, { key: 'repartidores', label: 'Repartidores' }]
+    ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'locales', label: 'Locales y usuarios' }]
+    : [{ key: 'menu', label: 'Menú del local' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'repartidores', label: 'Repartidores' }]
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
@@ -37,6 +38,7 @@ export function Administracion({ onClose }: { onClose: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {pestana === 'menu' && <MenuAdmin />}
         {pestana === 'caja' && <CajasAdmin />}
+        {pestana === 'stock' && <Stock />}
         {pestana === 'ingredientes' && esAdmin && <Ingredientes />}
         {pestana === 'repartidores' && <Repartidores />}
         {pestana === 'locales' && esAdmin && <Locales />}

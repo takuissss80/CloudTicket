@@ -1,9 +1,10 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, PrintJob, Producto,
-  MovimientoCaja, Repartidor, Sesion, Sucursal, Usuario, Zona,
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
 import { calcularTotales } from '../lib/caja'
+import { consumoItem } from '../lib/stock'
 import { importarMenuEjemplo, unirReceta } from '../lib/menu'
 
 /**
@@ -37,6 +38,9 @@ interface DB {
   impresoras: ConLocal<Impresora>[]
   repartidores?: ConLocal<Repartidor>[]
   movimientos?: (MovimientoCaja & { cajaId: string })[]
+  stock?: ConLocal<StockItem>[]
+  stockMovs?: (StockMovimiento & { comandaItemId?: string })[]
+  ingresos?: IngresoMercaderia[]
   cajas: ConLocal<Caja & { ultimoNumero: number }>[]
   comandas: ConLocal<Comanda>[]
   clientes: Cliente[]
@@ -161,6 +165,34 @@ function puedeEditarProducto(sucursalId?: string) {
 const sinLocal = <T extends { sucursalId: string }>(x: T) => { const { sucursalId: _, ...resto } = x; void _; return resto }
 
 const redondear = (v: number, r: number) => Math.round(v / r) * r
+
+// ---- Stock (igual que los triggers de la base)
+function moverStock(sucursalId: string, ingredienteId: string, cant: number) {
+  const d = db()
+  d.stock ??= []
+  let s = d.stock.find(x => x.sucursalId === sucursalId && x.ingredienteId === ingredienteId)
+  if (!s) { s = { sucursalId, ingredienteId, cantidad: 0, minimo: 0 }; d.stock.push(s) }
+  s.cantidad = Math.round((s.cantidad + cant) * 1000) / 1000
+}
+function descontarComanda(c: Comanda & { sucursalId: string }) {
+  if (c.estado === 'anulada') return
+  const d = db()
+  d.stockMovs ??= []
+  for (const it of c.items) {
+    for (const [ing, cant] of consumoItem(it, d.productos)) {
+      if (!cant) continue
+      d.stockMovs.push({ id: uid(), sucursalId: c.sucursalId, ingredienteId: ing, tipo: 'venta', cantidad: -cant, comandaId: c.id, comandaItemId: it.id, createdAt: ahora() })
+      moverStock(c.sucursalId, ing, -cant)
+    }
+  }
+}
+function devolverComanda(comandaId: string) {
+  const d = db()
+  for (const m of (d.stockMovs ?? []).filter(x => x.comandaId === comandaId && x.tipo === 'venta')) moverStock(m.sucursalId, m.ingredienteId, -m.cantidad)
+  d.stockMovs = (d.stockMovs ?? []).filter(x => !(x.comandaId === comandaId && x.tipo === 'venta'))
+}
+const enRango = (iso: string, desde: string, hasta: string) => iso >= desde && iso < hasta
+
 
 // ---------------------------------------------------------------------
 
@@ -489,6 +521,97 @@ export const localRepo: Repo = {
 
   async listTiposGasto() { return pausa(TIPOS_GASTO_DEMO) },
 
+  // ---- Stock
+  async getStock(sucursalId) {
+    puedeLocal(sucursalId)
+    return pausa(clon((db().stock ?? []).filter(x => x.sucursalId === sucursalId).map(sinLocal)))
+  },
+
+  async registrarIngreso(sucursalId, data) {
+    puedeLocal(sucursalId)
+    const d = db()
+    const items = data.items.filter(i => i.ingredienteId)
+    if (!items.length) throw new Error('El ingreso no tiene ingredientes')
+    if (items.some(i => !(i.cantidad > 0))) throw new Error('Las cantidades tienen que ser mayores a cero')
+    const total = items.reduce((s, i) => s + (i.costo || 0), 0)
+    const ing: IngresoMercaderia = {
+      id: uid(), sucursalId, proveedor: data.proveedor?.trim() || undefined, comprobante: data.comprobante?.trim() || undefined,
+      observaciones: data.observaciones?.trim() || undefined, total, pagadoConCaja: false, creadoPor: ses().usuario, createdAt: ahora(), items,
+    }
+    if (data.pagarConCaja && total > 0) {
+      const caja = d.cajas.find(c => c.sucursalId === sucursalId && c.estado === 'abierta')
+      if (!caja) throw new Error('Para pagar con la caja tiene que haber una caja abierta')
+      d.movimientos ??= []
+      d.movimientos.push({ id: uid(), cajaId: caja.id, tipo: 'gasto', tipoGastoId: 'tg-2', tipoGastoNombre: 'Pago remito',
+        concepto: ['Mercadería', ing.proveedor, ing.comprobante].filter(Boolean).join(' '), monto: total, createdAt: ahora(), creadoPor: ses().usuario })
+      ing.pagadoConCaja = true
+    }
+    d.ingresos ??= []
+    d.ingresos.push(ing)
+    d.stockMovs ??= []
+    for (const it of items) {
+      d.stockMovs.push({ id: uid(), sucursalId, ingredienteId: it.ingredienteId, tipo: 'ingreso', cantidad: it.cantidad, costo: it.costo, ingresoId: ing.id, creadoPor: ses().usuario, createdAt: ahora() })
+      moverStock(sucursalId, it.ingredienteId, it.cantidad)
+      const x = d.ingredientes.find(y => y.id === it.ingredienteId)
+      if (x && data.actualizarCosto && it.costo > 0) x.costo = Math.round(it.costo / it.cantidad * (x.unidad === 'un' ? 1 : 1000) * 100) / 100
+    }
+    guardar('menu')
+  },
+
+  async ajustarStock(sucursalId, ingredienteId, tipo, cantidad, motivo) {
+    puedeLocal(sucursalId)
+    const d = db()
+    const actual = (d.stock ?? []).find(x => x.sucursalId === sucursalId && x.ingredienteId === ingredienteId)?.cantidad ?? 0
+    let delta: number
+    if (tipo === 'ajuste') {
+      if (!(cantidad >= 0)) throw new Error('La cantidad contada no puede ser negativa')
+      delta = cantidad - actual
+    } else {
+      if (!(cantidad > 0)) throw new Error('La cantidad a decomisar tiene que ser mayor a cero')
+      delta = -cantidad
+    }
+    if (!delta) return
+    d.stockMovs ??= []
+    d.stockMovs.push({ id: uid(), sucursalId, ingredienteId, tipo, cantidad: delta, motivo: motivo?.trim() || undefined, creadoPor: ses().usuario, createdAt: ahora() })
+    moverStock(sucursalId, ingredienteId, delta)
+    guardar('menu')
+  },
+
+  async setStockMinimo(sucursalId, ingredienteId, minimo) {
+    puedeLocal(sucursalId)
+    moverStock(sucursalId, ingredienteId, 0)
+    const s = db().stock!.find(x => x.sucursalId === sucursalId && x.ingredienteId === ingredienteId)!
+    s.minimo = Math.max(0, minimo || 0)
+    guardar('menu')
+  },
+
+  // ---- Reportes
+  async reporteComandas(sucursalIds, desde, hasta) {
+    sucursalIds.forEach(puedeLocal)
+    return pausa(clon(db().comandas.filter(c => sucursalIds.includes(c.sucursalId) && enRango(c.createdAt, desde, hasta))))
+  },
+  async reporteMovimientosCaja(sucursalIds, desde, hasta) {
+    sucursalIds.forEach(puedeLocal)
+    const d = db()
+    const out: MovimientoReporte[] = []
+    for (const m of d.movimientos ?? []) {
+      const caja = d.cajas.find(c => c.id === m.cajaId)
+      if (!caja || !sucursalIds.includes(caja.sucursalId) || !enRango(m.createdAt, desde, hasta)) continue
+      const { cajaId: _, ...resto } = m; void _
+      out.push({ ...resto, sucursalId: caja.sucursalId, cajaTurno: caja.turno, cajaFecha: caja.abiertaAt })
+    }
+    return pausa(clon(out))
+  },
+  async reporteIngresos(sucursalIds, desde, hasta) {
+    sucursalIds.forEach(puedeLocal)
+    return pausa(clon((db().ingresos ?? []).filter(i => sucursalIds.includes(i.sucursalId) && enRango(i.createdAt, desde, hasta))))
+  },
+  async reporteStockMovimientos(sucursalIds, desde, hasta, tipos) {
+    sucursalIds.forEach(puedeLocal)
+    return pausa(clon((db().stockMovs ?? []).filter(m => sucursalIds.includes(m.sucursalId) && enRango(m.createdAt, desde, hasta) && (!tipos || tipos.includes(m.tipo)))
+      .map(({ comandaItemId: _, ...m }) => { void _; return m })))
+  },
+
   async listComandas(cajaId) {
     const caja = db().cajas.find(c => c.id === cajaId)
     if (!caja) return []
@@ -503,7 +626,10 @@ export const localRepo: Repo = {
     puedeLocal(caja.sucursalId)
     caja.ultimoNumero += 1
     const comanda = { ...clon(data), id: uid(), cajaId, sucursalId: caja.sucursalId, numero: caja.ultimoNumero, estado: 'pendiente' as const, createdAt: ahora(), updatedAt: ahora() }
+    // los ítems necesitan id propio para el stock
+    comanda.items = comanda.items.map(it => ({ ...it, id: uid() }))
     d.comandas.push(comanda)
+    descontarComanda(comanda)
     guardar()
     return clon(sinLocal(comanda))
   },
@@ -513,7 +639,10 @@ export const localRepo: Repo = {
     const i = d.comandas.findIndex(c => c.id === id)
     if (i < 0) throw new Error('Comanda no encontrada')
     puedeLocal(d.comandas[i].sucursalId)
+    devolverComanda(id)
     d.comandas[i] = { ...d.comandas[i], ...clon(data), updatedAt: ahora() }
+    d.comandas[i].items = d.comandas[i].items.map(it => ({ ...it, id: uid() }))
+    descontarComanda(d.comandas[i])
     guardar()
     return clon(sinLocal(d.comandas[i]))
   },
@@ -522,6 +651,7 @@ export const localRepo: Repo = {
     const c = db().comandas.find(x => x.id === id)
     if (!c) return
     puedeLocal(c.sucursalId)
+    if (estado === 'anulada' && c.estado !== 'anulada') devolverComanda(c.id)
     c.estado = estado; c.updatedAt = ahora()
     guardar()
   },

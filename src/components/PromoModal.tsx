@@ -26,7 +26,7 @@ export function PromoModal({ promo, onClose }: { promo: Producto; onClose: () =>
         if (!n) continue
         const [id, c] = k.split('|')
         const p = productos.find(x => x.id === id)
-        if (p) elegidos.push({ descripcion: p.nombre, cantidad: n, coccion: (c || undefined) as Coccion | undefined })
+        if (p) elegidos.push({ productoId: p.id, descripcion: p.nombre, cantidad: n, coccion: (c || undefined) as Coccion | undefined })
       }
     }
     agregar(itemPromo(promo, elegidos, productos, nota))

@@ -11,6 +11,7 @@ import { CajaCerrada, CajaPanel } from './components/Caja'
 import { ColaImpresion } from './components/ColaImpresion'
 import { CrearCuenta, Login } from './components/Login'
 import { Administracion } from './components/admin/Administracion'
+import { Reportes } from './components/Reportes'
 import { Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
@@ -19,6 +20,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
   const [verCola, setVerCola] = useState(false)
   const [verCierre, setVerCierre] = useState(false)
   const [verAdmin, setVerAdmin] = useState(false)
+  const [verReportes, setVerReportes] = useState(false)
   const [verReset, setVerReset] = useState(false)
 
   // Cambios en tiempo real: otras PCs, el spool, cambios de menú
@@ -71,6 +73,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
             {repo.modo === 'demo' && (
               <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza">Modo demo</button>
             )}
+            <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>
             <Btn onClick={() => setVerAdmin(true)}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
             <button onClick={() => setVerCola(true)}
               className={`h-10 rounded-lg px-3 font-semibold ring-1 ${conError ? 'bg-tomate text-white ring-tomate' : 'bg-white ring-linea hover:bg-harina'}`}>
@@ -89,6 +92,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
 
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion onClose={() => setVerAdmin(false)} />}
+      {verReportes && <Reportes onClose={() => setVerReportes(false)} />}
       {verCola && <ColaImpresion onClose={() => setVerCola(false)} />}
       {verCierre && <CajaPanel onClose={() => setVerCierre(false)} />}
       {verReset && (

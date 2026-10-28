@@ -163,6 +163,7 @@ export function itemPromo(promo: Producto, elegidos: Componente[], productos: Pr
   const fijos: Componente[] = promo.fijos.map(f => {
     const p = productos.find(x => x.id === f.productoId)
     return {
+      productoId: f.productoId,
       descripcion: p?.nombre ?? '¿producto?',
       cantidad: f.cantidad,
       variante: p?.precioMitad != null && f.variante !== 'unica' ? f.variante : undefined,

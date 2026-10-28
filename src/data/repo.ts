@@ -1,6 +1,6 @@
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
-  MovimientoCaja, Pago, PrintJob, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
 } from '../types'
 
 /** Catálogo listo para vender en un local (precios del local, sin ocultos) */
@@ -117,6 +117,18 @@ export interface Repo {
   listPrintJobs(sucursalId: string, limit?: number): Promise<PrintJob[]>
   /** Solo demo: simula que el spool imprimió */
   simularSpool?(): Promise<void>
+
+  // ---- Stock
+  getStock(sucursalId: string): Promise<StockItem[]>
+  registrarIngreso(sucursalId: string, data: NuevoIngreso): Promise<void>
+  ajustarStock(sucursalId: string, ingredienteId: string, tipo: 'ajuste' | 'decomiso', cantidad: number, motivo?: string): Promise<void>
+  setStockMinimo(sucursalId: string, ingredienteId: string, minimo: number): Promise<void>
+
+  // ---- Reportes (desde y hasta: ISO; hasta excluido)
+  reporteComandas(sucursalIds: string[], desde: string, hasta: string): Promise<Comanda[]>
+  reporteMovimientosCaja(sucursalIds: string[], desde: string, hasta: string): Promise<MovimientoReporte[]>
+  reporteIngresos(sucursalIds: string[], desde: string, hasta: string): Promise<IngresoMercaderia[]>
+  reporteStockMovimientos(sucursalIds: string[], desde: string, hasta: string, tipos?: TipoMovStock[]): Promise<StockMovimiento[]>
 
   /** Cambios de comandas, cola o menú (realtime / otras pestañas) */
   subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu') => void): () => void

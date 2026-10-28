@@ -68,6 +68,32 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 - **Historial de cajas:** todas las cajas del local con ventas, teórico, contado y diferencia.
   Cada una tiene su detalle: resumen, comandas y gastos/retiros.
 
+### Stock
+
+- Cada local tiene el stock de cada ingrediente (*Administración → Stock*).
+- **Ingreso de mercadería:** proveedor, remito y lo que entró (en kilos, litros o unidades) con lo que
+  se pagó. Puede actualizar el costo de los ingredientes y, si se pagó con la plata de la caja,
+  queda como gasto "Pago remito".
+- **Descuento automático:** al guardar una comanda, la base descuenta la receta de cada producto y
+  de lo que trae cada promo (la mitad consume la mitad). Si se edita la comanda se recalcula, y si
+  se anula se devuelve.
+- **Ajuste** (contaste y no coincide) y **decomiso** (se tiró), con motivo. **Mínimo** por
+  ingrediente para avisar cuando falta.
+
+### Reportes
+
+Botón **Reportes** arriba. Se elige el período (hoy, ayer, 7 días, este mes, mes pasado o fechas) y,
+si sos admin, un local o todos. Cada reporte se descarga en CSV para Excel.
+
+| Reporte | Qué muestra |
+|---|---|
+| Ventas | Total, ticket promedio, mostrador/delivery, sin cobrar, por forma de pago y por día |
+| Venta de mercadería | Unidades por producto (sueltas y dentro de promos), ingredientes consumidos, costo y margen |
+| Gastos | Por tipo de gasto (incluye sueldos) y detalle |
+| Ingresos y egresos de dinero | Ingresos y retiros de caja |
+| Ingreso de mercadería | Cada ingreso con su detalle y el total por ingrediente con precio promedio |
+| Stock | Stock actual por local y lo que entró, se vendió y se ajustó en el período |
+
 ### Ingredientes y recetas
 
 - Cada ingrediente se mide en **unidades, gramos o mililitros** y tiene un costo de compra
@@ -75,8 +101,6 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 - Cada producto tiene su receta (ingrediente + cantidad). La mitad usa la mitad de la receta.
 - El sistema calcula **costo y margen** de cada producto; en las promos suma los productos
   fijos y el promedio de lo que se puede elegir.
-- *Próximo paso:* descontar stock de ingredientes al vender (trigger en la base),
-  ingreso de mercadería, ajustes y decomisos.
 
 ## Conectar Supabase
 

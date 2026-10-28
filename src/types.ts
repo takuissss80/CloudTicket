@@ -176,6 +176,8 @@ export const TIPOS_MOVIMIENTO: { key: TipoMovimiento; label: string; ayuda: stri
 ]
 
 export interface Componente {
+  /** Para descontar stock con la receta del producto */
+  productoId?: string
   descripcion: string
   cantidad: number
   variante?: Variante
@@ -227,12 +229,14 @@ export interface Comanda {
   repartidorNombre?: string
   asignadaAt?: string
   entregadaAt?: string
+  /** Solo en reportes */
+  sucursalId?: string
   createdAt: string
   updatedAt: string
 }
 
 /** Datos para crear una comanda (sin campos que asigna el sistema) */
-export type NuevaComanda = Omit<Comanda, 'id' | 'numero' | 'estado' | 'createdAt' | 'updatedAt' | 'cajaId' | 'repartidorId' | 'repartidorNombre' | 'asignadaAt' | 'entregadaAt'>
+export type NuevaComanda = Omit<Comanda, 'id' | 'numero' | 'estado' | 'createdAt' | 'updatedAt' | 'cajaId' | 'sucursalId' | 'repartidorId' | 'repartidorNombre' | 'asignadaAt' | 'entregadaAt'>
 
 /** Moto / repartidor de un local */
 export interface Repartidor {
@@ -290,3 +294,59 @@ export const FORMAS_PAGO: { key: FormaPago; label: string }[] = [
   { key: 'tarjeta', label: 'Tarjeta' },
   { key: 'transferencia', label: 'Transferencia' },
 ]
+
+// ---------------------------------------------------------------------
+// Stock
+// ---------------------------------------------------------------------
+export interface StockItem {
+  ingredienteId: string
+  /** En la unidad base del ingrediente (un / g / ml) */
+  cantidad: number
+  minimo: number
+}
+
+export type TipoMovStock = 'ingreso' | 'venta' | 'ajuste' | 'decomiso'
+
+export interface StockMovimiento {
+  id: string
+  sucursalId: string
+  ingredienteId: string
+  tipo: TipoMovStock
+  /** Positiva suma, negativa resta */
+  cantidad: number
+  costo?: number
+  ingresoId?: string
+  comandaId?: string
+  motivo?: string
+  creadoPor?: string
+  createdAt: string
+}
+
+export interface IngresoMercaderia {
+  id: string
+  sucursalId: string
+  proveedor?: string
+  comprobante?: string
+  observaciones?: string
+  total: number
+  pagadoConCaja: boolean
+  creadoPor?: string
+  createdAt: string
+  items: { ingredienteId: string; cantidad: number; costo: number }[]
+}
+
+export interface NuevoIngreso {
+  items: { ingredienteId: string; cantidad: number; costo: number }[]
+  proveedor?: string
+  comprobante?: string
+  observaciones?: string
+  actualizarCosto: boolean
+  pagarConCaja: boolean
+}
+
+/** Movimiento de caja con los datos de su caja, para reportes */
+export interface MovimientoReporte extends MovimientoCaja {
+  sucursalId: string
+  cajaTurno: string
+  cajaFecha: string
+}
