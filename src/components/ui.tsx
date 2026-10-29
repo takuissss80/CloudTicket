@@ -1,16 +1,17 @@
 import { useEffect, type ReactNode, type ButtonHTMLAttributes } from 'react'
 import { useApp } from '../store/app'
+import { useTema } from '../lib/tema'
 
 type Tono = 'tinta' | 'albahaca' | 'tomate' | 'muzza' | 'pizarra' | 'claro' | 'fantasma'
 
 const tonos: Record<Tono, string> = {
-  tinta: 'bg-tinta text-white hover:bg-black',
-  albahaca: 'bg-albahaca text-white hover:brightness-110',
+  tinta: 'bg-primario text-sobre-primario hover:opacity-90',
+  albahaca: 'bg-albahaca text-sobre-albahaca hover:brightness-110',
   tomate: 'bg-tomate text-white hover:brightness-110',
-  muzza: 'bg-muzza text-tinta hover:brightness-105',
+  muzza: 'bg-muzza text-sobre-muzza hover:brightness-105',
   pizarra: 'bg-pizarra text-white hover:brightness-110',
-  claro: 'bg-papel text-tinta border border-linea hover:bg-white',
-  fantasma: 'bg-transparent text-tinta hover:bg-black/5',
+  claro: 'bg-papel text-tinta border border-linea hover:bg-superficie',
+  fantasma: 'bg-transparent text-tinta hover:bg-tinta/5',
 }
 
 export function Btn({ tono = 'claro', grande, className = '', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { tono?: Tono; grande?: boolean }) {
@@ -55,11 +56,11 @@ export function Modal({ titulo, onClose, children, pie, ancho = 'max-w-2xl', alt
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-tinta/50 sm:p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div role="dialog" aria-modal="true" className={`entra flex w-full ${ancho} flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-papel shadow-2xl ${alto ? 'h-[92dvh]' : 'max-h-[92dvh]'}`}>
         <header className="flex items-center gap-3 border-b border-linea px-5 py-3">
           <div className="min-w-0 flex-1 font-cond text-2xl font-bold">{titulo}</div>
-          <button onClick={onClose} aria-label="Cerrar" className="size-10 rounded-full text-2xl text-gris hover:bg-black/5">×</button>
+          <button onClick={onClose} aria-label="Cerrar" className="size-10 rounded-full text-2xl text-gris hover:bg-tinta/5">×</button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {pie && <footer className="border-t border-linea bg-harina/60 px-5 py-3">{pie}</footer>}
@@ -78,7 +79,7 @@ export function Campo({ label, children, className = '' }: { label: string; chil
 }
 
 /** Input sin ancho: para campos con ancho propio (w-24, flex-1…) */
-export const inputBase = 'h-11 rounded-lg border border-linea bg-white px-3 text-[16px] outline-none focus:border-pizarra focus:ring-2 focus:ring-pizarra/20'
+export const inputBase = 'h-11 rounded-lg border border-linea bg-superficie px-3 text-[16px] outline-none focus:border-pizarra focus:ring-2 focus:ring-pizarra/20'
 export const inputCls = `${inputBase} w-full`
 
 export function Toasts() {
@@ -86,7 +87,7 @@ export function Toasts() {
   return (
     <div className="pointer-events-none fixed bottom-4 left-4 z-[60] flex flex-col gap-2" aria-live="polite">
       {toasts.map(t => (
-        <div key={t.id} className={`entra rounded-lg px-4 py-3 font-medium text-white shadow-lg ${t.tipo === 'error' ? 'bg-tomate' : 'bg-albahaca'}`}>
+        <div key={t.id} className={`entra rounded-lg px-4 py-3 font-medium shadow-lg ${t.tipo === 'error' ? 'bg-tomate text-white' : 'bg-albahaca text-sobre-albahaca'}`}>
           {t.texto}
         </div>
       ))}
@@ -102,5 +103,21 @@ export function Confirmar({ texto, detalle, accion, tono = 'tomate', onSi, onNo 
       pie={<div className="flex justify-end gap-2"><Btn onClick={onNo}>Volver</Btn><Btn tono={tono} onClick={onSi}>{accion}</Btn></div>}>
       {detalle && <p className="px-5 py-4 text-gris">{detalle}</p>}
     </Modal>
+  )
+}
+
+/** Botón sol / luna para el modo noche */
+export function BotonTema({ className = '' }: { className?: string }) {
+  const { tema, alternar } = useTema()
+  const noche = tema === 'dark'
+  return (
+    <button type="button" onClick={alternar} aria-label={noche ? 'Pasar a modo día' : 'Pasar a modo noche'} title={noche ? 'Modo día' : 'Modo noche'}
+      className={`grid size-10 place-items-center rounded-lg border border-linea bg-papel text-tinta hover:bg-superficie ${className}`}>
+      {noche ? (
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+      ) : (
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></svg>
+      )}
+    </button>
   )
 }

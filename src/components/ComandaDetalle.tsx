@@ -52,7 +52,7 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
       <div className="grid gap-6 p-5 md:grid-cols-[1fr_auto]">
         <div className="space-y-5">
           <section className="flex flex-wrap items-center gap-3">
-            <span className={`rounded-full px-3.5 py-1.5 text-sm font-bold ${anulada ? 'bg-tomate text-white' : c.estado === 'entregado' ? 'bg-linea text-gris' : 'bg-tinta text-white'}`}>{etiquetaEstado(c)}</span>
+            <span className={`rounded-full px-3.5 py-1.5 text-sm font-bold ${anulada ? 'bg-tomate text-white' : c.estado === 'entregado' ? 'bg-linea text-gris' : 'bg-primario text-sobre-primario'}`}>{etiquetaEstado(c)}</span>
             {c.repartidorNombre && (
               <span className="text-[15px]">
                 Moto: <b>{c.repartidorNombre}</b>{c.asignadaAt ? `, salió ${hora(c.asignadaAt)}` : ''}
@@ -63,7 +63,7 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
           </section>
 
           {(c.clienteNombre || c.direccion) && (
-            <section className="rounded-xl border border-linea bg-white p-4">
+            <section className="rounded-xl border border-linea bg-superficie p-4">
               <div className="text-lg font-semibold">{c.clienteNombre}</div>
               {c.direccion && <div>{c.direccion}{c.entreCalles ? `, entre ${c.entreCalles}` : ''}</div>}
               {c.clienteTel && <a href={`tel:${c.clienteTel}`} className="text-pizarra underline">{c.clienteTel}</a>}
@@ -71,7 +71,7 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
             </section>
           )}
 
-          <section className="rounded-xl border border-linea bg-white p-4">
+          <section className="rounded-xl border border-linea bg-superficie p-4">
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-cond text-3xl font-bold">{money(c.total)}</div>

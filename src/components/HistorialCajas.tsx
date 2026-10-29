@@ -52,7 +52,7 @@ export function HistorialPanel({ sucursalId, onReabierta }: { sucursalId: string
       {!cajas ? <p className="p-8 text-center text-gris">Cargando…</p> : !cajas.length ? (
         <p className="p-8 text-center text-gris">Todavía no hay cajas en este local.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+        <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
           <table className="w-full min-w-[860px] text-left text-[15px]">
             <thead className="border-b border-linea text-sm text-gris">
               <tr>
@@ -73,7 +73,7 @@ export function HistorialPanel({ sucursalId, onReabierta }: { sucursalId: string
                   <td className="px-3 py-2.5 font-semibold">{fechaLarga(c.abiertaAt)}</td>
                   <td className="px-3 py-2.5">{c.turno}</td>
                   <td className="px-3 py-2.5">
-                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${c.estado === 'abierta' ? 'bg-albahaca text-white' : 'bg-linea text-gris'}`}>{c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}</span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${c.estado === 'abierta' ? 'bg-albahaca text-sobre-albahaca' : 'bg-linea text-gris'}`}>{c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}</span>
                   </td>
                   <td className="px-3 py-2.5 text-gris">{c.cerradaPor ?? c.abiertaPor ?? ''}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{c.totales?.cantComandas ?? ''}</td>
@@ -97,7 +97,7 @@ export function HistorialCajas({ onClose }: { onClose: () => void }) {
   const local = useNombreLocal()
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-harina">
-      <header className="flex flex-wrap items-center gap-3 bg-tinta px-4 py-3 text-white">
+      <header className="flex flex-wrap items-center gap-3 bg-barra px-4 py-3 text-white">
         <button onClick={onClose} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Volver</button>
         <h1 className="font-cond text-3xl font-bold leading-none">Historial de cajas de {local}</h1>
       </header>
@@ -128,7 +128,7 @@ function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir }: { caja: Caja; es
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <section className="space-y-1 rounded-xl bg-white p-4 text-[15px] ring-1 ring-linea">
+      <section className="space-y-1 rounded-xl bg-superficie p-4 text-[15px] ring-1 ring-linea">
         <p>Abierta a las <b>{hora(caja.abiertaAt)}</b>{caja.abiertaPor ? ` por ${caja.abiertaPor}` : ''}.</p>
         {caja.estado === 'cerrada' ? (
           <>
@@ -140,10 +140,10 @@ function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir }: { caja: Caja; es
         {puedeReabrir && <Btn className="mt-2" onClick={() => setConfirmar(true)}>Reabrir esta caja</Btn>}
       </section>
 
-      <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-linea" role="tablist">
+      <div className="flex gap-1 rounded-xl bg-superficie p-1 ring-1 ring-linea" role="tablist">
         {([['resumen', 'Resumen'], ['comandas', `Comandas (${comandas.length})`], ['movimientos', `Gastos y retiros (${movimientos.length})`]] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={pestana === k} onClick={() => setPestana(k)}
-            className={`h-10 flex-1 rounded-lg font-semibold ${pestana === k ? 'bg-tinta text-white' : 'text-gris hover:bg-harina'}`}>{l}</button>
+            className={`h-10 flex-1 rounded-lg font-semibold ${pestana === k ? 'bg-primario text-sobre-primario' : 'text-gris hover:bg-harina'}`}>{l}</button>
         ))}
       </div>
 
@@ -151,7 +151,7 @@ function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir }: { caja: Caja; es
       {pestana === 'movimientos' && <ListaMovimientos movimientos={movimientos} />}
       {pestana === 'comandas' && (
         comandas.length ? (
-          <ul className="divide-y divide-linea rounded-xl bg-white ring-1 ring-linea">
+          <ul className="divide-y divide-linea rounded-xl bg-superficie ring-1 ring-linea">
             {[...comandas].sort((a, b) => a.numero - b.numero).map(c => (
               <li key={c.id} className={`flex flex-wrap items-center gap-3 px-4 py-2.5 ${c.estado === 'anulada' ? 'text-gris line-through' : ''}`}>
                 <span className="w-10 font-cond text-2xl font-bold tabular-nums">{c.numero}</span>

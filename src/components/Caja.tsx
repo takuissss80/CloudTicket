@@ -41,11 +41,11 @@ export function CajaCerrada() {
         <p className="mt-2 text-gris">Abrí la caja del turno para tomar pedidos. Las comandas se numeran desde 1 en cada caja.</p>
       </div>
 
-      <section className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-linea">
+      <section className="space-y-4 rounded-2xl bg-superficie p-5 ring-1 ring-linea">
         <div className="flex justify-center gap-2">
           {TURNOS.map(t => (
             <button key={t} onClick={() => setTurno(t)} aria-pressed={turno === t}
-              className={`h-12 flex-1 rounded-xl font-semibold ${turno === t ? 'bg-tinta text-white' : 'bg-harina hover:bg-linea'}`}>{t}</button>
+              className={`h-12 flex-1 rounded-xl font-semibold ${turno === t ? 'bg-primario text-sobre-primario' : 'bg-harina hover:bg-linea'}`}>{t}</button>
           ))}
         </div>
         <Campo label="Dinero al inicio (efectivo en la caja)">
@@ -59,7 +59,7 @@ export function CajaCerrada() {
       </section>
 
       {ultima && ultima.estado === 'cerrada' && (
-        <section className="rounded-2xl bg-white p-5 ring-1 ring-linea">
+        <section className="rounded-2xl bg-superficie p-5 ring-1 ring-linea">
           <div className="text-sm font-medium text-gris">Última caja</div>
           <div className="mt-1 font-cond text-2xl font-bold">{fechaLarga(ultima.abiertaAt)}, turno {ultima.turno.toLowerCase()}</div>
           <p className="text-[15px] text-gris">
@@ -137,7 +137,7 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
       {motos.size > 0 && (
         <div>
           <div className="mb-1 text-sm font-medium text-gris">Viajes por moto</div>
-          <ul className="divide-y divide-linea rounded-xl bg-white ring-1 ring-linea">
+          <ul className="divide-y divide-linea rounded-xl bg-superficie ring-1 ring-linea">
             {[...motos].map(([nombre, m]) => (
               <li key={nombre} className="flex justify-between px-4 py-2">
                 <span>{nombre}: {m.viajes} {m.viajes === 1 ? 'viaje' : 'viajes'}</span>
@@ -150,7 +150,7 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
       {porForma && porForma.size > 0 && (
         <div>
           <div className="mb-1 text-sm font-medium text-gris">Cobrado por forma de pago</div>
-          <ul className="divide-y divide-linea rounded-xl bg-white ring-1 ring-linea">
+          <ul className="divide-y divide-linea rounded-xl bg-superficie ring-1 ring-linea">
             {[...porForma].map(([forma, monto]) => (
               <li key={forma} className="flex justify-between px-4 py-2">
                 <span>{FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma}</span>
@@ -170,7 +170,7 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
 export function ListaMovimientos({ movimientos, onEliminar }: { movimientos: MovimientoCaja[]; onEliminar?: (m: MovimientoCaja) => void }) {
   if (!movimientos.length) return <p className="py-6 text-center text-gris">No hay movimientos en esta caja.</p>
   return (
-    <ul className="divide-y divide-linea rounded-xl bg-white ring-1 ring-linea">
+    <ul className="divide-y divide-linea rounded-xl bg-superficie ring-1 ring-linea">
       {movimientos.map(m => {
         const tipo = TIPOS_MOVIMIENTO.find(t => t.key === m.tipo)
         return (
@@ -206,11 +206,11 @@ function NuevoMovimiento() {
   }
 
   return (
-    <form onSubmit={e => { e.preventDefault(); guardar() }} className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-linea">
+    <form onSubmit={e => { e.preventDefault(); guardar() }} className="space-y-3 rounded-xl bg-superficie p-4 ring-1 ring-linea">
       <div className="flex flex-wrap gap-1">
         {TIPOS_MOVIMIENTO.map(t => (
           <button key={t.key} type="button" onClick={() => setTipo(t.key)} aria-pressed={tipo === t.key}
-            className={`h-10 rounded-lg px-4 font-semibold ${tipo === t.key ? 'bg-tinta text-white' : 'bg-harina hover:bg-linea'}`}>{t.label}</button>
+            className={`h-10 rounded-lg px-4 font-semibold ${tipo === t.key ? 'bg-primario text-sobre-primario' : 'bg-harina hover:bg-linea'}`}>{t.label}</button>
         ))}
       </div>
       <p className="text-sm text-gris">{ayuda}</p>
@@ -260,7 +260,7 @@ export function CajaPanel({ onClose }: { onClose: () => void }) {
         <div className="flex gap-1 rounded-xl bg-harina p-1" role="tablist">
           {(['resumen', 'movimientos'] as const).map(p => (
             <button key={p} role="tab" aria-selected={pestana === p} onClick={() => setPestana(p)}
-              className={`h-10 flex-1 rounded-lg font-semibold ${pestana === p ? 'bg-white shadow-sm' : 'text-gris'}`}>
+              className={`h-10 flex-1 rounded-lg font-semibold ${pestana === p ? 'bg-superficie shadow-sm' : 'text-gris'}`}>
               {p === 'resumen' ? 'Resumen' : `Gastos, retiros e ingresos (${movimientos.length})`}
             </button>
           ))}

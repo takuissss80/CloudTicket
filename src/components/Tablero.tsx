@@ -8,10 +8,10 @@ import { AsignarRepartidorModal, EntregarModal } from './Entrega'
 import { MINUTOS_ALERTA_DELIVERY, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
 
 function colorEstado(c: Comanda) {
-  if (c.estado === 'anulada') return 'bg-tinta text-white'
+  if (c.estado === 'anulada') return 'bg-gris text-papel'
   if (c.estado === 'entregado') return 'bg-linea text-gris'
   if (c.tipo === 'delivery') return c.repartidorId ? 'bg-pizarra text-white' : 'bg-tomate text-white'
-  return 'bg-muzza text-tinta'
+  return 'bg-muzza text-sobre-muzza'
 }
 
 export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
@@ -25,7 +25,7 @@ function TarjetaComanda({ c, onAbrir, onAccion, ahora }: { c: Comanda; onAbrir: 
   const viaje = minutosDelivery(c, ahora)
 
   return (
-    <article className={`ticket-edge relative bg-white shadow-sm transition ${cerrada ? 'opacity-55' : ''}`}>
+    <article className={`ticket-edge relative bg-superficie shadow-sm transition ${cerrada ? 'opacity-55' : ''}`}>
       <button onClick={onAbrir} className="block w-full px-4 text-left">
         <div className="flex items-start gap-3">
           <span className={`font-cond text-5xl font-extrabold leading-[0.85] tabular-nums ${c.estado === 'anulada' ? 'line-through' : ''}`}>{c.numero}</span>
@@ -64,7 +64,7 @@ function TarjetaComanda({ c, onAbrir, onAccion, ahora }: { c: Comanda; onAbrir: 
       {accion && (
         <div className="px-4 pt-2">
           <button onClick={() => onAccion({ tipo: accion, id: c.id })}
-            className={`h-11 w-full rounded-lg font-cond text-lg font-bold ${accion === 'asignar' ? 'bg-tomate text-white hover:brightness-110' : 'bg-albahaca text-white hover:brightness-110'}`}>
+            className={`h-11 w-full rounded-lg font-cond text-lg font-bold ${accion === 'asignar' ? 'bg-tomate text-white hover:brightness-110' : 'bg-albahaca text-sobre-albahaca hover:brightness-110'}`}>
             {accion === 'asignar' ? 'Asignar delivery' : 'Entregar pedido'}
           </button>
         </div>

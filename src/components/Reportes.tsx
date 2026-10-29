@@ -89,13 +89,13 @@ export function Reportes({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
-      <header className="flex flex-wrap items-center gap-3 bg-tinta px-4 py-3 text-white">
+      <header className="flex flex-wrap items-center gap-3 bg-barra px-4 py-3 text-white">
         <button onClick={onClose} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Volver</button>
         <h1 className="font-cond text-3xl font-bold leading-none">Reportes</h1>
         <nav className="flex flex-wrap gap-1 rounded-lg bg-white/10 p-1 lg:ml-auto" aria-label="Reportes">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} aria-current={tab === t.key}
-              className={`h-9 rounded-md px-3 text-[15px] font-semibold ${tab === t.key ? 'bg-white text-tinta' : 'text-white/85 hover:text-white'}`}>{t.label}</button>
+              className={`h-9 rounded-md px-3 text-[15px] font-semibold ${tab === t.key ? 'bg-albahaca text-sobre-albahaca' : 'text-white/85 hover:text-white'}`}>{t.label}</button>
           ))}
         </nav>
       </header>
@@ -116,7 +116,7 @@ export function Reportes({ onClose }: { onClose: () => void }) {
                   const activo = v.desde === periodo.desde && v.hasta === periodo.hasta
                   return (
                     <button key={p.key} onClick={() => setPeriodo(v)} aria-pressed={activo}
-                      className={`h-10 rounded-lg px-3 text-[15px] font-semibold ${activo ? 'bg-tinta text-white' : 'bg-white ring-1 ring-linea hover:bg-harina'}`}>{p.label}</button>
+                      className={`h-10 rounded-lg px-3 text-[15px] font-semibold ${activo ? 'bg-primario text-sobre-primario' : 'bg-superficie ring-1 ring-linea hover:bg-harina'}`}>{p.label}</button>
                   )
                 })}
               </div>
@@ -152,7 +152,7 @@ export function Reportes({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------
 function Tarjeta({ label, valor, detalle, tono }: { label: string; valor: ReactNode; detalle?: ReactNode; tono?: 'bien' | 'mal' }) {
   return (
-    <div className="rounded-xl bg-white p-4 ring-1 ring-linea">
+    <div className="rounded-xl bg-superficie p-4 ring-1 ring-linea">
       <div className="text-sm text-gris">{label}</div>
       <div className={`font-cond text-3xl font-bold tabular-nums ${tono === 'mal' ? 'text-tomate' : tono === 'bien' ? 'text-albahaca' : ''}`}>{valor}</div>
       {detalle && <div className="text-sm text-gris">{detalle}</div>}
@@ -174,7 +174,7 @@ function Seccion({ titulo, children, csv }: { titulo: string; children: ReactNod
 
 function Tabla({ cabecera, children, ancho = 'min-w-[640px]' }: { cabecera: (string | [string, 'right'])[]; children: ReactNode; ancho?: string }) {
   return (
-    <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+    <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
       <table className={`w-full ${ancho} text-left text-[15px]`}>
         <thead className="border-b border-linea text-sm text-gris">
           <tr>{cabecera.map((c, i) => Array.isArray(c)
@@ -187,7 +187,7 @@ function Tabla({ cabecera, children, ancho = 'min-w-[640px]' }: { cabecera: (str
   )
 }
 
-const Vacio = ({ children }: { children: ReactNode }) => <p className="rounded-xl bg-white p-8 text-center text-gris ring-1 ring-linea">{children}</p>
+const Vacio = ({ children }: { children: ReactNode }) => <p className="rounded-xl bg-superficie p-8 text-center text-gris ring-1 ring-linea">{children}</p>
 
 function Barra({ valor, max, tono = 'bg-pizarra' }: { valor: number; max: number; tono?: string }) {
   return (

@@ -4,25 +4,82 @@
   --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
   --font-cond: "Barlow Condensed", "Barlow", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
 
-  --color-harina: #eef1ec;
-  --color-papel: #fbfcfa;
-  --color-tinta: #1e2421;
-  --color-gris: #6b746f;
-  --color-linea: #d6dcd6;
-  --color-tomate: #c8322b;
-  --color-tomate-claro: #f6dcd9;
-  --color-albahaca: #2f7d4e;
-  --color-albahaca-claro: #d9eddf;
-  --color-muzza: #f2c230;
-  --color-muzza-claro: #fbefc5;
-  --color-pizarra: #3b5b7a;
-  --color-pizarra-claro: #dbe4ee;
+/* Colores: paleta CloudVision (azul noche + verde agua). Los tokens cambian con el tema. */
+@theme inline {
+  --color-harina: var(--c-harina);
+  --color-papel: var(--c-papel);
+  --color-superficie: var(--c-superficie);
+  --color-tinta: var(--c-tinta);
+  --color-gris: var(--c-gris);
+  --color-linea: var(--c-linea);
+  --color-barra: var(--c-barra);
+  --color-albahaca: var(--c-albahaca);
+  --color-albahaca-claro: var(--c-albahaca-claro);
+  --color-sobre-albahaca: var(--c-sobre-albahaca);
+  --color-pizarra: var(--c-pizarra);
+  --color-pizarra-claro: var(--c-pizarra-claro);
+  --color-tomate: var(--c-tomate);
+  --color-tomate-claro: var(--c-tomate-claro);
+  --color-muzza: var(--c-muzza);
+  --color-muzza-claro: var(--c-muzza-claro);
+  --color-sobre-muzza: var(--c-sobre-muzza);
+  --color-primario: var(--c-primario);
+  --color-sobre-primario: var(--c-sobre-primario);
+}
+
+:root {
+  color-scheme: light;
+  --c-harina: #eef1f7;
+  --c-papel: #f8f9fc;
+  --c-superficie: #ffffff;
+  --c-tinta: #0d1226;
+  --c-gris: #5a6380;
+  --c-linea: #d7dce8;
+  --c-barra: #0d1226;
+  --c-albahaca: #00a383;
+  --c-albahaca-claro: #d4f5ec;
+  --c-sobre-albahaca: #0d1226;
+  --c-pizarra: #3355cc;
+  --c-pizarra-claro: #dde4fa;
+  --c-tomate: #d83c3c;
+  --c-tomate-claro: #fadbdb;
+  --c-muzza: #f2c230;
+  --c-muzza-claro: #fbf0c8;
+  --c-sobre-muzza: #1a1a1a;
+  --c-primario: #0d1226;
+  --c-sobre-primario: #ffffff;
+}
+
+/* Modo noche: los colores de cloud-vision.com.ar */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-harina: #0d1226;
+  --c-papel: #10162e;
+  --c-superficie: #141b39;
+  --c-tinta: #fafafa;
+  --c-gris: #a6a6a6;
+  --c-linea: #232c58;
+  --c-barra: #090c1c;
+  --c-albahaca: #00e6b4;
+  --c-albahaca-claro: #0b3b3a;
+  --c-sobre-albahaca: #0d1226;
+  --c-pizarra: #5470ea;
+  --c-pizarra-claro: #1c2654;
+  --c-tomate: #ef5350;
+  --c-tomate-claro: #3a1720;
+  --c-muzza: #f2c230;
+  --c-muzza-claro: #3a3112;
+  --c-sobre-muzza: #1a1a1a;
+  --c-primario: #00e6b4;
+  --c-sobre-primario: #0d1226;
 }
 
 html, body, #root { height: 100%; }
 body {
   background: var(--color-harina);
+  transition: background-color .2s, color .2s;
   color: var(--color-tinta);
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;

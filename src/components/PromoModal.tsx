@@ -66,7 +66,7 @@ export function PromoModal({ promo, onClose }: { promo: Producto; onClose: () =>
                 {opciones.map(p => {
                   const variantes: (Coccion | '')[] = p.admiteCoccion ? ['horno', 'frita'] : ['']
                   return (
-                    <div key={p.id} className="rounded-xl border border-linea bg-white p-3">
+                    <div key={p.id} className="rounded-xl border border-linea bg-superficie p-3">
                       <div className="flex items-baseline gap-2">
                         {p.codigo && <span className="font-cond text-lg font-bold text-tomate">{p.codigo}</span>}
                         <span className="font-semibold">{p.nombre}</span>

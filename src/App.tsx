@@ -12,7 +12,7 @@ import { ColaImpresion } from './components/ColaImpresion'
 import { CrearCuenta, Login } from './components/Login'
 import { Administracion } from './components/admin/Administracion'
 import { Reportes } from './components/Reportes'
-import { Btn, Confirmar, Toasts } from './components/ui'
+import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
   const { cargando, error, caja, sesion, sucursales, sucursalId, printJobs, cambiarLocal, refrescar, refrescarMenu, salir } = useApp()
@@ -60,7 +60,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
               <label className="flex items-center">
                 <span className="sr-only">Local</span>
                 <select id="local-activo" value={sucursalId ?? ''} onChange={e => cambiarLocal(e.target.value)}
-                  className="h-10 max-w-[60vw] rounded-lg border border-linea bg-white pl-2 pr-8 font-cond text-xl font-extrabold">
+                  className="h-10 max-w-[60vw] rounded-lg border border-linea bg-superficie pl-2 pr-8 font-cond text-xl font-extrabold">
                   {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               </label>
@@ -71,16 +71,17 @@ function Principal({ onSalir }: { onSalir: () => void }) {
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {repo.modo === 'demo' && (
-              <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza">Modo demo</button>
+              <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza hover:text-sobre-muzza">Modo demo</button>
             )}
             <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>
             <Btn onClick={() => setVerAdmin(true)}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
             <button onClick={() => setVerCola(true)}
-              className={`h-10 rounded-lg px-3 font-semibold ring-1 ${conError ? 'bg-tomate text-white ring-tomate' : 'bg-white ring-linea hover:bg-harina'}`}>
-              Impresión{enCola ? <span className="ml-2 rounded-full bg-muzza px-2 text-tinta">{enCola} en cola</span> : null}
+              className={`h-10 rounded-lg px-3 font-semibold ring-1 ${conError ? 'bg-tomate text-white ring-tomate' : 'bg-superficie ring-linea hover:bg-harina'}`}>
+              Impresión{enCola ? <span className="ml-2 rounded-full bg-muzza px-2 text-sobre-muzza">{enCola} en cola</span> : null}
               {conError ? <span className="ml-2">{conError} con error</span> : null}
             </button>
             {caja && <Btn onClick={() => setVerCierre(true)}>Caja</Btn>}
+            <BotonTema />
             <Btn tono="fantasma" title={`Usuario: ${sesion?.usuario}`} onClick={async () => { await salir(); onSalir() }}>
               Salir <span className="hidden text-sm font-normal text-gris md:inline">({sesion?.usuario})</span>
             </Btn>

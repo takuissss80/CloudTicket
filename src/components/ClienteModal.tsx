@@ -89,7 +89,7 @@ export function ClienteModal({ onClose }: { onClose: () => void }) {
         {resultados.length > 0 && (
           <div className="sm:col-span-2">
             <div className="mb-1 text-sm font-medium text-gris">Clientes anteriores</div>
-            <ul className="divide-y divide-linea overflow-hidden rounded-lg border border-linea bg-white">
+            <ul className="divide-y divide-linea overflow-hidden rounded-lg border border-linea bg-superficie">
               {resultados.map(c => (
                 <li key={c.id}>
                   <button type="button" onClick={() => elegir(c)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-pizarra-claro">

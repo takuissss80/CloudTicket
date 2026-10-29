@@ -43,7 +43,7 @@ export function AsignarRepartidorModal({ comanda, onClose }: { comanda: Comanda;
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {activos.map(r => (
               <button key={r.id} disabled={enviando} onClick={() => asignar(r.id)}
-                className="flex flex-col items-start rounded-xl bg-white px-4 py-3 text-left ring-1 ring-linea hover:bg-tomate-claro hover:ring-tomate disabled:opacity-50">
+                className="flex flex-col items-start rounded-xl bg-superficie px-4 py-3 text-left ring-1 ring-linea hover:bg-tomate-claro hover:ring-tomate disabled:opacity-50">
                 <span className="font-cond text-2xl font-bold">{r.nombre}</span>
                 <span className="text-sm text-gris">{[r.telefono, r.dni && `DNI ${r.dni}`].filter(Boolean).join(', ') || 'Sin datos de contacto'}</span>
               </button>
@@ -54,7 +54,7 @@ export function AsignarRepartidorModal({ comanda, onClose }: { comanda: Comanda;
         )}
 
         {nuevo ? (
-          <form className="space-y-2 rounded-xl bg-white p-3 ring-1 ring-linea" onSubmit={e => { e.preventDefault(); crear() }}>
+          <form className="space-y-2 rounded-xl bg-superficie p-3 ring-1 ring-linea" onSubmit={e => { e.preventDefault(); crear() }}>
             <div className="font-semibold">Nuevo repartidor</div>
             <input autoFocus aria-label="Nombre" placeholder="Nombre" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} className={`${inputBase} w-full`} />
             <div className="flex gap-2">
@@ -108,7 +108,7 @@ export function EntregarModal({ comanda, onClose }: { comanda: Comanda; onClose:
     >
       <div className="space-y-4 p-5">
         {comanda.tipo === 'delivery' && comanda.repartidorNombre && (
-          <p className="rounded-xl bg-white p-3 ring-1 ring-linea">
+          <p className="rounded-xl bg-superficie p-3 ring-1 ring-linea">
             Salió con <b>{comanda.repartidorNombre}</b>{comanda.asignadaAt ? ` a las ${hora(comanda.asignadaAt)}` : ''}
             {mins != null && <>, hace <b>{mins} min</b></>}
           </p>
@@ -117,7 +117,7 @@ export function EntregarModal({ comanda, onClose }: { comanda: Comanda; onClose:
           <div className="mb-2 text-sm font-medium text-gris">¿Cómo pagó?</div>
           <div className="space-y-2">
             {pagos.map((pg, i) => (
-              <div key={i} className="rounded-xl bg-white p-2 ring-1 ring-linea">
+              <div key={i} className="rounded-xl bg-superficie p-2 ring-1 ring-linea">
                 <div className="flex flex-wrap gap-1">
                   {FORMAS_PAGO.map(f => (
                     <button key={f.key} type="button" onClick={() => setPago(i, { forma: f.key })}
@@ -142,7 +142,7 @@ export function EntregarModal({ comanda, onClose }: { comanda: Comanda; onClose:
             </span>
           </div>
         </div>
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white px-4 py-3 ring-1 ring-linea">
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-superficie px-4 py-3 ring-1 ring-linea">
           <input type="checkbox" className="size-5 accent-albahaca" checked={cobrada} onChange={e => setCobrada(e.target.checked)} />
           <span className="font-semibold">Cobrado</span>
           <span className="text-sm text-gris">Desmarcalo si queda debiendo</span>

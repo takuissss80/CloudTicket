@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { repo } from '../data'
 import { USUARIOS_DEMO } from '../data/localRepo'
 import { mensajeError } from '../store/app'
-import { Btn, Campo, inputCls } from './ui'
+import { Btn, Campo, inputCls, BotonTema } from './ui'
 
 /** Ingreso: usuario de local o email de administrador */
 export function Login({ onListo }: { onListo: () => void }) {
@@ -40,6 +40,7 @@ export function Login({ onListo }: { onListo: () => void }) {
 
   return (
     <div className="mx-auto mt-[10vh] max-w-sm px-4 pb-10">
+      <BotonTema className="fixed right-4 top-4" />
       <h1 className="font-cond text-5xl font-bold">Comandas</h1>
       <p className="mt-1 text-gris">{modo === 'entrar' ? 'Entrá con el usuario de tu local o con tu email de administrador.' : 'Creá la cuenta de tu marca. Vas a ser el administrador.'}</p>
 
@@ -76,7 +77,7 @@ export function Login({ onListo }: { onListo: () => void }) {
             {USUARIOS_DEMO.map(u => (
               <li key={u.usuario}>
                 <button type="button" disabled={enviando} onClick={() => entrarDemo(u.usuario, u.password)}
-                  className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left ring-1 ring-linea hover:bg-papel">
+                  className="flex w-full items-center justify-between rounded-lg bg-superficie px-3 py-2 text-left ring-1 ring-linea hover:bg-papel">
                   <span className="font-semibold">{u.usuario}</span>
                   <span className="text-sm text-gris">{u.descripcion}</span>
                 </button>

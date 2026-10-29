@@ -86,12 +86,12 @@ export function MenuAdmin() {
       {/* ---- Qué menú se edita */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {esAdmin ? (
-          <div className="flex flex-wrap gap-1 rounded-xl bg-white p-1 ring-1 ring-linea" role="tablist" aria-label="Menú a editar">
+          <div className="flex flex-wrap gap-1 rounded-xl bg-superficie p-1 ring-1 ring-linea" role="tablist" aria-label="Menú a editar">
             <button role="tab" aria-selected={vista === null} onClick={() => setVista(null)}
-              className={`h-10 rounded-lg px-4 font-semibold ${vista === null ? 'bg-tinta text-white' : 'hover:bg-harina'}`}>Menú madre</button>
+              className={`h-10 rounded-lg px-4 font-semibold ${vista === null ? 'bg-primario text-sobre-primario' : 'hover:bg-harina'}`}>Menú madre</button>
             {sucursales.map(s => (
               <button key={s.id} role="tab" aria-selected={vista === s.id} onClick={() => setVista(s.id)}
-                className={`h-10 rounded-lg px-4 font-semibold ${vista === s.id ? 'bg-tinta text-white' : 'hover:bg-harina'}`}>{s.nombre}</button>
+                className={`h-10 rounded-lg px-4 font-semibold ${vista === s.id ? 'bg-primario text-sobre-primario' : 'hover:bg-harina'}`}>{s.nombre}</button>
             ))}
           </div>
         ) : <h2 className="font-cond text-3xl font-bold">{local?.nombre}</h2>}
@@ -103,7 +103,7 @@ export function MenuAdmin() {
       </div>
 
       {!categorias.length ? (
-        <div className="mx-auto max-w-md rounded-2xl bg-white p-8 text-center ring-1 ring-linea">
+        <div className="mx-auto max-w-md rounded-2xl bg-superficie p-8 text-center ring-1 ring-linea">
           <h3 className="font-cond text-3xl font-bold">El menú está vacío</h3>
           <p className="mt-2 text-gris">Creá una categoría para empezar{esAdmin && !enLocal ? ' o cargá el menú de ejemplo de la pizzería, con ingredientes y recetas, para editarlo después' : ''}.</p>
           <div className="mt-6 flex flex-col gap-2">
@@ -119,7 +119,7 @@ export function MenuAdmin() {
               const n = menu.productos.filter(p => p.categoriaId === c.id).length
               return (
                 <button key={c.id} onClick={() => { setCatSel(c.id); setBusqueda('') }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${catSel === c.id && !busqueda ? 'bg-white shadow-sm ring-1 ring-linea' : 'hover:bg-white/60'} ${c.activa ? '' : 'opacity-50'}`}>
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${c.activa ? '' : 'opacity-50'}`}>
                   <span className={`h-6 w-1.5 rounded-full ${bordeColor[c.color]}`} />
                   <span className="min-w-0 flex-1 truncate font-semibold">{c.nombre}</span>
                   {c.sucursalId && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold">Propia</span>}
@@ -142,7 +142,7 @@ export function MenuAdmin() {
               <Btn tono="albahaca" onClick={() => setEditando('nuevo')}>+ Nuevo producto{enLocal ? ' propio' : ''}</Btn>
             </div>
 
-            <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+            <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
               <table className="w-full min-w-[720px] text-left">
                 <thead className="border-b border-linea text-sm text-gris">
                   <tr>
@@ -277,7 +277,7 @@ function PrecioLocal({ valor, base, etiqueta, mitad, onGuardar }: {
       {mitad && <span className="text-xs text-gris">½</span>}
       <input aria-label={etiqueta} inputMode="decimal" value={texto} placeholder={String(base)}
         onChange={e => setTexto(e.target.value)} onBlur={guardar} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-        className={`h-9 rounded-lg border px-2 text-right tabular-nums outline-none focus:border-pizarra ${mitad ? 'w-24 text-sm' : 'w-28'} ${valor != null ? 'border-muzza bg-muzza-claro font-semibold' : 'border-linea bg-white'}`} />
+        className={`h-9 rounded-lg border px-2 text-right tabular-nums outline-none focus:border-pizarra ${mitad ? 'w-24 text-sm' : 'w-28'} ${valor != null ? 'border-muzza bg-muzza-claro font-semibold' : 'border-linea bg-superficie'}`} />
     </div>
   )
 }
@@ -313,7 +313,7 @@ function CategoriaEditor({ categoria, sucursalId, orden, onClose, onGuardado }: 
           <div className="flex gap-2">
             {COLORES.map(c => (
               <button key={c.key} type="button" onClick={() => setColor(c.key)} aria-pressed={color === c.key}
-                className={`flex h-10 items-center gap-2 rounded-lg px-3 ring-1 ${color === c.key ? 'bg-white ring-2 ring-tinta' : 'bg-white ring-linea'}`}>
+                className={`flex h-10 items-center gap-2 rounded-lg px-3 ring-1 ${color === c.key ? 'bg-superficie ring-2 ring-tinta' : 'bg-superficie ring-linea'}`}>
                 <span className={`size-4 rounded-full ${c.cls}`} />{c.label}
               </button>
             ))}

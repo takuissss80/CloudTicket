@@ -63,10 +63,10 @@ export function Stock() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl bg-white p-4 ring-1 ring-linea"><div className="text-sm text-gris">Valor del stock</div><div className="font-cond text-3xl font-bold tabular-nums">{money(valorTotal)}</div></div>
-        <div className="rounded-xl bg-white p-4 ring-1 ring-linea"><div className="text-sm text-gris">Ingredientes</div><div className="font-cond text-3xl font-bold tabular-nums">{filas.length}</div></div>
+        <div className="rounded-xl bg-superficie p-4 ring-1 ring-linea"><div className="text-sm text-gris">Valor del stock</div><div className="font-cond text-3xl font-bold tabular-nums">{money(valorTotal)}</div></div>
+        <div className="rounded-xl bg-superficie p-4 ring-1 ring-linea"><div className="text-sm text-gris">Ingredientes</div><div className="font-cond text-3xl font-bold tabular-nums">{filas.length}</div></div>
         <button onClick={() => setSoloBajos(!soloBajos)} aria-pressed={soloBajos}
-          className={`rounded-xl p-4 text-left ring-1 ${bajos ? 'bg-tomate-claro ring-tomate' : 'bg-white ring-linea'} ${soloBajos ? 'ring-2' : ''}`}>
+          className={`rounded-xl p-4 text-left ring-1 ${bajos ? 'bg-tomate-claro ring-tomate' : 'bg-superficie ring-linea'} ${soloBajos ? 'ring-2' : ''}`}>
           <div className="text-sm text-gris">Bajo el mínimo o en negativo</div>
           <div className={`font-cond text-3xl font-bold tabular-nums ${bajos ? 'text-tomate' : ''}`}>{bajos}</div>
           <div className="text-xs text-gris">{soloBajos ? 'Mostrando solo estos. Tocá para ver todos' : 'Tocá para ver solo estos'}</div>
@@ -76,9 +76,9 @@ export function Stock() {
       <input aria-label="Buscar ingrediente" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Buscar ingrediente" className={`${inputBase} w-full sm:w-72`} />
 
       {!stock ? <p className="p-8 text-center text-gris">Cargando…</p> : !ingredientes.length ? (
-        <p className="rounded-xl bg-white p-8 text-center text-gris ring-1 ring-linea">No hay ingredientes cargados. El administrador los carga en la pestaña Ingredientes y les arma la receta a los productos.</p>
+        <p className="rounded-xl bg-superficie p-8 text-center text-gris ring-1 ring-linea">No hay ingredientes cargados. El administrador los carga en la pestaña Ingredientes y les arma la receta a los productos.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+        <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
           <table className="w-full min-w-[680px] text-left text-[15px]">
             <thead className="border-b border-linea text-sm text-gris">
               <tr>
@@ -127,7 +127,7 @@ function MinimoInput({ valor, unidad, etiqueta, onGuardar }: { valor: number; un
     <span className="inline-flex items-center gap-1">
       <input aria-label={etiqueta} inputMode="decimal" value={t} placeholder="0" onChange={e => setT(e.target.value)}
         onBlur={() => { if (t !== inicial) onGuardar(t) }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-        className="h-9 w-20 rounded-lg border border-linea bg-white px-2 text-right tabular-nums outline-none focus:border-pizarra" />
+        className="h-9 w-20 rounded-lg border border-linea bg-superficie px-2 text-right tabular-nums outline-none focus:border-pizarra" />
       <span className="w-6 text-left text-sm text-gris">{unidad}</span>
     </span>
   )
@@ -245,7 +245,7 @@ function AjusteModal({ sucursalId, ingrediente, actual, onClose, onListo }: { su
         <div className="flex gap-1 rounded-xl bg-harina p-1">
           {(['ajuste', 'decomiso'] as const).map(t => (
             <button key={t} onClick={() => setTipo(t)} aria-pressed={tipo === t}
-              className={`h-10 flex-1 rounded-lg font-semibold ${tipo === t ? 'bg-white shadow-sm' : 'text-gris'}`}>
+              className={`h-10 flex-1 rounded-lg font-semibold ${tipo === t ? 'bg-superficie shadow-sm' : 'text-gris'}`}>
               {t === 'ajuste' ? 'Conté el stock' : 'Decomiso (se tiró)'}
             </button>
           ))}

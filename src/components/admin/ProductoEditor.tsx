@@ -143,7 +143,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
               <span className="text-sm text-gris">{porMitad ? 'Cantidades para la entera; la mitad usa la mitad' : 'Cantidades para una unidad'}</span>
             </div>
             {p.receta.length > 0 && (
-              <ul className="divide-y divide-linea overflow-hidden rounded-xl bg-white ring-1 ring-linea">
+              <ul className="divide-y divide-linea overflow-hidden rounded-xl bg-superficie ring-1 ring-linea">
                 {p.receta.map((r, i) => {
                   const ing = ingredientes.find(x => x.id === r.ingredienteId)
                   const c = ing ? (r.cantidad * ing.costo) / divisorUnidad(ing.unidad) : 0
@@ -181,7 +181,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
                 {p.fijos.map((f, i) => {
                   const prod = vendibles.find(x => x.id === f.productoId)
                   return (
-                    <li key={i} className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-2 ring-1 ring-linea">
+                    <li key={i} className="flex flex-wrap items-center gap-2 rounded-xl bg-superficie p-2 ring-1 ring-linea">
                       <input aria-label="Cantidad" inputMode="numeric" value={f.cantidad || ''} onChange={e => setFijos(p.fijos.map((x, j) => j === i ? { ...x, cantidad: Math.max(1, Math.round(numero(e.target.value) ?? 1)) } : x))}
                         className={`${inputBase} h-9 w-16 text-center`} />
                       <select aria-label="Producto" value={f.productoId} onChange={e => setFijos(p.fijos.map((x, j) => j === i ? { ...x, productoId: e.target.value } : x))}
@@ -208,7 +208,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
               <h3 className="mb-2 font-cond text-2xl font-bold">Para elegir</h3>
               <ul className="space-y-2">
                 {p.slots.map((s, i) => (
-                  <li key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-2 ring-1 ring-linea">
+                  <li key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-superficie p-2 ring-1 ring-linea">
                     <span className="text-gris">Elegí</span>
                     <input aria-label="Cantidad a elegir" inputMode="numeric" value={s.cantidad || ''} onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, cantidad: Math.max(1, Math.round(numero(e.target.value) ?? 1)) } : x))}
                       className={`${inputBase} h-9 w-16 text-center`} />
@@ -232,7 +232,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
         )}
 
         {/* ---- Costo y margen */}
-        <section className="grid gap-3 rounded-xl bg-white p-4 ring-1 ring-linea sm:grid-cols-3">
+        <section className="grid gap-3 rounded-xl bg-superficie p-4 ring-1 ring-linea sm:grid-cols-3">
           <div>
             <div className="text-sm text-gris">{esPromo ? 'Costo aproximado' : 'Costo'}</div>
             <div className="font-cond text-3xl font-bold tabular-nums">{money(costo)}</div>

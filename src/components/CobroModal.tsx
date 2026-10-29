@@ -99,7 +99,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
             <h3 className="mb-2 font-cond text-2xl font-bold">Pago</h3>
             <div className="space-y-2">
               {p.pagos.map((pg, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-linea bg-white p-2">
+                <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-linea bg-superficie p-2">
                   <div className="flex flex-wrap gap-1">
                     {FORMAS_PAGO.map(f => (
                       <button key={f.key} type="button" onClick={() => p.setPago(i, { forma: f.key })}
@@ -125,7 +125,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
                   : <span className="text-albahaca">Pago justo</span>}
               </span>
             </div>
-            <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-linea bg-white px-4 py-3">
+            <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-linea bg-superficie px-4 py-3">
               <input type="checkbox" className="size-5 accent-albahaca" checked={p.cobrada} onChange={e => p.set({ cobrada: e.target.checked })} />
               <span className="font-semibold">Ya está cobrado</span>
               <span className="text-sm text-gris">{p.tipo === 'delivery' ? 'Dejalo sin marcar si cobra el repartidor' : 'Desmarcá si paga al retirar'}</span>

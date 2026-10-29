@@ -45,7 +45,7 @@ export function Locales() {
         <p className="text-[15px] text-gris">Cada local nuevo arranca con el menú madre. Cada uno entra con su propio usuario y solo ve sus pedidos, su caja y su menú.</p>
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); crearLocal() }} className="flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 ring-1 ring-linea">
+      <form onSubmit={e => { e.preventDefault(); crearLocal() }} className="flex flex-wrap items-end gap-2 rounded-xl bg-superficie p-3 ring-1 ring-linea">
         <label className="min-w-56 flex-1">
           <span className="mb-1 block text-sm font-medium text-gris">Nuevo local</span>
           <input id="local-nuevo" value={nuevoLocal} onChange={e => setNuevoLocal(e.target.value)} className={inputCls} placeholder={`${sesion?.cuentaNombre ?? ''} Benavidez`.trim()} />
@@ -57,7 +57,7 @@ export function Locales() {
         <TarjetaLocal key={l.id} local={l} usuarios={usuarios.filter(u => u.sucursalId === l.id)} onCambio={cargar} />
       ))}
 
-      <section className="rounded-xl bg-white p-4 ring-1 ring-linea">
+      <section className="rounded-xl bg-superficie p-4 ring-1 ring-linea">
         <h3 className="font-cond text-2xl font-bold">Administradores</h3>
         <p className="text-[15px] text-gris">Ven y administran todos los locales.</p>
         <ul className="mt-2 space-y-1">
@@ -86,7 +86,7 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
   const sugerido = local.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).slice(-1)[0] ?? ''
 
   return (
-    <section className={`rounded-xl bg-white ring-1 ring-linea ${local.activa ? '' : 'opacity-60'}`}>
+    <section className={`rounded-xl bg-superficie ring-1 ring-linea ${local.activa ? '' : 'opacity-60'}`}>
       <header className="flex flex-wrap items-center gap-3 border-b border-linea px-4 py-3">
         <CampoTexto valor={local.nombre} etiqueta="Nombre del local" className="!w-auto min-w-0 flex-1 font-cond !text-2xl !font-bold"
           onGuardar={v => v && intentar(() => repo.actualizarSucursal(local.id, { nombre: v }), 'Nombre actualizado')} />

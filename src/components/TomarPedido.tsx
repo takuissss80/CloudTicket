@@ -93,7 +93,7 @@ export function TomarPedido() {
         <div className="flex overflow-hidden rounded-lg bg-black/20 p-0.5">
           {(['mostrador', 'delivery'] as const).map(t => (
             <button key={t} onClick={() => p.set({ tipo: t })}
-              className={`h-9 rounded-md px-3 font-semibold capitalize ${p.tipo === t ? 'bg-white text-tinta' : 'text-white/85 hover:text-white'}`}>
+              className={`h-9 rounded-md px-3 font-semibold capitalize ${p.tipo === t ? 'bg-superficie text-tinta' : 'text-white/85 hover:text-white'}`}>
               {t}
             </button>
           ))}
@@ -102,7 +102,7 @@ export function TomarPedido() {
           {p.tipo === 'mostrador' ? (
             <input value={p.clienteNombre} onChange={e => p.set({ clienteNombre: e.target.value })}
               placeholder="Nombre del cliente"
-              className="h-10 w-56 rounded-lg border-0 bg-white px-3 text-[16px] text-tinta outline-none placeholder:text-gris" />
+              className="h-10 w-56 rounded-lg border-0 bg-superficie px-3 text-[16px] text-tinta outline-none placeholder:text-gris" />
           ) : (
             <button onClick={() => setVerCliente(true)} className="flex max-w-md items-center gap-3 rounded-lg bg-white/15 px-3 py-1.5 text-left hover:bg-white/25">
               {p.clienteNombre ? (
@@ -134,12 +134,12 @@ export function TomarPedido() {
             />
             {busqueda && (
               <button onClick={() => setBusqueda('')} aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 size-8 -translate-y-1/2 rounded-full text-xl text-gris hover:bg-black/5">×</button>
+                className="absolute right-2 top-1/2 size-8 -translate-y-1/2 rounded-full text-xl text-gris hover:bg-tinta/5">×</button>
             )}
           </div>
 
           {busqueda ? (
-            <ul className="divide-y divide-linea overflow-hidden rounded-xl border border-linea bg-white">
+            <ul className="divide-y divide-linea overflow-hidden rounded-xl border border-linea bg-superficie">
               {resultados.map(prod => (
                 <li key={prod.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
@@ -172,7 +172,7 @@ export function TomarPedido() {
                 const n = enCarrito[c.id] ?? 0
                 return (
                   <button key={c.id} onClick={() => setCategoria(c)}
-                    className={`flex min-h-32 flex-col justify-between rounded-xl border border-linea border-t-[6px] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${colorTile[c.color]}`}>
+                    className={`flex min-h-32 flex-col justify-between rounded-xl border border-linea border-t-[6px] bg-superficie p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${colorTile[c.color]}`}>
                     <span className="font-cond text-2xl font-bold leading-tight">{c.nombre}</span>
                     <span className={`self-end font-cond text-5xl font-extrabold leading-none tabular-nums ${n ? 'text-tinta' : 'text-linea'}`}>{n}</span>
                   </button>
@@ -196,7 +196,7 @@ export function TomarPedido() {
               {p.items.map(it => {
                 const extra = [varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
                 return (
-                  <li key={it.id} className="rounded-lg border border-linea bg-white p-2.5">
+                  <li key={it.id} className="rounded-lg border border-linea bg-superficie p-2.5">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold leading-tight">{it.descripcion}{extra && <span className="font-normal text-gris"> ({extra})</span>}</div>

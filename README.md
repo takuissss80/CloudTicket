@@ -94,6 +94,13 @@ si sos admin, un local o todos. Cada reporte se descarga en CSV para Excel.
 | Ingreso de mercadería | Cada ingreso con su detalle y el total por ingrediente con precio promedio |
 | Stock | Stock actual por local y lo que entró, se vendió y se ajustó en el período |
 
+### Modo noche
+
+El botón con el sol / la luna (arriba a la derecha, también en el login) cambia entre modo día y
+modo noche. Se recuerda en cada PC; la primera vez toma lo que tenga configurado el sistema.
+Los colores son los de CloudVision (azul noche y verde agua) y viven como variables en
+`src/index.css` (`:root` para el día, `:root[data-theme="dark"]` para la noche).
+
 ### Ingredientes y recetas
 
 - Cada ingrediente se mide en **unidades, gramos o mililitros** y tiene un costo de compra

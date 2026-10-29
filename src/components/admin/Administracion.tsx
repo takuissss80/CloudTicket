@@ -21,14 +21,14 @@ export function Administracion({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
-      <header className="flex flex-wrap items-center gap-3 bg-tinta px-4 py-3 text-white">
+      <header className="flex flex-wrap items-center gap-3 bg-barra px-4 py-3 text-white">
         <button onClick={onClose} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Volver</button>
         <h1 className="font-cond text-3xl font-bold leading-none">{esAdmin ? `Administración de ${sesion?.cuentaNombre}` : 'Administración del local'}</h1>
         {pestanas.length > 1 && (
           <nav className="flex flex-wrap gap-1 rounded-lg bg-white/10 p-1 sm:ml-auto" aria-label="Secciones">
             {pestanas.map(p => (
               <button key={p.key} onClick={() => setPestana(p.key)} aria-current={pestana === p.key}
-                className={`h-9 rounded-md px-3 font-semibold ${pestana === p.key ? 'bg-white text-tinta' : 'text-white/85 hover:text-white'}`}>
+                className={`h-9 rounded-md px-3 font-semibold ${pestana === p.key ? 'bg-albahaca text-sobre-albahaca' : 'text-white/85 hover:text-white'}`}>
                 {p.label}
               </button>
             ))}

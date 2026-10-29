@@ -56,7 +56,7 @@ export function CategoriaModal({ categoria, onClose, onPromo }: {
   const fila = (p: Producto) => {
     const tieneSlots = p.tipo === 'promo' && p.slots.length > 0
     return (
-      <div key={p.id} className={`flex flex-col rounded-xl border border-linea p-3 ${p.agotado ? 'bg-harina' : 'bg-white'}`}>
+      <div key={p.id} className={`flex flex-col rounded-xl border border-linea p-3 ${p.agotado ? 'bg-harina' : 'bg-superficie'}`}>
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <div className={`font-cond text-xl font-bold leading-tight ${p.agotado ? 'text-gris line-through' : ''}`}>{p.nombre}</div>
@@ -131,7 +131,7 @@ export function CategoriaModal({ categoria, onClose, onPromo }: {
           value={filtro}
           onChange={e => setFiltro(e.target.value)}
           placeholder="Filtrar por nombre o código"
-          className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-[16px] outline-none focus:border-pizarra"
+          className="h-11 w-full rounded-lg border border-linea bg-superficie px-3 text-[16px] outline-none focus:border-pizarra"
         />
       </div>
       <div className="px-5 pb-5">

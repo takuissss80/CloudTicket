@@ -41,7 +41,7 @@ export function Repartidores() {
       </div>
 
       <form onSubmit={e => { e.preventDefault(); guardar({ ...nuevo, activo: true }, `${nuevo.nombre} agregado`).then(() => setNuevo({ nombre: '', dni: '', telefono: '' })) }}
-        className="flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 ring-1 ring-linea">
+        className="flex flex-wrap items-end gap-2 rounded-xl bg-superficie p-3 ring-1 ring-linea">
         <label className="min-w-40 flex-1">
           <span className="mb-1 block text-sm font-medium text-gris">Nombre</span>
           <input id="rep-nombre" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} className={`${inputBase} w-full`} placeholder="Ariel" />
@@ -57,7 +57,7 @@ export function Repartidores() {
         <Btn tono="albahaca" className="h-11" disabled={!nuevo.nombre.trim()}>Agregar</Btn>
       </form>
 
-      <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+      <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
         <table className="w-full min-w-[520px] text-left">
           <thead className="border-b border-linea text-sm text-gris">
             <tr>

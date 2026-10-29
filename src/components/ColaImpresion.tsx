@@ -40,7 +40,7 @@ export function ColaImpresion({ onClose }: { onClose: () => void }) {
             {impresoras.map(i => {
               const online = i.ultimoPing && Date.now() - new Date(i.ultimoPing).getTime() < 60_000
               return (
-                <li key={i.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-white p-3 ring-1 ring-linea">
+                <li key={i.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-superficie p-3 ring-1 ring-linea">
                   <span className={`size-3 rounded-full ${online ? 'bg-albahaca' : 'bg-linea'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{i.nombre}</div>
@@ -59,7 +59,7 @@ export function ColaImpresion({ onClose }: { onClose: () => void }) {
 
         <section>
           <h3 className="mb-2 font-cond text-2xl font-bold">Últimos trabajos</h3>
-          <ul className="divide-y divide-linea overflow-hidden rounded-xl bg-white ring-1 ring-linea">
+          <ul className="divide-y divide-linea overflow-hidden rounded-xl bg-superficie ring-1 ring-linea">
             {printJobs.map(j => {
               const c = comandas.find(x => x.id === j.comandaId)
               return (

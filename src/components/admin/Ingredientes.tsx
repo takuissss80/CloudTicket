@@ -60,7 +60,7 @@ export function Ingredientes() {
         <input id="ing-buscar" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Buscar ingrediente" className={`${inputBase} h-10 w-56`} />
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); agregar() }} className="mb-4 flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 ring-1 ring-linea">
+      <form onSubmit={e => { e.preventDefault(); agregar() }} className="mb-4 flex flex-wrap items-end gap-2 rounded-xl bg-superficie p-3 ring-1 ring-linea">
         <label className="min-w-48 flex-1">
           <span className="mb-1 block text-sm font-medium text-gris">Nuevo ingrediente</span>
           <input id="ing-nuevo-nombre" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} className={inputCls} placeholder="Muzzarella" />
@@ -78,7 +78,7 @@ export function Ingredientes() {
         <Btn tono="albahaca" className="h-11" disabled={!nuevo.nombre.trim()}>Agregar</Btn>
       </form>
 
-      <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-linea">
+      <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
         <table className="w-full min-w-[620px] text-left">
           <thead className="border-b border-linea text-sm text-gris">
             <tr>
@@ -99,7 +99,7 @@ export function Ingredientes() {
                   </td>
                   <td className="px-3 py-2">
                     <select aria-label={`Unidad de ${i.nombre}`} value={i.unidad} onChange={e => guardar(i, { unidad: e.target.value as UnidadIngrediente })}
-                      className="h-9 rounded-lg border border-linea bg-white px-2">
+                      className="h-9 rounded-lg border border-linea bg-superficie px-2">
                       {UNIDADES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
                     </select>
                   </td>
@@ -138,6 +138,6 @@ export function CampoTexto({ valor, etiqueta, numerico, onGuardar, className = '
       onChange={e => setT(e.target.value)}
       onBlur={() => { if (t.trim() !== valor) onGuardar(t.trim()) }}
       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setT(valor); (e.target as HTMLInputElement).blur() } }}
-      className={`h-9 rounded-lg border border-transparent bg-transparent px-2 outline-none hover:border-linea focus:border-pizarra focus:bg-white ${numerico ? 'w-28 text-right tabular-nums' : 'w-full font-medium'} ${className}`} />
+      className={`h-9 rounded-lg border border-transparent bg-transparent px-2 outline-none hover:border-linea focus:border-pizarra focus:bg-superficie ${numerico ? 'w-28 text-right tabular-nums' : 'w-full font-medium'} ${className}`} />
   )
 }
