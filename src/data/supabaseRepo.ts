@@ -179,6 +179,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         sesion: {
           userId: p.user_id, usuario: p.usuario, rol: p.rol, cuentaId: p.cuenta_id,
           cuentaNombre: p.cuentas?.nombre ?? '', sucursalId: opt(p.sucursal_id),
+          puedeDescontar: p.rol === 'admin' || !!p.puede_descontar,
         },
       }
     },
@@ -276,9 +277,16 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async listUsuarios() {
       return (ok(await sb.from('perfiles').select('*').order('created_at')) as Row[]).map((p): Usuario => ({
         userId: p.user_id, usuario: p.usuario, rol: p.rol, sucursalId: opt(p.sucursal_id), nombre: opt(p.nombre),
+        puedeDescontar: !!p.puede_descontar,
       }))
     },
-    async crearUsuario(d) { await invocarUsuarios({ accion: 'crear', usuario: d.usuario, password: d.password, sucursal_id: d.sucursalId, nombre: d.nombre }) },
+    async crearUsuario(d) {
+      const r = await invocarUsuarios({ accion: 'crear', usuario: d.usuario, password: d.password, sucursal_id: d.sucursalId, nombre: d.nombre })
+      if (d.puedeDescontar && r?.user_id) ok(await sb.rpc('set_puede_descontar', { p_user: r.user_id, p_valor: true }))
+    },
+    async setPuedeDescontar(userId, valor) {
+      ok(await sb.rpc('set_puede_descontar', { p_user: userId, p_valor: valor }))
+    },
     async cambiarPassword(userId, password) { await invocarUsuarios({ accion: 'password', user_id: userId, password }) },
     async eliminarUsuario(userId) { await invocarUsuarios({ accion: 'eliminar', user_id: userId }) },
 

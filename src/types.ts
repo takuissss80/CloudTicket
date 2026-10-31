@@ -14,6 +14,8 @@ export interface Sesion {
   cuentaNombre: string
   /** Solo usuarios de local */
   sucursalId?: string
+  /** Admin o encargado: puede cargar descuentos y adicionales a mano */
+  puedeDescontar: boolean
 }
 
 /** Un valor que puede ser un monto fijo o un porcentaje */
@@ -57,6 +59,8 @@ export interface Usuario {
   rol: Rol
   sucursalId?: string
   nombre?: string
+  /** Usuario de local encargado (si no, común) */
+  puedeDescontar?: boolean
 }
 
 export type UnidadIngrediente = 'un' | 'g' | 'ml'

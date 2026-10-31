@@ -14,7 +14,8 @@ import { TicketPreview } from './TicketPreview'
 export function CobroModal({ onClose }: { onClose: () => void }) {
   const p = usePedido()
   const { catalogo, comandas, impresoras, guardarPedido, sesion } = useApp()
-  const esAdmin = sesion?.rol === 'admin'
+  // Admin o encargado: descuentos, adicionales y envío a mano. El cupón lo puede cargar cualquiera.
+  const puedeDescontar = !!sesion?.puedeDescontar
   const sucursal = useNombreLocal()
   const local = useLocalActivo()
   const t = totales(p, catalogo.zonas, catalogo.productos, local)
@@ -121,7 +122,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
             </Campo>
             {p.tipo === 'delivery' && (
               <Campo label="Envío">
-                {esAdmin
+                {puedeDescontar
                   ? <input inputMode="decimal" value={envio || ''} placeholder="0" onChange={e => p.set({ envioManual: numero(e.target.value) })} className={inputCls} />
                   : <div className={`${inputCls} flex items-center bg-harina font-semibold`}>{envio ? money(envio) : 'Sin cargo'}</div>}
                 {envioIncluido && p.envioManual == null
@@ -155,8 +156,8 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
             {errCupon && <p className="mt-1 text-sm font-semibold text-tomate">{errCupon}</p>}
           </section>
 
-          {/* ---- Descuento y adicional: solo admin */}
-          {esAdmin ? (
+          {/* ---- Descuento y adicional: admin o encargado */}
+          {puedeDescontar ? (
             <section className="grid gap-3 sm:grid-cols-2">
               <ValorConTipo label="Descuento" valor={p.descuento} tipo={p.descuentoTipo} monto={t.descuentoManual}
                 onChange={(valor, tipo) => p.set({ descuento: valor, descuentoTipo: tipo })} />
@@ -165,7 +166,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
             </section>
           ) : (t.descuentoManual > 0 || t.adicional > 0) ? (
             <p className="rounded-lg bg-harina px-3 py-2 text-sm text-gris">
-              Esta comanda tiene {t.descuentoManual > 0 ? `un descuento de ${money(t.descuentoManual)}` : ''}{t.descuentoManual > 0 && t.adicional > 0 ? ' y ' : ''}{t.adicional > 0 ? `un adicional de ${money(t.adicional)}` : ''} que cargó el administrador.
+              Esta comanda tiene {t.descuentoManual > 0 ? `un descuento de ${money(t.descuentoManual)}` : ''}{t.descuentoManual > 0 && t.adicional > 0 ? ' y ' : ''}{t.adicional > 0 ? `un adicional de ${money(t.adicional)}` : ''} que cargó un encargado o el administrador.
             </p>
           ) : null}
 

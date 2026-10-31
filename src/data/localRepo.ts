@@ -140,7 +140,7 @@ function sesionActual(): Sesion | null {
   const id = sesionMemoria ?? leerStorage(KEY_SESION)
   const u = db().usuarios.find(x => x.userId === id)
   if (!u) return null
-  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, sucursalId: u.sucursalId }
+  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar }
 }
 function ses(): Sesion {
   const s = sesionActual()
@@ -156,11 +156,11 @@ function soloAdmin() {
 function validarDescuentos(data: NuevaComanda, anterior?: Comanda) {
   const manual = (c: Pick<Comanda, 'descuento' | 'descuentoCupon'>) => c.descuento - (c.descuentoCupon || 0)
   if ((data.descuentoCupon || 0) > data.descuento + 0.01) throw new Error('El descuento del cupón no puede ser mayor al descuento total')
-  if (ses().rol !== 'admin') {
+  if (!ses().puedeDescontar) {
     const cambia = anterior
       ? Math.abs(manual(data) - manual(anterior)) > 0.01 || Math.abs(data.adicional - anterior.adicional) > 0.01
       : manual(data) > 0.01 || data.adicional > 0.01
-    if (cambia) throw new Error(anterior ? 'Solo el administrador puede cambiar descuentos o adicionales' : 'Solo el administrador puede aplicar descuentos o adicionales')
+    if (cambia) throw new Error(anterior ? 'Solo el administrador o un encargado pueden cambiar descuentos o adicionales' : 'Solo el administrador o un encargado pueden aplicar descuentos o adicionales')
   }
   if (!data.cuponId) {
     if ((data.descuentoCupon || 0) > 0.01) throw new Error('Hay descuento de cupón sin cupón')
@@ -365,13 +365,21 @@ export const localRepo: Repo = {
     return pausa(db().usuarios.map(({ password: _, ...u }) => { void _; return u }))
   },
 
-  async crearUsuario({ usuario, password, sucursalId, nombre }) {
+  async setPuedeDescontar(userId, valor) {
+    soloAdmin()
+    const u = db().usuarios.find(x => x.userId === userId && x.rol === 'local')
+    if (!u) throw new Error('Ese usuario no es de tu cuenta')
+    u.puedeDescontar = valor
+    guardar('menu')
+  },
+
+  async crearUsuario({ usuario, password, sucursalId, nombre, puedeDescontar }) {
     soloAdmin()
     const u = usuario.trim().toLowerCase()
     if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(u)) throw new Error('El usuario debe tener entre 3 y 40 caracteres: letras, números, punto, guion o guion bajo.')
     if (password.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.')
     if (db().usuarios.some(x => x.usuario === u)) throw new Error(`El usuario "${u}" ya existe. Probá con otro nombre.`)
-    db().usuarios.push({ userId: uid(), usuario: u, password, rol: 'local', sucursalId, nombre })
+    db().usuarios.push({ userId: uid(), usuario: u, password, rol: 'local', sucursalId, nombre, puedeDescontar: !!puedeDescontar })
     guardar('menu')
   },
 

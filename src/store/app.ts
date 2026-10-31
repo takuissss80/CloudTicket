@@ -197,8 +197,8 @@ export const useApp = create<AppState>((set, get) => {
       if (!p.items.length) { get().avisar('El pedido no tiene productos', 'error'); return null }
       const faltaCliente = faltaClienteMostrador(p)
       if (faltaCliente) { get().avisar(faltaCliente, 'error'); return null }
-      if (sesion?.rol !== 'admin' && !p.editandoId && (p.descuento > 0 || p.adicional > 0)) {
-        get().avisar('Solo el administrador puede aplicar descuentos o adicionales', 'error'); return null
+      if (!sesion?.puedeDescontar && !p.editandoId && (p.descuento > 0 || p.adicional > 0)) {
+        get().avisar('Solo el administrador o un encargado pueden aplicar descuentos o adicionales', 'error'); return null
       }
       const t = totales(p, catalogo.zonas, catalogo.productos, sucursales.find(s => s.id === sucursalId))
       const { subtotal, envio, total } = t

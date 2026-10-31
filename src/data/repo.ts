@@ -79,7 +79,9 @@ export interface Repo {
   /** Valida un código para usarlo hoy; tira error con el motivo si no sirve */
   validarCupon(codigo: string): Promise<CuponAplicado>
   listUsuarios(): Promise<Usuario[]>
-  crearUsuario(data: { usuario: string; password: string; sucursalId: string; nombre?: string }): Promise<void>
+  crearUsuario(data: { usuario: string; password: string; sucursalId: string; nombre?: string; puedeDescontar?: boolean }): Promise<void>
+  /** Común (false) o encargado (true) */
+  setPuedeDescontar(userId: string, valor: boolean): Promise<void>
   cambiarPassword(userId: string, password: string): Promise<void>
   eliminarUsuario(userId: string): Promise<void>
 
