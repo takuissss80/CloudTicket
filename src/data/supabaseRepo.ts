@@ -33,7 +33,7 @@ const mapSucursal = (r: Row): Sucursal => ({
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
-  desde: opt(c.desde), hasta: opt(c.hasta), activo: c.activo,
+  desde: opt(c.desde), hasta: opt(c.hasta), activo: c.activo, maxUsos: opt(c.max_usos), lote: opt(c.lote),
 })
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
@@ -227,19 +227,35 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
 
     // ---- Cupones
     async listCupones() {
-      return (ok(await sb.from('cupones').select('*').order('created_at', { ascending: false })) as Row[]).map(mapCupon)
+      return (await todas(async (a, b) => sb.from('cupones').select('*').order('created_at', { ascending: false }).order('codigo').range(a, b))).map(mapCupon)
     },
     async guardarCupon(c) {
       const p = await perfil()
       const row = {
         cuenta_id: p?.cuenta_id, codigo: c.codigo, descripcion: c.descripcion || null, tipo: c.tipo, valor: c.valor,
         desde: c.desde || null, hasta: c.hasta || null, activo: c.activo,
+        max_usos: c.maxUsos || null, lote: c.lote || null,
       }
       if (c.id) ok(await sb.from('cupones').update(row).eq('id', c.id))
       else ok(await sb.from('cupones').insert(row))
     },
     async eliminarCupon(id) {
       ok(await sb.from('cupones').delete().eq('id', id))
+    },
+    async crearCupones(lista) {
+      const p = await perfil()
+      const filas = lista.map(c => ({
+        cuenta_id: p?.cuenta_id, codigo: c.codigo, descripcion: c.descripcion || null, tipo: c.tipo, valor: c.valor,
+        desde: c.desde || null, hasta: c.hasta || null, activo: c.activo, max_usos: c.maxUsos || null, lote: c.lote || null,
+      }))
+      for (let i = 0; i < filas.length; i += 500) ok(await sb.from('cupones').insert(filas.slice(i, i + 500)))
+      return filas.length
+    },
+    async eliminarCupones(ids) {
+      for (let i = 0; i < ids.length; i += 200) ok(await sb.from('cupones').delete().in('id', ids.slice(i, i + 200)))
+    },
+    async activarCupones(ids, activo) {
+      for (let i = 0; i < ids.length; i += 200) ok(await sb.from('cupones').update({ activo }).in('id', ids.slice(i, i + 200)))
     },
     async usoCupones() {
       const filas = await todas(async (a, b) => sb.from('comandas').select('cupon_id, descuento_cupon')

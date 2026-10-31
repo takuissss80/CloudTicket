@@ -171,7 +171,8 @@ function validarDescuentos(data: NuevaComanda, anterior?: Comanda) {
   if (!c) throw new Error('Cupón inválido')
   data.cuponCodigo = c.codigo
   if (!anterior || anterior.cuponId !== data.cuponId) {
-    const p = problemaCupon(c)
+    const usos = db().comandas.filter(x => x.cuponId === c.id && x.estado !== 'anulada' && x.id !== anterior?.id).length
+    const p = problemaCupon(c, usos)
     if (p) throw new Error(p)
   }
   const max = descuentoCupon(c, data.subtotal)
@@ -298,6 +299,39 @@ export const localRepo: Repo = {
     guardar('menu')
   },
 
+  async crearCupones(lista) {
+    soloAdmin()
+    const d = db()
+    d.cupones ??= []
+    const existentes = new Set(d.cupones.map(x => x.codigo))
+    const nuevos: Cupon[] = []
+    for (const c of lista) {
+      const codigo = normalizarCodigo(c.codigo)
+      if (existentes.has(codigo)) throw new Error(`Ya existe un cupón con el código ${codigo}.`)
+      existentes.add(codigo)
+      nuevos.push({ ...clon(c), codigo, id: uid() })
+    }
+    d.cupones.unshift(...nuevos)
+    guardar('menu')
+    return nuevos.length
+  },
+
+  async eliminarCupones(ids) {
+    soloAdmin()
+    const d = db()
+    const set = new Set(ids)
+    d.cupones = (d.cupones ?? []).filter(x => !set.has(x.id))
+    for (const c of d.comandas) if (c.cuponId && set.has(c.cuponId)) c.cuponId = undefined
+    guardar('menu')
+  },
+
+  async activarCupones(ids, activo) {
+    soloAdmin()
+    const set = new Set(ids)
+    for (const c of db().cupones ?? []) if (set.has(c.id)) c.activo = activo
+    guardar('menu')
+  },
+
   async usoCupones() {
     soloAdmin()
     const out: Record<string, UsoCupon> = {}
@@ -314,7 +348,7 @@ export const localRepo: Repo = {
     const cod = normalizarCodigo(codigo)
     const c = (db().cupones ?? []).find(x => x.codigo === cod)
     if (!c) throw new Error(`El cupón ${cod} no existe`)
-    const p = problemaCupon(c)
+    const p = problemaCupon(c, db().comandas.filter(x => x.cuponId === c.id && x.estado !== 'anulada').length)
     if (p) throw new Error(p)
     return pausa({ id: c.id, codigo: c.codigo, descripcion: c.descripcion, tipo: c.tipo, valor: c.valor })
   },

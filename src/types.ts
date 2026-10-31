@@ -40,6 +40,10 @@ export interface Cupon {
   desde?: string
   hasta?: string
   activo: boolean
+  /** Cuántas veces se puede usar (1 = cupón único). Sin valor = ilimitado */
+  maxUsos?: number
+  /** Nombre del lote si se generó junto con otros */
+  lote?: string
 }
 
 /** Lo que el que toma pedidos ve de un cupón válido */

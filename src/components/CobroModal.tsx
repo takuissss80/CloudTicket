@@ -148,7 +148,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
               <form className="flex gap-2" onSubmit={e => { e.preventDefault(); aplicarCupon() }}>
                 <input id="cobro-cupon" value={codigo} onChange={e => { setCodigo(e.target.value.toUpperCase()); setErrCupon('') }}
                   placeholder="Código" autoComplete="off" aria-label="Código de cupón"
-                  className={`${inputBase} min-w-0 flex-1 font-mono uppercase ${errCupon ? 'border-tomate' : ''}`} />
+                  className={`${inputBase} min-w-0 flex-1 font-mono uppercase placeholder:font-sans placeholder:normal-case ${errCupon ? 'border-tomate' : ''}`} />
                 <Btn type="submit" disabled={!codigo.trim() || validando}>{validando ? 'Validando…' : 'Aplicar'}</Btn>
               </form>
             )}

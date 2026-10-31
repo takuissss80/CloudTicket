@@ -60,6 +60,11 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 - **Cupones** (*Administración → Cupones*, solo admin): código, descuento en % o $ fijo, vigencia sin
   vencimiento o hasta una fecha (y opcionalmente desde una fecha), activar/desactivar. Valen en todos los
   locales. Se muestran los usos y cuánto se descontó.
+- **Usos:** un solo uso, una cantidad máxima o ilimitado. Si se anula la comanda, el uso se libera. Si dos
+  cajas usan a la vez el último uso, la base deja pasar solo una.
+- **Código al azar** (sin 0/O/1/I/L para que no se confundan) y **Generar varios**: hasta 1000 cupones de
+  una vez con la misma configuración, prefijo opcional y nombre de lote. El lote se ve agrupado, se
+  descarga en CSV para imprimir o mandar, y se puede desactivar o eliminar entero.
 - Al cobrar, cualquier usuario puede cargar el **código del cupón**. Si no existe, venció o está
   desactivado, avisa el motivo. El cupón sale en la comanda impresa.
 - **Recargo de delivery** (*Administración → Delivery*): monto fijo o % del pedido por local. Se suma solo
@@ -136,7 +141,7 @@ Los colores son los de CloudVision (azul noche y verde agua) y viven como variab
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0006`) en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0007`) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si

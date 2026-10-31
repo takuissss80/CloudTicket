@@ -70,6 +70,10 @@ export interface Repo {
   listCupones(): Promise<Cupon[]>
   guardarCupon(c: Omit<Cupon, 'id'> & { id?: string }): Promise<void>
   eliminarCupon(id: string): Promise<void>
+  /** Lote: crea muchos cupones de una vez */
+  crearCupones(cupones: Omit<Cupon, 'id'>[]): Promise<number>
+  eliminarCupones(ids: string[]): Promise<void>
+  activarCupones(ids: string[], activo: boolean): Promise<void>
   /** Usos (comandas no anuladas) y total descontado por cupón */
   usoCupones(): Promise<Record<string, UsoCupon>>
   /** Valida un código para usarlo hoy; tira error con el motivo si no sirve */
