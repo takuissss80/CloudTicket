@@ -1,10 +1,11 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
-  AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, PrintJob, Producto,
+  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, NuevaComanda, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
+import { descuentoCupon, normalizarCodigo, problemaCupon } from '../lib/descuentos'
 import { importarMenuEjemplo, unirReceta } from '../lib/menu'
 
 /**
@@ -45,6 +46,7 @@ interface DB {
   comandas: ConLocal<Comanda>[]
   clientes: Cliente[]
   printJobs: PrintJob[]
+  cupones?: Cupon[]
 }
 
 const uid = () =>
@@ -79,8 +81,8 @@ function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' = 'comandas') {
 }
 
 function baseVacia(): DB {
-  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true }
-  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true }
+  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto' }
+  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc' }
   return {
     cuenta: { id: uid(), nombre: 'Napoles' },
     sucursales: [principal, benavidez],
@@ -90,10 +92,7 @@ function baseVacia(): DB {
       { userId: uid(), usuario: 'benavidez', password: '1234', rol: 'local', sucursalId: benavidez.id },
     ],
     ingredientes: [], categorias: [], productos: [], ajustes: [],
-    zonas: [principal, benavidez].flatMap(s => [
-      { id: uid(), sucursalId: s.id, nombre: 'Zona 1 (hasta 15 cuadras)', costo: 2000 },
-      { id: uid(), sucursalId: s.id, nombre: 'Zona 2 (hasta 30 cuadras)', costo: 3000 },
-    ]),
+    zonas: [],
     impresoras: [principal, benavidez].map(s => ({
       id: uid(), sucursalId: s.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48,
     })),
@@ -153,6 +152,32 @@ function soloAdmin() {
   if (s.rol !== 'admin') throw new Error('Solo un administrador puede hacer esto')
   return s
 }
+/** Mismas reglas que el trigger validar_descuentos_comanda() de la base */
+function validarDescuentos(data: NuevaComanda, anterior?: Comanda) {
+  const manual = (c: Pick<Comanda, 'descuento' | 'descuentoCupon'>) => c.descuento - (c.descuentoCupon || 0)
+  if ((data.descuentoCupon || 0) > data.descuento + 0.01) throw new Error('El descuento del cupón no puede ser mayor al descuento total')
+  if (ses().rol !== 'admin') {
+    const cambia = anterior
+      ? Math.abs(manual(data) - manual(anterior)) > 0.01 || Math.abs(data.adicional - anterior.adicional) > 0.01
+      : manual(data) > 0.01 || data.adicional > 0.01
+    if (cambia) throw new Error(anterior ? 'Solo el administrador puede cambiar descuentos o adicionales' : 'Solo el administrador puede aplicar descuentos o adicionales')
+  }
+  if (!data.cuponId) {
+    if ((data.descuentoCupon || 0) > 0.01) throw new Error('Hay descuento de cupón sin cupón')
+    data.cuponCodigo = undefined
+    return
+  }
+  const c = (db().cupones ?? []).find(x => x.id === data.cuponId)
+  if (!c) throw new Error('Cupón inválido')
+  data.cuponCodigo = c.codigo
+  if (!anterior || anterior.cuponId !== data.cuponId) {
+    const p = problemaCupon(c)
+    if (p) throw new Error(p)
+  }
+  const max = descuentoCupon(c, data.subtotal)
+  if ((data.descuentoCupon || 0) > max + 1) throw new Error(`El cupón ${c.codigo} descuenta como máximo $${max}`)
+}
+
 function puedeLocal(sucursalId: string) {
   const s = ses()
   if (s.rol !== 'admin' && s.sucursalId !== sucursalId) throw new Error('No tenés acceso a ese local')
@@ -230,17 +255,68 @@ export const localRepo: Repo = {
   // ---- Locales y usuarios
   async listSucursales() {
     const s = ses()
-    return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)))
+    return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
+      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto' }))))
   },
 
   async crearSucursal(nombre) {
     soloAdmin()
     const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true }
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto' }
     d.sucursales.push(suc)
     d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
     guardar('menu')
     return suc
+  },
+
+  async listCupones() {
+    soloAdmin()
+    return pausa(clon(db().cupones ?? []))
+  },
+
+  async guardarCupon(c) {
+    soloAdmin()
+    const d = db()
+    d.cupones ??= []
+    const codigo = normalizarCodigo(c.codigo)
+    if (codigo.length < 3 || codigo.length > 30) throw new Error('El código va de 3 a 30 letras o números.')
+    if (!(c.valor > 0) || (c.tipo === 'porc' && c.valor > 100)) throw new Error('El valor tiene que ser mayor a cero (y hasta 100%).')
+    if (c.desde && c.hasta && c.desde > c.hasta) throw new Error('La fecha de inicio es posterior al vencimiento.')
+    if (d.cupones.some(x => x.codigo === codigo && x.id !== c.id)) throw new Error('Ya existe un cupón con ese código.')
+    const fila: Cupon = { ...clon(c), codigo, id: c.id ?? uid() }
+    const i = d.cupones.findIndex(x => x.id === c.id)
+    if (i >= 0) d.cupones[i] = fila
+    else d.cupones.unshift(fila)
+    guardar('menu')
+  },
+
+  async eliminarCupon(id) {
+    soloAdmin()
+    const d = db()
+    d.cupones = (d.cupones ?? []).filter(x => x.id !== id)
+    for (const c of d.comandas) if (c.cuponId === id) c.cuponId = undefined
+    guardar('menu')
+  },
+
+  async usoCupones() {
+    soloAdmin()
+    const out: Record<string, UsoCupon> = {}
+    for (const c of db().comandas) {
+      if (!c.cuponId || c.estado === 'anulada') continue
+      const u = (out[c.cuponId] ??= { usos: 0, descontado: 0 })
+      u.usos++; u.descontado += c.descuentoCupon || 0
+    }
+    return pausa(out)
+  },
+
+  async validarCupon(codigo) {
+    ses()
+    const cod = normalizarCodigo(codigo)
+    const c = (db().cupones ?? []).find(x => x.codigo === cod)
+    if (!c) throw new Error(`El cupón ${cod} no existe`)
+    const p = problemaCupon(c)
+    if (p) throw new Error(p)
+    return pausa({ id: c.id, codigo: c.codigo, descripcion: c.descripcion, tipo: c.tipo, valor: c.valor })
   },
 
   async actualizarSucursal(id, data) {
@@ -626,6 +702,8 @@ export const localRepo: Repo = {
     const caja = d.cajas.find(c => c.id === cajaId && c.estado === 'abierta')
     if (!caja) throw new Error('La caja no está abierta')
     puedeLocal(caja.sucursalId)
+    data = clon(data)
+    validarDescuentos(data)
     caja.ultimoNumero += 1
     const comanda = { ...clon(data), id: uid(), cajaId, sucursalId: caja.sucursalId, numero: caja.ultimoNumero, estado: 'pendiente' as const, createdAt: ahora(), updatedAt: ahora() }
     // los ítems necesitan id propio para el stock
@@ -641,6 +719,8 @@ export const localRepo: Repo = {
     const i = d.comandas.findIndex(c => c.id === id)
     if (i < 0) throw new Error('Comanda no encontrada')
     puedeLocal(d.comandas[i].sucursalId)
+    data = clon(data)
+    validarDescuentos(data, d.comandas[i])
     devolverComanda(id)
     d.comandas[i] = { ...d.comandas[i], ...clon(data), updatedAt: ahora() }
     d.comandas[i].items = d.comandas[i].items.map(it => ({ ...it, id: uid() }))

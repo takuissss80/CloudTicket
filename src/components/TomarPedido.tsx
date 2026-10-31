@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Categoria, Producto } from '../types'
-import { useApp } from '../store/app'
+import { useLocalActivo, useApp } from '../store/app'
 import { itemProducto, itemPromo, totales, usePedido } from '../store/pedido'
 import { coccionLabel, money, normalizar, varianteLabel } from '../lib/format'
 import { Btn, Confirmar, Stepper, inputCls } from './ui'
@@ -29,7 +29,8 @@ export function TomarPedido() {
   const [notaAbierta, setNotaAbierta] = useState<string | null>(null)
   const buscador = useRef<HTMLInputElement>(null)
 
-  const { subtotal, envio, total } = totales(p, catalogo.zonas, catalogo.productos)
+  const localActivo = useLocalActivo()
+  const { subtotal, envio, descuento, total } = totales(p, catalogo.zonas, catalogo.productos, localActivo)
   const unidades = p.items.reduce((s, i) => s + i.cantidad, 0)
 
   // Delivery nuevo: arranca pidiendo el cliente
@@ -237,6 +238,7 @@ export function TomarPedido() {
           <div className="border-t border-linea px-4 py-3">
             <div className="flex justify-between text-[15px] text-gris"><span>{unidades} {unidades === 1 ? 'producto' : 'productos'}</span><span className="tabular-nums">{money(subtotal)}</span></div>
             {p.tipo === 'delivery' && <div className="flex justify-between text-[15px] text-gris"><span>Envío</span><span className="tabular-nums">{envio ? money(envio) : 'sin cargo'}</span></div>}
+            {descuento > 0 && <div className="flex justify-between text-[15px] text-albahaca"><span>{p.cupon ? `Cupón ${p.cupon.codigo}` : 'Descuento'}</span><span className="tabular-nums">−{money(descuento)}</span></div>}
             <div className="mt-1 flex items-baseline justify-between">
               <span className="font-cond text-2xl font-bold">Total</span>
               <span className="font-cond text-4xl font-extrabold tabular-nums">{money(total)}</span>

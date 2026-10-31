@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { Comanda } from '../types'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Comanda, TipoValor } from '../types'
 import { FORMAS_PAGO } from '../types'
-import { useApp, useNombreLocal } from '../store/app'
+import { mensajeError, useApp, useLocalActivo, useNombreLocal } from '../store/app'
+import { repo } from '../data'
+import { normalizarCodigo, textoValor } from '../lib/descuentos'
 import { faltaClienteMostrador, totales, usePedido } from '../store/pedido'
 import { construirTicket } from '../lib/ticket'
 import { money } from '../lib/format'
@@ -11,10 +13,36 @@ import { TicketPreview } from './TicketPreview'
 /** Revisar el pedido, cobrar y mandar a la comandera */
 export function CobroModal({ onClose }: { onClose: () => void }) {
   const p = usePedido()
-  const { catalogo, comandas, impresoras, guardarPedido } = useApp()
+  const { catalogo, comandas, impresoras, guardarPedido, sesion } = useApp()
+  const esAdmin = sesion?.rol === 'admin'
   const sucursal = useNombreLocal()
-  const { subtotal, envio, total } = totales(p, catalogo.zonas, catalogo.productos)
+  const local = useLocalActivo()
+  const t = totales(p, catalogo.zonas, catalogo.productos, local)
+  const { subtotal, envio, total } = t
   const [guardando, setGuardando] = useState(false)
+  const [codigo, setCodigo] = useState('')
+  const [errCupon, setErrCupon] = useState('')
+  const [validando, setValidando] = useState(false)
+
+  const aplicarCupon = async () => {
+    const cod = normalizarCodigo(codigo)
+    if (!cod) return
+    setValidando(true); setErrCupon('')
+    try {
+      p.set({ cupon: await repo.validarCupon(cod) })
+      setCodigo('')
+    } catch (e) { setErrCupon(mensajeError(e)) }
+    setValidando(false)
+  }
+
+  // Si hay un solo pago por el total y el total cambia (cupón, descuento), el pago lo sigue
+  const totalAnterior = useRef(total)
+  useEffect(() => {
+    const antes = totalAnterior.current
+    totalAnterior.current = total
+    if (antes !== total && p.pagos.length === 1 && Math.abs(p.pagos[0].monto - antes) < 0.01) p.setPago(0, { monto: total })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total])
 
   // Primera vez: un pago por el total y "cobrado" según el tipo
   useEffect(() => {
@@ -33,7 +61,8 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
       id: 'preview', cajaId: '', numero: p.editandoNumero ?? Math.max(0, ...comandas.map(x => x.numero)) + 1,
       tipo: p.tipo, estado: 'pendiente', clienteNombre: p.clienteNombre || undefined, clienteTel: p.clienteTel || undefined,
       direccion: p.direccion || undefined, entreCalles: p.entreCalles || undefined, zonaId: p.zonaId,
-      costoEnvio: envio, subtotal, descuento: p.descuento || 0, adicional: p.adicional || 0, total,
+      costoEnvio: envio, subtotal, descuento: t.descuento, adicional: t.adicional, total,
+      cuponId: p.cupon?.id, cuponCodigo: p.cupon?.codigo, descuentoCupon: t.descuentoCupon,
       observaciones: p.observaciones || undefined, horaEntrega: p.horaEntrega || undefined,
       cobrada: p.cobrada, pagos: p.pagos.filter(x => x.monto > 0), items: p.items,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -42,7 +71,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
       ancho: impresoras[0]?.ancho ?? 48, tipo: p.editandoId ? 'reimpresion' : 'comanda',
       zonas: catalogo.zonas, nombreLocal: sucursal,
     })
-  }, [p, envio, subtotal, total, comandas, impresoras, catalogo.zonas, sucursal])
+  }, [p, envio, subtotal, total, t.descuento, t.adicional, t.descuentoCupon, comandas, impresoras, catalogo.zonas, sucursal])
 
   const guardar = async (imprimir: boolean) => {
     setGuardando(true)
@@ -92,17 +121,53 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
             </Campo>
             {p.tipo === 'delivery' && (
               <Campo label="Envío">
-                <input inputMode="decimal" value={envio || ''} placeholder="0" onChange={e => p.set({ envioManual: numero(e.target.value) })} className={inputCls} />
-                {envioIncluido && p.envioManual == null && <span className="mt-1 block text-xs text-albahaca">Incluido en la promo</span>}
+                {esAdmin
+                  ? <input inputMode="decimal" value={envio || ''} placeholder="0" onChange={e => p.set({ envioManual: numero(e.target.value) })} className={inputCls} />
+                  : <div className={`${inputCls} flex items-center bg-harina font-semibold`}>{envio ? money(envio) : 'Sin cargo'}</div>}
+                {envioIncluido && p.envioManual == null
+                  ? <span className="mt-1 block text-xs text-albahaca">Incluido en la promo</span>
+                  : p.envioManual == null && !p.zonaId && local?.recargoDelivery
+                    ? <span className="mt-1 block text-xs text-gris">Recargo delivery {textoValor(local.recargoDeliveryTipo, local.recargoDelivery, money)}</span>
+                    : null}
               </Campo>
             )}
-            <Campo label="Descuento $">
-              <input inputMode="decimal" value={p.descuento || ''} placeholder="0" onChange={e => p.set({ descuento: numero(e.target.value) })} className={inputCls} />
-            </Campo>
-            <Campo label="Adicional $">
-              <input inputMode="decimal" value={p.adicional || ''} placeholder="0" onChange={e => p.set({ adicional: numero(e.target.value) })} className={inputCls} />
-            </Campo>
           </section>
+
+          {/* ---- Cupón */}
+          <section>
+            <span className="mb-1 block text-sm font-medium text-gris">Cupón de descuento</span>
+            {p.cupon ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl bg-albahaca-claro px-4 py-2.5 text-albahaca">
+                <span className="font-mono text-lg font-semibold">{p.cupon.codigo}</span>
+                <span className="text-[15px]">{textoValor(p.cupon.tipo, p.cupon.valor, money)} de descuento{p.cupon.descripcion ? ` · ${p.cupon.descripcion}` : ''}</span>
+                <b className="ml-auto font-cond text-2xl tabular-nums">−{money(t.descuentoCupon)}</b>
+                <button type="button" onClick={() => p.set({ cupon: undefined })} aria-label="Quitar cupón" title="Quitar cupón"
+                  className="grid size-8 place-items-center rounded-full text-xl hover:bg-black/10">×</button>
+              </div>
+            ) : (
+              <form className="flex gap-2" onSubmit={e => { e.preventDefault(); aplicarCupon() }}>
+                <input id="cobro-cupon" value={codigo} onChange={e => { setCodigo(e.target.value.toUpperCase()); setErrCupon('') }}
+                  placeholder="Código" autoComplete="off" aria-label="Código de cupón"
+                  className={`${inputBase} min-w-0 flex-1 font-mono uppercase ${errCupon ? 'border-tomate' : ''}`} />
+                <Btn type="submit" disabled={!codigo.trim() || validando}>{validando ? 'Validando…' : 'Aplicar'}</Btn>
+              </form>
+            )}
+            {errCupon && <p className="mt-1 text-sm font-semibold text-tomate">{errCupon}</p>}
+          </section>
+
+          {/* ---- Descuento y adicional: solo admin */}
+          {esAdmin ? (
+            <section className="grid gap-3 sm:grid-cols-2">
+              <ValorConTipo label="Descuento" valor={p.descuento} tipo={p.descuentoTipo} monto={t.descuentoManual}
+                onChange={(valor, tipo) => p.set({ descuento: valor, descuentoTipo: tipo })} />
+              <ValorConTipo label="Adicional" valor={p.adicional} tipo={p.adicionalTipo} monto={t.adicional}
+                onChange={(valor, tipo) => p.set({ adicional: valor, adicionalTipo: tipo })} />
+            </section>
+          ) : (t.descuentoManual > 0 || t.adicional > 0) ? (
+            <p className="rounded-lg bg-harina px-3 py-2 text-sm text-gris">
+              Esta comanda tiene {t.descuentoManual > 0 ? `un descuento de ${money(t.descuentoManual)}` : ''}{t.descuentoManual > 0 && t.adicional > 0 ? ' y ' : ''}{t.adicional > 0 ? `un adicional de ${money(t.adicional)}` : ''} que cargó el administrador.
+            </p>
+          ) : null}
 
           <Campo label="Observaciones para cocina o delivery">
             <textarea rows={2} value={p.observaciones} onChange={e => p.set({ observaciones: e.target.value })}
@@ -149,8 +214,10 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
           <section className="rounded-xl bg-harina p-4 text-[15px]">
             <div className="flex justify-between"><span>Productos</span><span className="tabular-nums">{money(subtotal)}</span></div>
             {p.tipo === 'delivery' && <div className="flex justify-between"><span>Envío</span><span className="tabular-nums">{money(envio)}</span></div>}
-            {!!p.adicional && <div className="flex justify-between"><span>Adicional</span><span className="tabular-nums">{money(p.adicional)}</span></div>}
-            {!!p.descuento && <div className="flex justify-between"><span>Descuento</span><span className="tabular-nums">−{money(p.descuento)}</span></div>}
+            {t.adicional > 0 && <div className="flex justify-between"><span>Adicional{p.adicionalTipo === 'porc' ? ` (${p.adicional}%)` : ''}</span><span className="tabular-nums">{money(t.adicional)}</span></div>}
+            {t.descuentoManual > 0 && <div className="flex justify-between text-albahaca"><span>Descuento{p.descuentoTipo === 'porc' ? ` (${p.descuento}%)` : ''}</span><span className="tabular-nums">−{money(t.descuentoManual)}</span></div>}
+            {t.descuentoCupon > 0 && <div className="flex justify-between text-albahaca"><span>Cupón {p.cupon?.codigo}</span><span className="tabular-nums">−{money(t.descuentoCupon)}</span></div>}
+            <div className="mt-1 flex justify-between border-t border-linea pt-1 font-bold"><span>Total</span><span className="tabular-nums">{money(total)}</span></div>
           </section>
         </div>
 
@@ -162,5 +229,30 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
         </aside>
       </div>
     </Modal>
+  )
+}
+
+/** Campo de monto con selector $ / % */
+function ValorConTipo({ label, valor, tipo, monto, onChange }: {
+  label: string; valor: number; tipo: TipoValor; monto: number; onChange: (valor: number, tipo: TipoValor) => void
+}) {
+  const id = `cobro-${label.toLowerCase()}`
+  const numero = (v: string) => (v === '' ? 0 : Math.max(0, Number(v.replace(',', '.')) || 0))
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1 block text-sm font-medium text-gris">{label}</label>
+      <div className="flex gap-2">
+        <input id={id} inputMode="decimal" value={valor || ''} placeholder="0"
+          onChange={e => onChange(tipo === 'porc' ? Math.min(100, numero(e.target.value)) : numero(e.target.value), tipo)}
+          className={`${inputBase} min-w-0 flex-1 text-right`} />
+        <div className="flex shrink-0 overflow-hidden rounded-lg border border-linea" role="group" aria-label={`${label} en pesos o porcentaje`}>
+          {(['monto', 'porc'] as const).map(k => (
+            <button key={k} type="button" aria-pressed={tipo === k} onClick={() => onChange(k === 'porc' ? Math.min(100, valor) : valor, k)}
+              className={`h-11 w-11 font-semibold ${tipo === k ? 'bg-primario text-sobre-primario' : 'bg-superficie hover:bg-harina'}`}>{k === 'porc' ? '%' : '$'}</button>
+          ))}
+        </div>
+      </div>
+      {tipo === 'porc' && valor > 0 && <span className="mt-1 block text-xs text-gris">{valor}% de los productos = {money(monto)}</span>}
+    </div>
   )
 }

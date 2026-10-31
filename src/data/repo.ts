@@ -1,5 +1,5 @@
 import type {
-  AjusteLocal, Caja, Categoria, Cliente, Comanda, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
+  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
 } from '../types'
 
@@ -64,7 +64,16 @@ export interface Repo {
   // ---- Locales y usuarios (admin)
   listSucursales(): Promise<Sucursal[]>
   crearSucursal(nombre: string): Promise<Sucursal>
-  actualizarSucursal(id: string, data: Partial<Pick<Sucursal, 'nombre' | 'activa'>>): Promise<void>
+  actualizarSucursal(id: string, data: Partial<Pick<Sucursal, 'nombre' | 'activa' | 'recargoDelivery' | 'recargoDeliveryTipo'>>): Promise<void>
+
+  // ---- Cupones (admin crea; cualquiera valida un código)
+  listCupones(): Promise<Cupon[]>
+  guardarCupon(c: Omit<Cupon, 'id'> & { id?: string }): Promise<void>
+  eliminarCupon(id: string): Promise<void>
+  /** Usos (comandas no anuladas) y total descontado por cupón */
+  usoCupones(): Promise<Record<string, UsoCupon>>
+  /** Valida un código para usarlo hoy; tira error con el motivo si no sirve */
+  validarCupon(codigo: string): Promise<CuponAplicado>
   listUsuarios(): Promise<Usuario[]>
   crearUsuario(data: { usuario: string; password: string; sucursalId: string; nombre?: string }): Promise<void>
   cambiarPassword(userId: string, password: string): Promise<void>

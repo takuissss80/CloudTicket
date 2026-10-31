@@ -53,6 +53,19 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
   *Administración → Repartidores* o directo desde el botón de asignar.
 - El cierre de caja muestra los viajes de cada moto y su tiempo promedio.
 
+### Descuentos, adicionales y cupones
+
+- **Descuento y adicional** al cobrar, en **$ o en %** (el % es sobre los productos, sin el envío). Solo los
+  puede cargar o cambiar el **administrador**; el usuario del local no ve esos campos. Lo valida la base.
+- **Cupones** (*Administración → Cupones*, solo admin): código, descuento en % o $ fijo, vigencia sin
+  vencimiento o hasta una fecha (y opcionalmente desde una fecha), activar/desactivar. Valen en todos los
+  locales. Se muestran los usos y cuánto se descontó.
+- Al cobrar, cualquier usuario puede cargar el **código del cupón**. Si no existe, venció o está
+  desactivado, avisa el motivo. El cupón sale en la comanda impresa.
+- **Recargo de delivery** (*Administración → Delivery*): monto fijo o % del pedido por local. Se suma solo
+  como envío a cada delivery; las promos con envío gratis no lo cobran. Ahí mismo, opcional, zonas con
+  otro costo.
+
 ### Caja
 
 - **Orden de turnos:** en el mismo día van mañana → tarde → noche. Si ya se abrió la noche, un usuario de
@@ -123,7 +136,7 @@ Los colores son los de CloudVision (azul noche y verde agua) y viven como variab
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0005`) en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0006`) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si

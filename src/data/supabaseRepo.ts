@@ -3,7 +3,7 @@ import { unirReceta } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
+  Cupon, UsoCupon, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
 } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -27,7 +27,14 @@ const mapCaja = (r: Row): Caja => ({
     totalEgresos: num(r.total_egresos), totalSueldos: num(r.total_sueldos), efectivoTeorico: num(r.efectivo_teorico),
   } : undefined,
 })
-const mapSucursal = (r: Row): Sucursal => ({ id: r.id, nombre: r.nombre, esPrincipal: r.es_principal, activa: r.activa })
+const mapSucursal = (r: Row): Sucursal => ({
+  id: r.id, nombre: r.nombre, esPrincipal: r.es_principal, activa: r.activa,
+  recargoDelivery: num(r.recargo_delivery), recargoDeliveryTipo: r.recargo_delivery_tipo ?? 'monto',
+})
+const mapCupon = (c: Row): Cupon => ({
+  id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
+  desde: opt(c.desde), hasta: opt(c.hasta), activo: c.activo,
+})
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
 const mapCategoria = (c: Row): Categoria => ({
@@ -71,6 +78,7 @@ function mapComanda(r: Row): Comanda {
     direccion: opt(r.direccion), entreCalles: opt(r.entre_calles), zonaId: opt(r.zona_id),
     costoEnvio: num(r.costo_envio), subtotal: num(r.subtotal), descuento: num(r.descuento),
     adicional: num(r.adicional), total: num(r.total), observaciones: opt(r.observaciones),
+    cuponId: opt(r.cupon_id), cuponCodigo: opt(r.cupon_codigo), descuentoCupon: num(r.descuento_cupon),
     horaEntrega: opt(r.hora_entrega), cobrada: r.cobrada, createdAt: r.created_at, updatedAt: r.updated_at,
     repartidorId: opt(r.repartidor_id), repartidorNombre: opt(r.repartidores?.nombre),
     asignadaAt: opt(r.asignada_at), entregadaAt: opt(r.entregada_at), sucursalId: opt(r.sucursal_id),
@@ -91,6 +99,7 @@ const comandaRow = (d: NuevaComanda) => ({
   zona_id: d.zonaId ?? null, costo_envio: d.costoEnvio, subtotal: d.subtotal, descuento: d.descuento,
   adicional: d.adicional, total: d.total, observaciones: d.observaciones ?? null,
   hora_entrega: d.horaEntrega ?? null, cobrada: d.cobrada,
+  cupon_id: d.cuponId ?? null, descuento_cupon: d.descuentoCupon || 0,
 })
 
 const SELECT_COMANDA = '*, comanda_items(*), pagos(*), repartidores(nombre)'
@@ -208,7 +217,45 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       return mapSucursal(ok(await sb.from('sucursales').select('*').eq('id', id).single()) as Row)
     },
     async actualizarSucursal(id, data) {
-      ok(await sb.from('sucursales').update(data).eq('id', id))
+      const row: Row = {}
+      if (data.nombre !== undefined) row.nombre = data.nombre
+      if (data.activa !== undefined) row.activa = data.activa
+      if (data.recargoDelivery !== undefined) row.recargo_delivery = data.recargoDelivery
+      if (data.recargoDeliveryTipo !== undefined) row.recargo_delivery_tipo = data.recargoDeliveryTipo
+      ok(await sb.from('sucursales').update(row).eq('id', id))
+    },
+
+    // ---- Cupones
+    async listCupones() {
+      return (ok(await sb.from('cupones').select('*').order('created_at', { ascending: false })) as Row[]).map(mapCupon)
+    },
+    async guardarCupon(c) {
+      const p = await perfil()
+      const row = {
+        cuenta_id: p?.cuenta_id, codigo: c.codigo, descripcion: c.descripcion || null, tipo: c.tipo, valor: c.valor,
+        desde: c.desde || null, hasta: c.hasta || null, activo: c.activo,
+      }
+      if (c.id) ok(await sb.from('cupones').update(row).eq('id', c.id))
+      else ok(await sb.from('cupones').insert(row))
+    },
+    async eliminarCupon(id) {
+      ok(await sb.from('cupones').delete().eq('id', id))
+    },
+    async usoCupones() {
+      const filas = await todas(async (a, b) => sb.from('comandas').select('cupon_id, descuento_cupon')
+        .not('cupon_id', 'is', null).neq('estado', 'anulada').range(a, b))
+      const out: Record<string, UsoCupon> = {}
+      for (const f of filas) {
+        const u = (out[f.cupon_id] ??= { usos: 0, descontado: 0 })
+        u.usos++; u.descontado += num(f.descuento_cupon)
+      }
+      return out
+    },
+    async validarCupon(codigo) {
+      const r = ok(await sb.rpc('validar_cupon', { p_codigo: codigo })) as Row[]
+      const c = r?.[0]
+      if (!c) throw new Error('Cupón inválido')
+      return { id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor) }
     },
     async listUsuarios() {
       return (ok(await sb.from('perfiles').select('*').order('created_at')) as Row[]).map((p): Usuario => ({
@@ -500,6 +547,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'producto_sucursal' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, () => onChange('menu'))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sucursales' }, () => onChange('menu'))
         .subscribe()
       return () => { sb.removeChannel(ch) }
     },
@@ -513,13 +561,15 @@ function traducirError(e: unknown): Error {
   const m = err?.message ?? String(e)
   // Tabla o función que todavía no existe: falta correr una migración
   const falta = m.match(/(?:table|function) '?public\.(\w+)/i)
-  if (err?.code === 'PGRST205' || err?.code === 'PGRST202' || (falta && m.includes('schema cache'))) {
+  if (err?.code === 'PGRST205' || err?.code === 'PGRST202' || err?.code === 'PGRST204' || (falta && m.includes('schema cache'))) {
     return new Error(`Falta actualizar la base de datos${falta ? ` (no existe "${falta[1]}")` : ''}. Corré en Supabase → SQL Editor los archivos de supabase/migrations que todavía no corriste, en orden.`)
   }
   if (err?.code === '42501' || m.includes('row-level security')) return new Error('No tenés permiso para hacer este cambio.')
   // update bloqueado por RLS: no devuelve filas
   if (err?.code === 'PGRST116') return new Error('No tenés permiso para hacer este cambio, o ese dato ya no existe.')
   if (err?.code === '23505' && m.includes('cajas_una_abierta')) return new Error('Ya hay una caja abierta en este local.')
+  if (err?.code === '23505' && m.includes('cupones_codigo')) return new Error('Ya existe un cupón con ese código.')
+  if (err?.code === '23514' && m.includes('cupones')) return new Error('Revisá el cupón: el código va de 3 a 30 letras o números, el valor mayor a cero (hasta 100%) y las fechas en orden.')
   if (err?.code === '23503') return new Error('No se puede borrar: está en uso.')
   for (const t of ['Para pagar con la caja tiene que haber una caja abierta', 'Las cantidades tienen que ser mayores a cero', 'La cantidad contada no puede ser negativa', 'La cantidad a decomisar tiene que ser mayor a cero', 'El ingreso no tiene ingredientes', 'La caja no está abierta', 'Ya hay una caja abierta en este local', 'Solo se puede reabrir la última caja del local', 'Esa caja no está cerrada']) if (m.includes(t)) return new Error(t + '.')
   if (m.includes('repartidor no es de este local')) return new Error('Ese repartidor no es de este local.')

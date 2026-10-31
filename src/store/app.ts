@@ -57,6 +57,9 @@ interface AppState {
 let toastSeq = 0
 const menuVacio: MenuData = { categorias: [], productos: [], ajustes: [], ingredientes: [] }
 
+/** Recargo de delivery del local activo */
+export const useLocalActivo = () => useApp(s => s.sucursales.find(x => x.id === s.sucursalId))
+
 export const mensajeError = (e: unknown) =>
   e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)
 
@@ -115,8 +118,9 @@ export const useApp = create<AppState>((set, get) => {
     async refrescarMenu() {
       const id = get().sucursalId
       if (!id) return
-      const [menu, zonas] = await Promise.all([repo.getMenu(id), repo.listZonas(id)])
-      set({ menu, catalogo: resolverCatalogo(menu, zonas, id) })
+      const [menu, zonas, sucursales] = await Promise.all([repo.getMenu(id), repo.listZonas(id), repo.listSucursales()])
+      // también los locales: el recargo de delivery puede haber cambiado
+      set({ menu, catalogo: resolverCatalogo(menu, zonas, id), sucursales: sucursales.filter(s => s.activa) })
     },
 
     async refrescar() {
@@ -188,12 +192,16 @@ export const useApp = create<AppState>((set, get) => {
 
     async guardarPedido(imprimir) {
       const p = usePedido.getState()
-      const { caja, catalogo } = get()
+      const { caja, catalogo, sucursales, sucursalId, sesion } = get()
       if (!caja) { get().avisar('Abrí la caja antes de cargar pedidos', 'error'); return null }
       if (!p.items.length) { get().avisar('El pedido no tiene productos', 'error'); return null }
       const faltaCliente = faltaClienteMostrador(p)
       if (faltaCliente) { get().avisar(faltaCliente, 'error'); return null }
-      const { subtotal, envio, total } = totales(p, catalogo.zonas, catalogo.productos)
+      if (sesion?.rol !== 'admin' && !p.editandoId && (p.descuento > 0 || p.adicional > 0)) {
+        get().avisar('Solo el administrador puede aplicar descuentos o adicionales', 'error'); return null
+      }
+      const t = totales(p, catalogo.zonas, catalogo.productos, sucursales.find(s => s.id === sucursalId))
+      const { subtotal, envio, total } = t
       const data: NuevaComanda = {
         tipo: p.tipo,
         clienteId: p.clienteId,
@@ -204,8 +212,11 @@ export const useApp = create<AppState>((set, get) => {
         zonaId: p.tipo === 'delivery' ? p.zonaId : undefined,
         costoEnvio: envio,
         subtotal,
-        descuento: p.descuento || 0,
-        adicional: p.adicional || 0,
+        descuento: t.descuento,
+        adicional: t.adicional,
+        cuponId: p.cupon?.id,
+        cuponCodigo: p.cupon?.codigo,
+        descuentoCupon: t.descuentoCupon,
         total,
         observaciones: p.observaciones.trim() || undefined,
         horaEntrega: p.horaEntrega || undefined,

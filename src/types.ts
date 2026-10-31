@@ -16,12 +16,36 @@ export interface Sesion {
   sucursalId?: string
 }
 
+/** Un valor que puede ser un monto fijo o un porcentaje */
+export type TipoValor = 'monto' | 'porc'
+
 export interface Sucursal {
   id: string
   nombre: string
   esPrincipal: boolean
   activa: boolean
+  /** Recargo automático a los pedidos de delivery */
+  recargoDelivery: number
+  recargoDeliveryTipo: TipoValor
 }
+
+/** Cupón de descuento (lo crea el administrador) */
+export interface Cupon {
+  id: string
+  codigo: string
+  descripcion?: string
+  tipo: 'porc' | 'monto'
+  valor: number
+  /** yyyy-mm-dd; sin fecha = desde ya / sin vencimiento */
+  desde?: string
+  hasta?: string
+  activo: boolean
+}
+
+/** Lo que el que toma pedidos ve de un cupón válido */
+export type CuponAplicado = Pick<Cupon, 'id' | 'codigo' | 'tipo' | 'valor' | 'descripcion'>
+
+export interface UsoCupon { usos: number; descontado: number }
 
 export interface Usuario {
   userId: string
@@ -216,9 +240,14 @@ export interface Comanda {
   zonaId?: string
   costoEnvio: number
   subtotal: number
+  /** Descuento total (manual + cupón) */
   descuento: number
   adicional: number
   total: number
+  /** Cupón usado y cuánto descontó (está incluido en descuento) */
+  cuponId?: string
+  cuponCodigo?: string
+  descuentoCupon: number
   observaciones?: string
   horaEntrega?: string
   cobrada: boolean

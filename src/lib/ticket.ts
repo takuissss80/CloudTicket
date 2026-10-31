@@ -105,11 +105,13 @@ export function construirTicket(c: Comanda, o: OpcionesTicket): LineaTicket[] {
 
   // ---- Totales
   if (precios) {
-    const fila = (a: string, b: number) => dosColumnas(a, money(b), W).forEach(l => L.push(txt(l)))
+    const fila = (a: string, b: number) => dosColumnas(a, b < 0 ? `-${money(-b)}` : money(b), W).forEach(l => L.push(txt(l)))
     if (c.costoEnvio || c.descuento || c.adicional) fila('Subtotal', c.subtotal)
     if (c.costoEnvio) fila('Envio', c.costoEnvio)
     if (c.adicional) fila('Adicional', c.adicional)
-    if (c.descuento) fila('Descuento', -c.descuento)
+    const descCupon = c.descuentoCupon || 0
+    if (c.descuento - descCupon > 0.009) fila('Descuento', -(c.descuento - descCupon))
+    if (descCupon > 0.009) fila(`Cupon ${c.cuponCodigo ?? ''}`.trim(), -descCupon)
     const wT = anchoPara(W, 'large')
     dosColumnas('TOTAL', money(c.total), wT).forEach(l => L.push(txt(l, { size: 'large', bold: true })))
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Comanda, Componente, Coccion, FormaPago, ItemComanda, Pago, TipoComanda, Variante, Zona, Producto } from '../types'
+import type { Comanda, Componente, Coccion, CuponAplicado, FormaPago, ItemComanda, Pago, Sucursal, TipoComanda, TipoValor, Variante, Zona, Producto } from '../types'
+import { descuentoCupon, montoDe } from '../lib/descuentos'
 
 /** Pedido que se está cargando o editando (todavía no guardado) */
 export interface PedidoState {
@@ -15,8 +16,12 @@ export interface PedidoState {
   entreCalles: string
   zonaId?: string
   envioManual?: number
+  /** Descuento y adicional manuales (solo admin): valor en $ o en % según el tipo */
   descuento: number
+  descuentoTipo: TipoValor
   adicional: number
+  adicionalTipo: TipoValor
+  cupon?: CuponAplicado
   observaciones: string
   horaEntrega: string
   pagos: Pago[]
@@ -51,7 +56,10 @@ const vacio = {
   zonaId: undefined,
   envioManual: undefined,
   descuento: 0,
+  descuentoTipo: 'monto' as TipoValor,
   adicional: 0,
+  adicionalTipo: 'monto' as TipoValor,
+  cupon: undefined as CuponAplicado | undefined,
   observaciones: '',
   horaEntrega: '',
   pagos: [] as Pago[],
@@ -84,8 +92,10 @@ export const usePedido = create<PedidoState>((set) => ({
     entreCalles: c.entreCalles ?? '',
     zonaId: c.zonaId,
     envioManual: c.costoEnvio,
-    descuento: c.descuento,
+    // Al editar se conserva lo que ya se descontó, en pesos
+    descuento: Math.max(0, c.descuento - (c.descuentoCupon || 0)),
     adicional: c.adicional,
+    cupon: c.cuponId ? { id: c.cuponId, codigo: c.cuponCodigo ?? '', tipo: 'monto', valor: c.descuentoCupon || 0 } : undefined,
     observaciones: c.observaciones ?? '',
     horaEntrega: c.horaEntrega ?? '',
     pagos: c.pagos.map(p => ({ ...p })),
@@ -128,20 +138,32 @@ export const usePedido = create<PedidoState>((set) => ({
 export const subtotalItems = (items: ItemComanda[]) =>
   items.reduce((s, i) => s + i.precioUnit * i.cantidad, 0)
 
-/** El envío sale de la zona, salvo que alguna promo lo incluya o se haya cargado a mano */
-export function calcularEnvio(p: Pick<PedidoState, 'tipo' | 'zonaId' | 'envioManual' | 'items'>, zonas: Zona[], productos: Producto[]) {
+type Recargo = Pick<Sucursal, 'recargoDelivery' | 'recargoDeliveryTipo'> | undefined
+
+/**
+ * Envío de delivery: si se cargó a mano, ese; si alguna promo lo incluye, 0;
+ * si el cliente tiene zona, el de la zona; si no, el recargo automático del local.
+ */
+export function calcularEnvio(p: Pick<PedidoState, 'tipo' | 'zonaId' | 'envioManual' | 'items'>, zonas: Zona[], productos: Producto[], recargo?: Recargo) {
   if (p.tipo !== 'delivery') return 0
   if (p.envioManual != null) return p.envioManual
   const incluido = p.items.some(i => productos.find(x => x.id === i.productoId)?.incluyeEnvio)
   if (incluido) return 0
-  return zonas.find(z => z.id === p.zonaId)?.costo ?? 0
+  const zona = zonas.find(z => z.id === p.zonaId)
+  if (zona) return zona.costo
+  return recargo ? montoDe(recargo.recargoDeliveryTipo, recargo.recargoDelivery, subtotalItems(p.items)) : 0
 }
 
-export function totales(p: PedidoState, zonas: Zona[], productos: Producto[]) {
+/** Totales del pedido. Descuentos y adicional en % se calculan sobre los productos. */
+export function totales(p: PedidoState, zonas: Zona[], productos: Producto[], recargo?: Recargo) {
   const subtotal = subtotalItems(p.items)
-  const envio = calcularEnvio(p, zonas, productos)
-  const total = Math.max(0, subtotal + envio + (p.adicional || 0) - (p.descuento || 0))
-  return { subtotal, envio, total }
+  const envio = calcularEnvio(p, zonas, productos, recargo)
+  const adicional = montoDe(p.adicionalTipo, p.adicional || 0, subtotal)
+  const descCupon = descuentoCupon(p.cupon, subtotal)
+  const descManual = Math.min(montoDe(p.descuentoTipo, p.descuento || 0, subtotal), Math.max(0, subtotal + envio + adicional - descCupon))
+  const descuento = descCupon + descManual
+  const total = Math.max(0, subtotal + envio + adicional - descuento)
+  return { subtotal, envio, adicional, descuentoCupon: descCupon, descuentoManual: descManual, descuento, total }
 }
 
 /** Arma el renglón de un producto simple */
