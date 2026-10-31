@@ -9,7 +9,7 @@ import { hora, money } from '../lib/format'
 import { Btn, Confirmar } from './ui'
 import { ListaMovimientos, ResumenCaja, fechaLarga } from './Caja'
 
-const colorDif = (d?: number) => (d == null ? 'text-gris' : Math.abs(d) < 0.01 ? 'text-albahaca' : 'text-tomate')
+const colorDif = (d?: number) => (d == null ? 'text-gris' : d > -0.01 ? 'text-albahaca' : 'text-tomate') // sobra o justo: verde; falta: rojo
 const textoDif = (d?: number) => (d == null ? '—' : Math.abs(d) < 0.01 ? '$0' : `${d > 0 ? '+' : '−'}${money(Math.abs(d))}`)
 
 /** Historial de cajas de un local: lista y detalle (sin encabezado propio) */

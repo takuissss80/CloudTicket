@@ -55,6 +55,8 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 
 ### Caja
 
+- **Orden de turnos:** en el mismo día van mañana → tarde → noche. Si ya se abrió la noche, un usuario de
+  local no puede abrir mañana ni tarde (ni repetir la noche); solo el administrador puede. Lo valida la base.
 - **Abrir:** elegís el turno y el **dinero al inicio**. Viene sugerido con lo que se contó al
   cerrar la caja anterior.
 - **Durante el turno**, desde el botón *Caja*: resumen en vivo y carga de **gastos** (con tipo:
@@ -100,6 +102,8 @@ si sos admin, un local o todos. Cada reporte se descarga en CSV para Excel.
 
 Las comanderas, la cola y los últimos trabajos están en *Administración → Impresión*. Si un trabajo
 falla, aparece un aviso rojo arriba en la pantalla de pedidos que lleva directo a esa pestaña.
+Desde ahí se puede **eliminar** un trabajo o **vaciar la cola** (solo los que están en cola o con error;
+lo ya impreso queda como registro).
 
 ### Modo noche
 
@@ -119,7 +123,7 @@ Los colores son los de CloudVision (azul noche y verde agua) y viven como variab
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden las migraciones de `supabase/migrations/` (`0001`, `0002`, `0003`…) en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0005`) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si

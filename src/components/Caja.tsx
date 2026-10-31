@@ -3,7 +3,7 @@ import type { Caja, Comanda, MovimientoCaja, TipoMovimiento, TotalesCaja } from 
 import { FORMAS_PAGO, TIPOS_MOVIMIENTO } from '../types'
 import { repo } from '../data'
 import { useApp } from '../store/app'
-import { calcularTotales, cobradoPorForma, TURNOS, turnoSugerido } from '../lib/caja'
+import { calcularTotales, cobradoPorForma, TURNOS, turnoQueBloquea, turnoSugerido } from '../lib/caja'
 import { fecha, hora, money } from '../lib/format'
 import { minutosDelivery } from '../lib/estados'
 import { Btn, Campo, Confirmar, Modal, inputBase, inputCls } from './ui'
@@ -17,22 +17,31 @@ export const fechaLarga = (iso: string) => `${DIAS[new Date(iso).getDay()]} ${fe
 // Caja cerrada: abrir (con dinero inicial) o reabrir la última
 // ---------------------------------------------------------------------
 export function CajaCerrada() {
-  const { abrirCaja, reabrirCaja, sucursalId } = useApp()
+  const { abrirCaja, reabrirCaja, sucursalId, sesion } = useApp()
+  const esAdmin = sesion?.rol === 'admin'
   const [turno, setTurno] = useState(turnoSugerido())
   const [ultima, setUltima] = useState<Caja | null | undefined>(undefined)
+  const [recientes, setRecientes] = useState<Caja[]>([])
   const [inicial, setInicial] = useState('')
   const [verHistorial, setVerHistorial] = useState(false)
   const [confirmarReabrir, setConfirmarReabrir] = useState(false)
 
   useEffect(() => {
     if (!sucursalId) return
-    repo.listCajas(sucursalId, 1).then(l => {
+    repo.listCajas(sucursalId, 10).then(l => {
       const u = l[0] ?? null
       setUltima(u)
+      setRecientes(l)
+      // Si el turno sugerido ya no se puede abrir, se pasa al siguiente que sí
+      if (!esAdmin) setTurno(t => turnoQueBloquea(t, l) ? TURNOS.find(x => !turnoQueBloquea(x, l)) ?? t : t)
       // Arranca con lo que quedó contado al cerrar la anterior
       if (u?.dineroCierre != null) setInicial(String(u.dineroCierre))
     }).catch(() => setUltima(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursalId])
+
+  const bloquea = turnoQueBloquea(turno, recientes)
+  const bloqueado = !!bloquea && !esAdmin
 
   return (
     <div className="mx-auto mt-[8vh] max-w-md space-y-6 px-4 pb-10">
@@ -43,11 +52,21 @@ export function CajaCerrada() {
 
       <section className="space-y-4 rounded-2xl bg-superficie p-5 ring-1 ring-linea">
         <div className="flex justify-center gap-2">
-          {TURNOS.map(t => (
-            <button key={t} onClick={() => setTurno(t)} aria-pressed={turno === t}
-              className={`h-12 flex-1 rounded-xl font-semibold ${turno === t ? 'bg-primario text-sobre-primario' : 'bg-harina hover:bg-linea'}`}>{t}</button>
-          ))}
+          {TURNOS.map(t => {
+            const fuera = !!turnoQueBloquea(t, recientes)
+            return (
+              <button key={t} onClick={() => setTurno(t)} aria-pressed={turno === t} disabled={fuera && !esAdmin}
+                title={fuera ? 'Hoy ya se abrió este turno o uno posterior' : undefined}
+                className={`h-12 flex-1 rounded-xl font-semibold disabled:cursor-not-allowed disabled:opacity-35 disabled:line-through ${turno === t ? 'bg-primario text-sobre-primario' : 'bg-harina hover:bg-linea'}`}>{t}</button>
+            )
+          })}
         </div>
+        {bloquea && (
+          <p className={`-mt-1 rounded-lg px-3 py-2 text-sm ${esAdmin ? 'bg-muzza-claro' : 'bg-tomate-claro text-tomate'}`}>
+            Hoy ya se abrió la caja {bloquea.toLowerCase()}.{' '}
+            {esAdmin ? 'Como administrador podés abrir este turno igual.' : 'Los turnos van en orden: mañana, tarde y noche. Solo el administrador puede abrir un turno anterior o repetirlo.'}
+          </p>
+        )}
         <Campo label="Dinero al inicio (efectivo en la caja)">
           <input id="caja-inicial" inputMode="decimal" value={inicial} onChange={e => setInicial(e.target.value)} placeholder="0"
             className={`${inputCls} text-right font-cond text-2xl font-bold`} />
@@ -55,7 +74,7 @@ export function CajaCerrada() {
         {ultima?.dineroCierre != null && (
           <p className="-mt-2 text-sm text-gris">La caja anterior cerró con {money(ultima.dineroCierre)} contados.</p>
         )}
-        <Btn tono="albahaca" grande className="w-full" onClick={() => abrirCaja(turno, numero(inicial))}>Abrir caja {turno.toLowerCase()}</Btn>
+        <Btn tono="albahaca" grande className="w-full" disabled={bloqueado} onClick={() => abrirCaja(turno, numero(inicial))}>Abrir caja {turno.toLowerCase()}</Btn>
       </section>
 
       {ultima && ultima.estado === 'cerrada' && (
@@ -339,7 +358,7 @@ function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onC
             className={`${inputCls} h-14 text-right font-cond text-3xl font-bold`} />
         </Campo>
         {contado.trim() !== '' && (
-          <div className={`flex items-center justify-between rounded-xl p-4 font-semibold ${Math.abs(diferencia) < 0.01 ? 'bg-albahaca-claro text-albahaca' : 'bg-tomate-claro text-tomate'}`}>
+          <div className={`flex items-center justify-between rounded-xl p-4 font-semibold ${diferencia > -0.01 ? 'bg-albahaca-claro text-albahaca' : 'bg-tomate-claro text-tomate'}`}>
             <span>{Math.abs(diferencia) < 0.01 ? 'Sin diferencia' : diferencia > 0 ? 'Sobra' : 'Falta'}</span>
             <span className="font-cond text-3xl font-bold tabular-nums">{diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}{money(Math.abs(diferencia))}</span>
           </div>

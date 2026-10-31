@@ -117,6 +117,8 @@ export interface Repo {
   guardarCliente(c: Omit<Cliente, 'id'> & { id?: string }): Promise<Cliente>
   encolarImpresion(jobs: NuevoPrintJob[]): Promise<void>
   listPrintJobs(sucursalId: string, limit?: number): Promise<PrintJob[]>
+  /** Borra trabajos de la cola. Solo los pendientes o con error; devuelve cuántos borró */
+  eliminarPrintJobs(ids: string[]): Promise<number>
   /** Solo demo: simula que el spool imprimió */
   simularSpool?(): Promise<void>
 

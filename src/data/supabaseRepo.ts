@@ -478,6 +478,11 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         impresora_id: j.impresoraId, comanda_id: j.comandaId ?? null, tipo: j.tipo, contenido: j.contenido, copias: j.copias,
       }))))
     },
+    async eliminarPrintJobs(ids) {
+      if (!ids.length) return 0
+      const r = ok(await sb.from('print_jobs').delete().in('id', ids).in('estado', ['pendiente', 'error']).select('id'))
+      return (r as Row[]).length
+    },
     async listPrintJobs(sucursalId, limit = 50) {
       const r = ok(await sb.from('print_jobs').select('*, impresoras!inner(sucursal_id)')
         .eq('impresoras.sucursal_id', sucursalId).order('created_at', { ascending: false }).limit(limit))

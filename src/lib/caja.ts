@@ -51,3 +51,23 @@ export const turnoSugerido = () => {
   const h = new Date().getHours()
   return h >= 6 && h < 14 ? 'Mañana' : h >= 14 && h < 19 ? 'Tarde' : 'Noche'
 }
+
+/** Día local (yyyy-mm-dd) de una fecha ISO */
+const diaLocal = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
+
+/**
+ * Orden de los turnos: en un mismo día no se puede abrir un turno anterior (ni repetir uno)
+ * a otro que ya se abrió. Devuelve el turno que lo impide, o null si se puede abrir.
+ * Solo el administrador puede saltearlo (lo valida también la base).
+ */
+export function turnoQueBloquea(turno: string, cajas: { turno: string; abiertaAt: string }[], ahora = new Date().toISOString()) {
+  const hoy = diaLocal(ahora)
+  const i = TURNOS.indexOf(turno)
+  let peor: string | null = null
+  for (const c of cajas) {
+    if (diaLocal(c.abiertaAt) !== hoy) continue
+    const j = TURNOS.indexOf(c.turno)
+    if (j >= i && (peor == null || j > TURNOS.indexOf(peor))) peor = c.turno
+  }
+  return peor
+}

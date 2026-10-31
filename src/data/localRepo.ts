@@ -3,7 +3,7 @@ import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, PrintJob, Producto,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
-import { calcularTotales } from '../lib/caja'
+import { calcularTotales, turnoQueBloquea } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
 import { importarMenuEjemplo, unirReceta } from '../lib/menu'
 
@@ -447,6 +447,8 @@ export const localRepo: Repo = {
     puedeLocal(sucursalId)
     const d = db()
     if (d.cajas.some(c => c.sucursalId === sucursalId && c.estado === 'abierta')) throw new Error('Ya hay una caja abierta en este local.')
+    const bloquea = turnoQueBloquea(turno, d.cajas.filter(c => c.sucursalId === sucursalId))
+    if (bloquea && ses().rol !== 'admin') throw new Error(`Hoy ya se abrió la caja ${bloquea.toLowerCase()}. Solo el administrador puede abrir un turno anterior o repetirlo.`)
     const caja = {
       id: uid(), sucursalId, turno, estado: 'abierta' as const, abiertaAt: ahora(), ultimoNumero: 0,
       dineroInicial: dineroInicial || 0, abiertaPor: ses().usuario,
@@ -735,6 +737,16 @@ export const localRepo: Repo = {
     puedeLocal(sucursalId)
     const imps = new Set(db().impresoras.filter(i => i.sucursalId === sucursalId).map(i => i.id))
     return pausa(clon(db().printJobs.filter(j => imps.has(j.impresoraId)).slice(0, limit)))
+  },
+
+  async eliminarPrintJobs(ids) {
+    const d = db()
+    const imps = new Map(d.impresoras.map(i => [i.id, i.sucursalId]))
+    const borrar = new Set(d.printJobs.filter(j => ids.includes(j.id) && (j.estado === 'pendiente' || j.estado === 'error')).map(j => j.id))
+    for (const j of d.printJobs) if (borrar.has(j.id)) puedeLocal(imps.get(j.impresoraId) ?? '')
+    d.printJobs = d.printJobs.filter(j => !borrar.has(j.id))
+    guardar('print_jobs')
+    return borrar.size
   },
 
   async simularSpool() {
