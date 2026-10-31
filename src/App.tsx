@@ -8,18 +8,16 @@ import { hora } from './lib/format'
 import { Tablero } from './components/Tablero'
 import { TomarPedido } from './components/TomarPedido'
 import { CajaCerrada, CajaPanel } from './components/Caja'
-import { ColaImpresion } from './components/ColaImpresion'
 import { CrearCuenta, Login } from './components/Login'
-import { Administracion } from './components/admin/Administracion'
+import { Administracion, type Pestana } from './components/admin/Administracion'
 import { Reportes } from './components/Reportes'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
   const { cargando, error, caja, sesion, sucursales, sucursalId, printJobs, cambiarLocal, refrescar, refrescarMenu, salir } = useApp()
   const pedidoAbierto = usePedido(s => s.abierto)
-  const [verCola, setVerCola] = useState(false)
   const [verCierre, setVerCierre] = useState(false)
-  const [verAdmin, setVerAdmin] = useState(false)
+  const [verAdmin, setVerAdmin] = useState<Pestana | null>(null)
   const [verReportes, setVerReportes] = useState(false)
   const [verReset, setVerReset] = useState(false)
 
@@ -46,7 +44,6 @@ function Principal({ onSalir }: { onSalir: () => void }) {
     </div>
   )
 
-  const enCola = printJobs.filter(j => j.estado === 'pendiente').length
   const conError = printJobs.filter(j => j.estado === 'error').length
   const esAdmin = sesion?.rol === 'admin'
   const local = sucursales.find(s => s.id === sucursalId)
@@ -74,12 +71,12 @@ function Principal({ onSalir }: { onSalir: () => void }) {
               <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza hover:text-sobre-muzza">Modo demo</button>
             )}
             <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>
-            <Btn onClick={() => setVerAdmin(true)}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
-            <button onClick={() => setVerCola(true)}
-              className={`h-10 rounded-lg px-3 font-semibold ring-1 ${conError ? 'bg-tomate text-white ring-tomate' : 'bg-superficie ring-linea hover:bg-harina'}`}>
-              Impresión{enCola ? <span className="ml-2 rounded-full bg-muzza px-2 text-sobre-muzza">{enCola} en cola</span> : null}
-              {conError ? <span className="ml-2">{conError} con error</span> : null}
-            </button>
+            <Btn onClick={() => setVerAdmin('menu')}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
+            {conError > 0 && (
+              <button onClick={() => setVerAdmin('impresion')} className="h-10 rounded-lg bg-tomate px-3 font-semibold text-white">
+                Impresión: {conError} con error
+              </button>
+            )}
             {caja && <Btn onClick={() => setVerCierre(true)}>Caja</Btn>}
             <BotonTema />
             <Btn tono="fantasma" title={`Usuario: ${sesion?.usuario}`} onClick={async () => { await salir(); onSalir() }}>
@@ -92,9 +89,8 @@ function Principal({ onSalir }: { onSalir: () => void }) {
       {caja ? <Tablero /> : <CajaCerrada />}
 
       {pedidoAbierto && <TomarPedido />}
-      {verAdmin && <Administracion onClose={() => setVerAdmin(false)} />}
+      {verAdmin && <Administracion inicial={verAdmin} onClose={() => setVerAdmin(null)} />}
       {verReportes && <Reportes onClose={() => setVerReportes(false)} />}
-      {verCola && <ColaImpresion onClose={() => setVerCola(false)} />}
       {verCierre && <CajaPanel onClose={() => setVerCierre(false)} />}
       {verReset && (
         <Confirmar

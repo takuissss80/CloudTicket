@@ -6,18 +6,19 @@ import { Locales } from './Locales'
 import { Repartidores } from './Repartidores'
 import { CajasAdmin } from './CajasAdmin'
 import { Stock } from './Stock'
+import { ImpresionPanel } from '../ColaImpresion'
 
-type Pestana = 'menu' | 'caja' | 'stock' | 'ingredientes' | 'repartidores' | 'locales'
+export type Pestana = 'menu' | 'caja' | 'stock' | 'ingredientes' | 'repartidores' | 'impresion' | 'locales'
 
 /** Pantalla de administración: menú, ingredientes, locales y usuarios */
-export function Administracion({ onClose }: { onClose: () => void }) {
+export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => void; inicial?: Pestana }) {
   const sesion = useApp(s => s.sesion)
   const esAdmin = sesion?.rol === 'admin'
-  const [pestana, setPestana] = useState<Pestana>('menu')
+  const [pestana, setPestana] = useState<Pestana>(inicial)
 
   const pestanas: { key: Pestana; label: string }[] = esAdmin
-    ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'locales', label: 'Locales y usuarios' }]
-    : [{ key: 'menu', label: 'Menú del local' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'repartidores', label: 'Repartidores' }]
+    ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }, { key: 'locales', label: 'Locales y usuarios' }]
+    : [{ key: 'menu', label: 'Menú del local' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }]
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
@@ -41,6 +42,7 @@ export function Administracion({ onClose }: { onClose: () => void }) {
         {pestana === 'stock' && <Stock />}
         {pestana === 'ingredientes' && esAdmin && <Ingredientes />}
         {pestana === 'repartidores' && <Repartidores />}
+        {pestana === 'impresion' && <ImpresionPanel />}
         {pestana === 'locales' && esAdmin && <Locales />}
       </div>
     </div>

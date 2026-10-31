@@ -100,9 +100,14 @@ export function TomarPedido() {
         </div>
         <div className="ml-auto min-w-0">
           {p.tipo === 'mostrador' ? (
-            <input value={p.clienteNombre} onChange={e => p.set({ clienteNombre: e.target.value })}
-              placeholder="Nombre del cliente"
-              className="h-10 w-56 rounded-lg border-0 bg-superficie px-3 text-[16px] text-tinta outline-none placeholder:text-gris" />
+            <div className="flex flex-wrap gap-2">
+              <input id="mostrador-nombre" value={p.clienteNombre} onChange={e => p.set({ clienteNombre: e.target.value })}
+                placeholder="Nombre *" aria-label="Nombre del cliente" required
+                className="h-10 w-48 rounded-lg border-0 bg-superficie px-3 text-[16px] text-tinta outline-none placeholder:text-gris" />
+              <input id="mostrador-tel" type="tel" inputMode="tel" value={p.clienteTel} onChange={e => p.set({ clienteTel: e.target.value })}
+                placeholder="Teléfono *" aria-label="Teléfono del cliente" required
+                className="h-10 w-40 rounded-lg border-0 bg-superficie px-3 text-[16px] text-tinta outline-none placeholder:text-gris" />
+            </div>
           ) : (
             <button onClick={() => setVerCliente(true)} className="flex max-w-md items-center gap-3 rounded-lg bg-white/15 px-3 py-1.5 text-left hover:bg-white/25">
               {p.clienteNombre ? (

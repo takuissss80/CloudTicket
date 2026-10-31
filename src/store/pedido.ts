@@ -178,3 +178,12 @@ export function itemPromo(promo: Producto, elegidos: Componente[], productos: Pr
     componentes: [...fijos, ...elegidos],
   }
 }
+
+/** Mostrador: para tomar un pedido nuevo hacen falta nombre y teléfono. Devuelve qué falta o null. */
+export function faltaClienteMostrador(p: Pick<PedidoState, 'tipo' | 'editandoId' | 'clienteNombre' | 'clienteTel'>) {
+  if (p.tipo !== 'mostrador' || p.editandoId) return null
+  const falta: string[] = []
+  if (!p.clienteNombre.trim()) falta.push('el nombre')
+  if (p.clienteTel.replace(/\D/g, '').length < 6) falta.push('el teléfono')
+  return falta.length ? `Falta ${falta.join(' y ')} del cliente` : null
+}

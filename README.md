@@ -44,7 +44,7 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 
 ### Pedidos y delivery
 
-- **Mostrador:** el pedido queda pendiente hasta que tocás **Entregar pedido**. Ahí confirmás
+- **Mostrador:** para tomar el pedido son obligatorios **nombre y teléfono** del cliente. El pedido queda pendiente hasta que tocás **Entregar pedido**. Ahí confirmás
   o cambiás la forma de pago (por si el cliente paga distinto al retirar).
 - **Delivery:** primero **Asignar delivery** (elegís la moto). Desde ese momento corre un
   contador de minutos en la tarjeta (en rojo pasados los 30). Recién con la moto asignada
@@ -61,6 +61,8 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
   Motos, Proveedores, Servicios…), **retiros** de efectivo, **ingresos** y **sueldos**.
 - **Total teórico en caja** = inicio + ventas en efectivo cobradas (sin el vuelto) + ingresos
   − gastos − retiros − sueldos. Lo cobrado por Mercado Pago, tarjeta o transferencia no suma.
+- El resumen y el cierre muestran dos columnas: **entra a la caja** (inicio, ventas en efectivo, ingresos) y
+  **sale de la caja** (gastos, retiros, sueldos), cada una con su total.
 - **Cerrar:** cargás el efectivo contado y queda la **diferencia** (sobra / falta) con una
   observación. Se guarda una foto de todos los totales, quién cerró y a qué hora.
 - **Reabrir:** la última caja del local se puede reabrir si se cerró por error; sigue con la
@@ -93,6 +95,11 @@ si sos admin, un local o todos. Cada reporte se descarga en CSV para Excel.
 | Ingresos y egresos de dinero | Ingresos y retiros de caja |
 | Ingreso de mercadería | Cada ingreso con su detalle y el total por ingrediente con precio promedio |
 | Stock | Stock actual por local y lo que entró, se vendió y se ajustó en el período |
+
+### Impresión
+
+Las comanderas, la cola y los últimos trabajos están en *Administración → Impresión*. Si un trabajo
+falla, aparece un aviso rojo arriba en la pantalla de pedidos que lleva directo a esa pestaña.
 
 ### Modo noche
 

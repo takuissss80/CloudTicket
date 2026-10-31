@@ -4,7 +4,7 @@ import type { Catalogo, MenuData } from '../data/repo'
 import type { Caja, Comanda, EstadoComanda, Impresora, MovimientoCaja, NuevaComanda, Pago, PrintJob, Repartidor, Sesion, Sucursal, TipoGasto } from '../types'
 import { jobsParaComanda, ticketPrueba } from '../lib/ticket'
 import { resolverCatalogo } from '../lib/menu'
-import { usePedido, totales } from './pedido'
+import { usePedido, totales, faltaClienteMostrador } from './pedido'
 
 interface Toast { id: number; texto: string; tipo: 'ok' | 'error' }
 
@@ -191,6 +191,8 @@ export const useApp = create<AppState>((set, get) => {
       const { caja, catalogo } = get()
       if (!caja) { get().avisar('Abrí la caja antes de cargar pedidos', 'error'); return null }
       if (!p.items.length) { get().avisar('El pedido no tiene productos', 'error'); return null }
+      const faltaCliente = faltaClienteMostrador(p)
+      if (faltaCliente) { get().avisar(faltaCliente, 'error'); return null }
       const { subtotal, envio, total } = totales(p, catalogo.zonas, catalogo.productos)
       const data: NuevaComanda = {
         tipo: p.tipo,

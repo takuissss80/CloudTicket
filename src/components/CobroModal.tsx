@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Comanda } from '../types'
 import { FORMAS_PAGO } from '../types'
 import { useApp, useNombreLocal } from '../store/app'
-import { totales, usePedido } from '../store/pedido'
+import { faltaClienteMostrador, totales, usePedido } from '../store/pedido'
 import { construirTicket } from '../lib/ticket'
 import { money } from '../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from './ui'
@@ -52,6 +52,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
   }
 
   const numero = (v: string) => (v === '' ? 0 : Math.max(0, Number(v.replace(',', '.')) || 0))
+  const faltaCliente = faltaClienteMostrador(p)
 
   return (
     <Modal
@@ -61,10 +62,11 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
       alto
       pie={
         <div className="flex flex-wrap items-center gap-3">
+          {faltaCliente && <p className="w-full text-right text-sm font-semibold text-tomate">{faltaCliente}: completalo arriba para poder guardar.</p>}
           <div className="mr-auto font-cond text-3xl font-bold">Total {money(total)}</div>
           <Btn onClick={onClose}>Seguir cargando</Btn>
-          <Btn disabled={guardando} onClick={() => guardar(false)}>Guardar sin imprimir</Btn>
-          <Btn tono="albahaca" grande disabled={guardando} onClick={() => guardar(true)}>
+          <Btn disabled={guardando || !!faltaCliente} onClick={() => guardar(false)}>Guardar sin imprimir</Btn>
+          <Btn tono="albahaca" grande disabled={guardando || !!faltaCliente} onClick={() => guardar(true)}>
             {guardando ? 'Guardando…' : 'Guardar e imprimir'}
           </Btn>
         </div>
@@ -72,6 +74,18 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
     >
       <div className="grid gap-6 p-5 lg:grid-cols-[1fr_auto]">
         <div className="space-y-5">
+          {p.tipo === 'mostrador' && (
+            <section className="grid grid-cols-2 gap-3">
+              <Campo label="Nombre del cliente *">
+                <input id="cobro-nombre" value={p.clienteNombre} onChange={e => p.set({ clienteNombre: e.target.value })}
+                  className={`${inputCls} ${faltaCliente && !p.clienteNombre.trim() ? 'border-tomate' : ''}`} autoComplete="off" />
+              </Campo>
+              <Campo label="Teléfono *">
+                <input id="cobro-tel" type="tel" inputMode="tel" value={p.clienteTel} onChange={e => p.set({ clienteTel: e.target.value })}
+                  className={`${inputCls} ${faltaCliente && p.clienteTel.replace(/\D/g, '').length < 6 ? 'border-tomate' : ''}`} autoComplete="off" />
+              </Campo>
+            </section>
+          )}
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Campo label="Para las">
               <input type="time" value={p.horaEntrega} onChange={e => p.set({ horaEntrega: e.target.value })} className={inputCls} />

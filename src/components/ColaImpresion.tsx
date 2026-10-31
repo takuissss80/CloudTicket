@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { PrintJob } from '../types'
 import { repo } from '../data'
-import { useApp } from '../store/app'
+import { useApp, useNombreLocal } from '../store/app'
 import { hora } from '../lib/format'
 import { Btn, Modal } from './ui'
 import { TicketPreview } from './TicketPreview'
@@ -13,27 +13,33 @@ const etiqueta: Record<PrintJob['estado'], string> = {
   error: 'Error',
 }
 
-/** Cola de impresión: lo que el spool de cada local tiene que imprimir */
-export function ColaImpresion({ onClose }: { onClose: () => void }) {
+/** Comanderas y cola de impresión del local activo (pestaña de Administración) */
+export function ImpresionPanel() {
   const { printJobs, impresoras, comandas, imprimirPrueba, refrescar } = useApp()
+  const local = useNombreLocal()
   const [ver, setVer] = useState<PrintJob | null>(null)
   const pendientes = printJobs.filter(j => j.estado === 'pendiente').length
+  const conError = printJobs.filter(j => j.estado === 'error').length
 
   return (
-    <Modal
-      titulo="Comanderas e impresión"
-      onClose={onClose}
-      ancho="max-w-3xl"
-      pie={repo.modo === 'demo' ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="flex-1 text-sm text-gris">Modo demo: no hay spool conectado. Podés simular que la comandera imprimió lo que está en cola.</p>
+    <div className="mx-auto max-w-4xl px-4 py-5">
+      <div className="mb-5 flex flex-wrap items-end gap-3">
+        <div className="mr-auto">
+          <h2 className="font-cond text-3xl font-bold">Impresión</h2>
+          <p className="text-[15px] text-gris">Comanderas de {local} y lo que se mandó a imprimir.</p>
+        </div>
+        <span className="rounded-lg bg-muzza-claro px-3 py-1.5 font-semibold">{pendientes} en cola</span>
+        {conError > 0 && <span className="rounded-lg bg-tomate px-3 py-1.5 font-semibold text-white">{conError} con error</span>}
+      </div>
+      {repo.modo === 'demo' && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl bg-muzza-claro p-3">
+          <p className="flex-1 text-sm">Modo demo: no hay spool conectado. Podés simular que la comandera imprimió lo que está en cola.</p>
           <Btn tono="pizarra" disabled={!pendientes} onClick={async () => { await repo.simularSpool?.(); await refrescar() }}>
             Simular impresión ({pendientes})
           </Btn>
         </div>
-      ) : undefined}
-    >
-      <div className="space-y-6 p-5">
+      )}
+      <div className="space-y-6">
         <section>
           <h3 className="mb-2 font-cond text-2xl font-bold">Comanderas</h3>
           <ul className="space-y-2">
@@ -86,6 +92,6 @@ export function ColaImpresion({ onClose }: { onClose: () => void }) {
           </div>
         </Modal>
       )}
-    </Modal>
+    </div>
   )
 }

@@ -91,6 +91,52 @@ export function CajaCerrada() {
 // ---------------------------------------------------------------------
 // Resumen de movimientos (como en Datalive)
 // ---------------------------------------------------------------------
+/** Lo que suma a la caja a la izquierda, lo que resta a la derecha, y el teórico abajo */
+export function ColumnasCaja({ caja, totales: t, detalleVentas, compacto }: { caja: Caja; totales: TotalesCaja; detalleVentas?: ReactNode; compacto?: boolean }) {
+  const entra = (caja.dineroInicial || 0) + t.ventasEfectivo + t.totalIngresos
+  const sale = t.totalGastos + t.totalEgresos + t.totalSueldos
+  const fila = (label: string, monto: number, extra?: ReactNode) => (
+    <li className={`flex items-start justify-between gap-3 ${compacto ? 'py-1.5' : 'py-2.5'}`}>
+      <div className="min-w-0"><div className="font-semibold">{label}</div>{extra && <div className="text-sm text-gris">{extra}</div>}</div>
+      <span className="shrink-0 font-semibold tabular-nums">{money(monto)}</span>
+    </li>
+  )
+  const columna = (titulo: string, signo: '+' | '−', total: number, tono: string, filas: ReactNode) => (
+    <section className="flex flex-col rounded-xl bg-superficie ring-1 ring-linea">
+      <h4 className={`flex items-center gap-2 border-b border-linea px-4 py-2 text-sm font-bold uppercase tracking-wide ${tono}`}>
+        <span className="font-cond text-xl leading-none">{signo}</span>{titulo}
+      </h4>
+      <ul className="flex-1 divide-y divide-linea px-4 text-[15px]">{filas}</ul>
+      <div className={`flex justify-between border-t border-linea px-4 py-2.5 font-bold ${tono}`}>
+        <span>Total</span><span className="tabular-nums">{signo === '−' && total ? '−' : ''}{money(total)}</span>
+      </div>
+    </section>
+  )
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {columna('Entra a la caja', '+', entra, 'text-albahaca', <>
+          {fila('Dinero al inicio', caja.dineroInicial || 0)}
+          {fila('Ventas en efectivo', t.ventasEfectivo, detalleVentas)}
+          {fila('Ingresos de dinero', t.totalIngresos)}
+        </>)}
+        {columna('Sale de la caja', '−', sale, 'text-tomate', <>
+          {fila('Gastos', t.totalGastos)}
+          {fila('Retiros (egresos)', t.totalEgresos)}
+          {fila('Sueldos', t.totalSueldos)}
+        </>)}
+      </div>
+      <div className="flex items-end justify-between gap-3 rounded-xl bg-harina p-4">
+        <div>
+          <div className="font-semibold">Total teórico en caja</div>
+          <div className="text-sm text-gris">{money(entra)} − {money(sale)}. Sin lo cobrado online.</div>
+        </div>
+        <div className="font-cond text-4xl font-bold tabular-nums">{money(t.efectivoTeorico)}</div>
+      </div>
+    </div>
+  )
+}
+
 export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: TotalesCaja; comandas?: Comanda[] }) {
   const t = totales
   const online = t.totalVentas - t.ventasEfectivo
@@ -102,38 +148,14 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
     const x = motos.get(c.repartidorNombre) ?? { viajes: 0, minutos: 0 }
     motos.set(c.repartidorNombre, { viajes: x.viajes + 1, minutos: x.minutos + m })
   }
-  const fila = (label: string, monto: number, signo: '+' | '-' | '', extra?: ReactNode) => (
-    <tr className="border-b border-linea">
-      <td className="py-2.5 pr-3 align-top"><div className="font-semibold">{label}</div>{extra}</td>
-      <td className={`py-2.5 text-right align-top font-semibold tabular-nums ${signo === '-' && monto ? 'text-tomate' : signo === '+' && monto ? 'text-albahaca' : ''}`}>
-        {signo === '-' && monto ? '−' : ''}{money(monto)}
-      </td>
-    </tr>
-  )
   return (
     <div className="space-y-4">
-      <table className="w-full text-[15px]">
-        <tbody>
-          {fila('Dinero al inicio', caja.dineroInicial || 0, '+')}
-          {fila('Ventas en efectivo', t.ventasEfectivo, '+', (
-            <div className="text-sm text-gris">
-              {t.cantComandas} {t.cantComandas === 1 ? 'comanda' : 'comandas'} por {money(t.totalVentas)}
-              {t.cantAnuladas ? `, ${t.cantAnuladas} anuladas` : ''}. Online y otros medios: {money(online)}
-            </div>
-          ))}
-          {fila('Ingresos', t.totalIngresos, '+')}
-          {fila('Gastos', t.totalGastos, '-')}
-          {fila('Retiros (egresos)', t.totalEgresos, '-')}
-          {fila('Sueldos', t.totalSueldos, '-')}
-        </tbody>
-      </table>
-      <div className="flex items-end justify-between rounded-xl bg-harina p-4">
-        <div>
-          <div className="font-semibold">Total teórico en caja</div>
-          <div className="text-sm text-gris">Efectivo que debería haber (sin lo cobrado online)</div>
-        </div>
-        <div className="font-cond text-4xl font-bold tabular-nums">{money(t.efectivoTeorico)}</div>
-      </div>
+      <ColumnasCaja caja={caja} totales={t} detalleVentas={
+        <>
+          {t.cantComandas} {t.cantComandas === 1 ? 'comanda' : 'comandas'} por {money(t.totalVentas)}
+          {t.cantAnuladas ? `, ${t.cantAnuladas} anuladas` : ''}. Online y otros medios: {money(online)}
+        </>
+      } />
       {motos.size > 0 && (
         <div>
           <div className="mb-1 text-sm font-medium text-gris">Viajes por moto</div>
@@ -246,7 +268,7 @@ export function CajaPanel({ onClose }: { onClose: () => void }) {
     <Modal
       titulo={<span>Caja {caja.turno.toLowerCase()} <span className="font-sans text-lg font-semibold text-gris">{fechaLarga(caja.abiertaAt)}</span></span>}
       onClose={onClose}
-      ancho="max-w-2xl"
+      ancho="max-w-3xl"
       alto
       pie={
         <div className="flex flex-wrap items-center gap-2">
@@ -302,7 +324,7 @@ function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onC
   }
 
   return (
-    <Modal titulo={`Cerrar caja ${caja.turno.toLowerCase()}`} onClose={onClose} ancho="max-w-lg"
+    <Modal titulo={`Cerrar caja ${caja.turno.toLowerCase()}`} onClose={onClose} ancho="max-w-3xl"
       pie={<div className="flex justify-end gap-2"><Btn onClick={onClose}>Volver</Btn><Btn tono="tomate" disabled={enviando || contado.trim() === ''} onClick={cerrar}>Cerrar caja</Btn></div>}>
       <div className="space-y-4 p-5">
         {(sinCobrar.length > 0 || sinEntregar.length > 0) && (
@@ -311,10 +333,7 @@ function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onC
             {sinCobrar.length > 0 && <p><b>{sinCobrar.length}</b> sin cobrar ({money(sinCobrar.reduce((s, c) => s + c.total, 0))}): no suman al efectivo.</p>}
           </div>
         )}
-        <div className="flex items-end justify-between rounded-xl bg-harina p-4">
-          <span className="font-semibold">Total teórico en caja</span>
-          <span className="font-cond text-3xl font-bold tabular-nums">{money(totales.efectivoTeorico)}</span>
-        </div>
+        <ColumnasCaja caja={caja} totales={totales} compacto />
         <Campo label="Efectivo contado (dinero real en la caja)">
           <input id="caja-contado" autoFocus inputMode="decimal" value={contado} onChange={e => setContado(e.target.value)} placeholder="0"
             className={`${inputCls} h-14 text-right font-cond text-3xl font-bold`} />

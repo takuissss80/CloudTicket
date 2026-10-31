@@ -32,6 +32,7 @@ function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Coma
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="truncate font-semibold">{c.clienteNombre || (c.tipo === 'mostrador' ? 'Mostrador' : 'Sin nombre')}</div>
             {c.tipo === 'delivery' && <div className="truncate text-sm text-gris">{c.direccion}</div>}
+            {c.tipo === 'mostrador' && c.clienteTel && <div className="truncate text-sm text-gris">Tel. {c.clienteTel}</div>}
           </div>
           <div className="text-right">
             <div className={`text-sm font-semibold tabular-nums ${demorada ? 'text-tomate' : 'text-gris'}`}>{hora(c.createdAt)}</div>
