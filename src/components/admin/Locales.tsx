@@ -133,7 +133,7 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
             <Btn tono="albahaca" className="h-10" disabled={nuevoUsuario.usuario.length < 3 || nuevoUsuario.password.length < 6}>Crear usuario</Btn>
           </form>
           <p className="mt-2 text-sm text-gris">
-            <b>Común:</b> toma pedidos, cobra y usa cupones. <b>Encargado:</b> además puede cargar descuentos, adicionales y cambiar el envío.
+            <b>Común:</b> toma pedidos, cobra, entrega y usa cupones. <b>Encargado:</b> además modifica y anula comandas, carga descuentos y adicionales y cambia el envío.
           </p>
         </div>
       </div>

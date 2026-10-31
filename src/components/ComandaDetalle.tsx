@@ -11,7 +11,9 @@ import { Btn, Confirmar, Modal } from './ui'
 import { TicketPreview } from './TicketPreview'
 
 export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comanda; onClose: () => void; onAccion: (a: AccionTablero) => void }) {
-  const { reimprimir, anular, marcarCobrada, impresoras, catalogo, printJobs } = useApp()
+  const { reimprimir, anular, marcarCobrada, impresoras, catalogo, printJobs, sesion } = useApp()
+  // Modificar y anular: solo admin o encargado
+  const encargado = !!sesion?.puedeDescontar
   const sucursal = useNombreLocal()
   const editar = usePedido(s => s.editar)
   const [confirmarAnular, setConfirmarAnular] = useState(false)
@@ -33,9 +35,10 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
       ancho="max-w-4xl"
       pie={
         <div className="flex flex-wrap items-center gap-2">
-          {!anulada && <Btn tono="fantasma" className="text-tomate" onClick={() => setConfirmarAnular(true)}>Anular</Btn>}
+          {!anulada && encargado && <Btn tono="fantasma" className="text-tomate" onClick={() => setConfirmarAnular(true)}>Anular</Btn>}
+          {!anulada && !encargado && <span className="text-sm text-gris">Para modificar o anular, pedíselo a un encargado.</span>}
           <div className="ml-auto flex flex-wrap gap-2">
-            {!anulada && <Btn onClick={() => { editar(c); onClose() }}>Editar pedido</Btn>}
+            {!anulada && encargado && <Btn onClick={() => { editar(c); onClose() }}>Editar pedido</Btn>}
             <Btn onClick={() => reimprimir(c)}>Reimprimir</Btn>
             {c.tipo === 'delivery' && c.repartidorId && accion && (
               <Btn onClick={() => onAccion({ tipo: 'asignar', id: c.id })}>Cambiar moto</Btn>

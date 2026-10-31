@@ -761,6 +761,7 @@ export const localRepo: Repo = {
     const i = d.comandas.findIndex(c => c.id === id)
     if (i < 0) throw new Error('Comanda no encontrada')
     puedeLocal(d.comandas[i].sucursalId)
+    if (!ses().puedeDescontar) throw new Error('Solo el administrador o un encargado pueden modificar comandas')
     data = clon(data)
     validarDescuentos(data, d.comandas[i])
     devolverComanda(id)
@@ -775,6 +776,7 @@ export const localRepo: Repo = {
     const c = db().comandas.find(x => x.id === id)
     if (!c) return
     puedeLocal(c.sucursalId)
+    if ((estado === 'anulada') !== (c.estado === 'anulada') && !ses().puedeDescontar) throw new Error('Solo el administrador o un encargado pueden anular comandas')
     if (estado === 'anulada' && c.estado !== 'anulada') devolverComanda(c.id)
     c.estado = estado; c.updatedAt = ahora()
     guardar()

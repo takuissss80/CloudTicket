@@ -58,8 +58,9 @@ impresión se simula. Viene con la cuenta *Napoles*, dos locales y tres usuarios
 - **Descuento y adicional** al cobrar, en **$ o en %** (el % es sobre los productos, sin el envío). Los puede
   cargar o cambiar el **administrador** o un usuario **Encargado**; el usuario **Común** no ve esos campos
   (pero sí el de cupón). Lo valida la base.
-- **Tipos de usuario de local** (*Locales y usuarios*): **Común** toma pedidos, cobra y usa cupones;
-  **Encargado** además carga descuentos, adicionales y cambia el envío. Se elige al crearlo y se cambia
+- **Tipos de usuario de local** (*Locales y usuarios*): **Común** toma pedidos, cobra, entrega, asigna la
+  moto, reimprime y usa cupones; **Encargado** además **modifica y anula comandas**, carga descuentos y
+  adicionales y cambia el envío. Lo valida la base. Se elige al crearlo y se cambia
   cuando quieras.
 - **Cupones** (*Administración → Cupones*, solo admin): código, descuento en % o $ fijo, vigencia sin
   vencimiento o hasta una fecha (y opcionalmente desde una fecha), activar/desactivar. Valen en todos los
@@ -145,7 +146,7 @@ Los colores son los de CloudVision (azul noche y verde agua) y viven como variab
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0008`) en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0009`) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si
