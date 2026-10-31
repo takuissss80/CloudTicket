@@ -38,6 +38,10 @@ for each row execute function validar_orden_turno();
 -- Borrar trabajos de la cola: solo los que todavía no se imprimieron
 -- (pendientes o con error). Reemplaza el permiso general de print_jobs.
 drop policy if exists pj_all on print_jobs;
+drop policy if exists pj_sel on print_jobs;
+drop policy if exists pj_ins on print_jobs;
+drop policy if exists pj_upd on print_jobs;
+drop policy if exists pj_del on print_jobs;
 create policy pj_sel on print_jobs for select to authenticated
   using (exists (select 1 from impresoras i where i.id = impresora_id and puede_sucursal(i.sucursal_id)));
 create policy pj_ins on print_jobs for insert to authenticated
