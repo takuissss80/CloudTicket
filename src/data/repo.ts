@@ -109,6 +109,8 @@ export interface Repo {
   marcarCobrada(id: string, cobrada: boolean): Promise<void>
   /** Delivery: asigna la moto, pasa a "en camino" y arranca el contador */
   asignarRepartidor(comandaId: string, repartidorId: string): Promise<void>
+  /** Saca la moto asignada (por si se eligió mal); vuelve a quedar sin moto */
+  quitarRepartidor(comandaId: string): Promise<void>
   /** Entrega el pedido con la forma de pago final */
   entregarComanda(comandaId: string, pagos: Pago[], cobrada: boolean): Promise<void>
   buscarClientes(q: BusquedaCliente): Promise<Cliente[]>

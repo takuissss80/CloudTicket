@@ -443,6 +443,10 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async asignarRepartidor(comandaId, repartidorId) {
       ok(await sb.from('comandas').update({ repartidor_id: repartidorId, asignada_at: new Date().toISOString(), estado: 'en_camino' }).eq('id', comandaId))
     },
+    async quitarRepartidor(comandaId) {
+      ok(await sb.from('comandas').update({ repartidor_id: null, asignada_at: null, estado: 'pendiente' })
+        .eq('id', comandaId).not('estado', 'in', '(entregado,anulada)'))
+    },
     async entregarComanda(comandaId, pagos: Pago[], cobrada) {
       ok(await sb.from('pagos').delete().eq('comanda_id', comandaId))
       if (pagos.length) ok(await sb.from('pagos').insert(pagos.map(p => ({ comanda_id: comandaId, forma: p.forma, monto: p.monto }))))

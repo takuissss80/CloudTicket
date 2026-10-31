@@ -16,7 +16,7 @@ function colorEstado(c: Comanda) {
 
 export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
 
-function TarjetaComanda({ c, onAbrir, onAccion, ahora }: { c: Comanda; onAbrir: () => void; onAccion: (a: AccionTablero) => void; ahora: number }) {
+function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Comanda; onAbrir: () => void; onAccion: (a: AccionTablero) => void; onQuitarMoto: () => void; ahora: number }) {
   const accion = accionPendiente(c)
   const mins = minutosDesde(c.createdAt, ahora)
   const cerrada = c.estado === 'entregado' || c.estado === 'anulada'
@@ -45,13 +45,24 @@ function TarjetaComanda({ c, onAbrir, onAccion, ahora }: { c: Comanda; onAbrir: 
           ))}
           {c.items.length > 4 && <li className="text-gris">y {c.items.length - 4} más</li>}
         </ul>
+      </button>
 
-        {c.repartidorNombre && viaje != null && (
-          <div className={`mt-2 flex items-center justify-between rounded-lg px-3 py-1.5 ${c.entregadaAt ? 'bg-harina text-gris' : viaje >= MINUTOS_ALERTA_DELIVERY ? 'bg-tomate text-white' : 'bg-pizarra-claro text-pizarra'}`}>
-            <span className="font-semibold">Moto: {c.repartidorNombre}</span>
-            <span className="font-cond text-2xl font-bold tabular-nums">{c.entregadaAt ? `tardó ${viaje}′` : `${viaje}′`}</span>
+      {c.repartidorNombre && viaje != null && (
+        <div className="px-4">
+          <div className={`mt-2 flex items-center gap-2 rounded-lg py-1.5 pl-3 pr-2 ${c.entregadaAt ? 'bg-harina text-gris' : viaje >= MINUTOS_ALERTA_DELIVERY ? 'bg-tomate text-white' : 'bg-pizarra-claro text-pizarra'}`}>
+            <span className="min-w-0 truncate font-semibold">Moto: {c.repartidorNombre}</span>
+            {!cerrada && (
+              <button type="button" onClick={onQuitarMoto} aria-label={`Quitar a ${c.repartidorNombre} y elegir otra moto`} title="Quitar esta moto"
+                className="grid size-7 shrink-0 place-items-center rounded-full hover:bg-black/15">
+                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            )}
+            <span className="ml-auto font-cond text-2xl font-bold tabular-nums">{c.entregadaAt ? `tardó ${viaje}′` : `${viaje}′`}</span>
           </div>
-        )}
+        </div>
+      )}
+
+      <button onClick={onAbrir} className="block w-full px-4 text-left">
 
         <div className="mt-2 flex items-center gap-2 border-t border-dashed border-linea pt-2">
           <span className={`rounded px-2 py-0.5 text-xs font-bold ${colorEstado(c)}`}>{etiquetaEstado(c)}</span>
@@ -74,7 +85,7 @@ function TarjetaComanda({ c, onAbrir, onAccion, ahora }: { c: Comanda; onAbrir: 
 }
 
 export function Tablero() {
-  const { comandas } = useApp()
+  const { comandas, quitarRepartidor } = useApp()
   const nuevo = usePedido(s => s.nuevo)
   const [verCerradas, setVerCerradas] = useState(false)
   const [seleccion, setSeleccion] = useState<string | null>(null)
@@ -106,7 +117,8 @@ export function Tablero() {
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-          {lista.map(c => <TarjetaComanda key={c.id} c={c} ahora={ahora} onAbrir={() => setSeleccion(c.id)} onAccion={setAccion} />)}
+          {lista.map(c => <TarjetaComanda key={c.id} c={c} ahora={ahora} onAbrir={() => setSeleccion(c.id)} onAccion={setAccion}
+            onQuitarMoto={async () => { if (await quitarRepartidor(c)) setAccion({ tipo: 'asignar', id: c.id }) }} />)}
         </div>
         {!lista.length && (
           <button onClick={() => nuevo(tipo)} className="w-full rounded-xl border-2 border-dashed border-linea py-10 text-center text-gris hover:border-gris">

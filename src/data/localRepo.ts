@@ -676,6 +676,16 @@ export const localRepo: Repo = {
     guardar()
   },
 
+  async quitarRepartidor(comandaId) {
+    const c = db().comandas.find(x => x.id === comandaId)
+    if (!c) throw new Error('Comanda no encontrada')
+    puedeLocal(c.sucursalId)
+    if (c.estado === 'entregado' || c.estado === 'anulada') throw new Error('El pedido ya está cerrado')
+    c.repartidorId = undefined; c.repartidorNombre = undefined
+    c.asignadaAt = undefined; c.estado = 'pendiente'; c.updatedAt = ahora()
+    guardar()
+  },
+
   async entregarComanda(comandaId, pagos, cobrada) {
     const c = db().comandas.find(x => x.id === comandaId)
     if (!c) throw new Error('Comanda no encontrada')

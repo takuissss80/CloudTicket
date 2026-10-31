@@ -44,6 +44,7 @@ interface AppState {
   cambiarEstado(c: Comanda, estado: EstadoComanda): Promise<void>
   marcarCobrada(c: Comanda, cobrada: boolean): Promise<void>
   asignarRepartidor(c: Comanda, repartidorId: string): Promise<boolean>
+  quitarRepartidor(c: Comanda): Promise<boolean>
   entregar(c: Comanda, pagos: Pago[], cobrada: boolean): Promise<boolean>
   cargarRepartidores(): Promise<void>
   reimprimir(c: Comanda): Promise<void>
@@ -241,6 +242,15 @@ export const useApp = create<AppState>((set, get) => {
         await repo.asignarRepartidor(c.id, repartidorId)
         const r = get().repartidores.find(x => x.id === repartidorId)
         get().avisar(`Comanda #${c.numero} salió con ${r?.nombre ?? 'el repartidor'}`)
+        await get().refrescar()
+        return true
+      } catch (e) { fallo(e); return false }
+    },
+
+    async quitarRepartidor(c) {
+      try {
+        await repo.quitarRepartidor(c.id)
+        get().avisar(`Comanda #${c.numero}: se quitó a ${c.repartidorNombre ?? 'la moto'}`)
         await get().refrescar()
         return true
       } catch (e) { fallo(e); return false }
