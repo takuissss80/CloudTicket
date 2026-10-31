@@ -109,8 +109,8 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
                 {pass?.userId === u.userId && (
                   <form className="mt-2 flex gap-2" onSubmit={e => { e.preventDefault(); intentar(() => repo.cambiarPassword(u.userId, pass.valor), 'Contraseña actualizada').then(() => setPass(null)) }}>
                     <input autoFocus type="text" aria-label="Nueva contraseña" value={pass.valor} onChange={e => setPass({ ...pass, valor: e.target.value })}
-                      className={`${inputCls} h-9`} placeholder="Nueva contraseña" autoComplete="new-password" />
-                    <Btn tono="albahaca" className="h-9" disabled={pass.valor.length < 4}>Guardar</Btn>
+                      className={`${inputCls} h-9`} placeholder="Nueva contraseña (mín. 6)" autoComplete="new-password" />
+                    <Btn tono="albahaca" className="h-9" disabled={pass.valor.length < 6}>Guardar</Btn>
                     <Btn type="button" className="h-9" onClick={() => setPass(null)}>Cancelar</Btn>
                   </form>
                 )}
@@ -126,8 +126,8 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
             <input aria-label="Usuario nuevo" value={nuevoUsuario.usuario} onChange={e => setNuevoUsuario({ ...nuevoUsuario, usuario: e.target.value.toLowerCase().replace(/\s/g, '') })}
               className={`${inputBase} h-10 min-w-0 flex-1`} placeholder={`usuario (ej: ${sugerido})`} autoComplete="off" autoCapitalize="none" />
             <input aria-label="Contraseña del usuario nuevo" type="text" value={nuevoUsuario.password} onChange={e => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
-              className={`${inputBase} h-10 min-w-0 flex-1`} placeholder="contraseña" autoComplete="new-password" />
-            <Btn tono="albahaca" className="h-10" disabled={nuevoUsuario.usuario.length < 3 || nuevoUsuario.password.length < 4}>Crear usuario</Btn>
+              className={`${inputBase} h-10 min-w-0 flex-1`} placeholder="contraseña (mín. 6)" autoComplete="new-password" />
+            <Btn tono="albahaca" className="h-10" disabled={nuevoUsuario.usuario.length < 3 || nuevoUsuario.password.length < 6}>Crear usuario</Btn>
           </form>
         </div>
       </div>
