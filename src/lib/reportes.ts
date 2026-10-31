@@ -65,6 +65,10 @@ export function reporteVentas(comandas: Comanda[], p: Periodo) {
     descuentos: validas.reduce((s, c) => s + c.descuento, 0),
     porDia: [...porDia.values()],
     porForma: [...cobradoPorForma(validas)].sort((a, b) => b[1] - a[1]),
+    porCanal: (['propio', 'pedidosya'] as const).map(canal => {
+      const l = validas.filter(c => (c.canal ?? 'propio') === canal)
+      return { canal, cantidad: l.length, total: l.reduce((s, c) => s + c.total, 0) }
+    }),
     sinCobrar: sinCobrar.reduce((s, c) => s + c.total, 0),
     cantSinCobrar: sinCobrar.length,
   }

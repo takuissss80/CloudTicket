@@ -11,26 +11,39 @@ import { CajaCerrada, CajaPanel } from './components/Caja'
 import { CrearCuenta, Login } from './components/Login'
 import { Administracion, type Pestana } from './components/admin/Administracion'
 import { Reportes } from './components/Reportes'
+import { PedidosYa } from './components/PedidosYa'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
-  const { cargando, error, caja, sesion, sucursales, sucursalId, printJobs, cambiarLocal, refrescar, refrescarMenu, salir } = useApp()
+  const { cargando, error, caja, sesion, sucursales, sucursalId, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
   const pedidoAbierto = usePedido(s => s.abierto)
   const [verCierre, setVerCierre] = useState(false)
   const [verAdmin, setVerAdmin] = useState<Pestana | null>(null)
   const [verReportes, setVerReportes] = useState(false)
+  const [verPY, setVerPY] = useState(false)
   const [verReset, setVerReset] = useState(false)
 
   // Cambios en tiempo real: otras PCs, el spool, cambios de menú
   useEffect(() => {
     let t1: ReturnType<typeof setTimeout> | undefined
     let t2: ReturnType<typeof setTimeout> | undefined
+    let t3: ReturnType<typeof setTimeout> | undefined
     const off = repo.subscribe(tabla => {
       if (tabla === 'menu') { clearTimeout(t2); t2 = setTimeout(() => refrescarMenu(), 300) }
+      else if (tabla === 'externos') { clearTimeout(t3); t3 = setTimeout(() => procesarExternos(), 400) }
       else { clearTimeout(t1); t1 = setTimeout(() => refrescar(), 150) }
     })
-    return () => { clearTimeout(t1); clearTimeout(t2); off() }
-  }, [refrescar, refrescarMenu])
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); off() }
+  }, [refrescar, refrescarMenu, procesarExternos])
+
+  // Importación de PedidosYa: al abrir la caja y cada 15 s (por si se perdió un aviso en tiempo real)
+  const cajaId = caja?.id
+  useEffect(() => {
+    if (!cajaId) return
+    procesarExternos()
+    const t = setInterval(() => procesarExternos(), 15_000)
+    return () => clearInterval(t)
+  }, [cajaId, procesarExternos])
 
   if (cargando) return <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>
   if (error) return (
@@ -46,6 +59,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
 
   const conError = printJobs.filter(j => j.estado === 'error').length
   const esAdmin = sesion?.rol === 'admin'
+  const erroresPY = (pedidosExternos ?? []).filter(p => p.estado === 'error').length
   const local = sucursales.find(s => s.id === sucursalId)
 
   return (
@@ -70,6 +84,11 @@ function Principal({ onSalir }: { onSalir: () => void }) {
             {repo.modo === 'demo' && (
               <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza hover:text-sobre-muzza">Modo demo</button>
             )}
+            {pedidosExternos !== null && (
+              <Btn onClick={() => setVerPY(true)} className={erroresPY ? '!border-tomate !text-tomate' : ''}>
+                PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
+              </Btn>
+            )}
             <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>
             <Btn onClick={() => setVerAdmin('menu')}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
             {conError > 0 && (
@@ -91,6 +110,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion inicial={verAdmin} onClose={() => setVerAdmin(null)} />}
       {verReportes && <Reportes onClose={() => setVerReportes(false)} />}
+      {verPY && <PedidosYa onClose={() => setVerPY(false)} />}
       {verCierre && <CajaPanel onClose={() => setVerCierre(false)} />}
       {verReset && (
         <Confirmar

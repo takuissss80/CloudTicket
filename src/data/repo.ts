@@ -1,5 +1,5 @@
 import type {
-  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
+  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
 } from '../types'
 
@@ -100,6 +100,10 @@ export interface Repo {
   guardarZona(sucursalId: string, z: Omit<Zona, 'id'> & { id?: string }): Promise<void>
   eliminarZona(id: string): Promise<void>
   listImpresoras(sucursalId: string): Promise<Impresora[]>
+  guardarImpresora(sucursalId: string, i: Omit<Impresora, 'id'> & { id?: string }): Promise<void>
+  eliminarImpresora(id: string): Promise<void>
+  /** Genera un token nuevo (desvincula la PC anterior). Se muestra una sola vez. */
+  generarTokenImpresora(id: string): Promise<string>
   /** Incluye los inactivos */
   listRepartidores(sucursalId: string): Promise<Repartidor[]>
   guardarRepartidor(sucursalId: string, r: Omit<Repartidor, 'id'> & { id?: string }): Promise<Repartidor>
@@ -137,6 +141,17 @@ export interface Repo {
   /** Solo demo: simula que el spool imprimió */
   simularSpool?(): Promise<void>
 
+  // ---- Importación automática de pedidos (PedidosYa)
+  listPedidosExternos(sucursalId: string, limit?: number): Promise<PedidoExterno[]>
+  /** Crea la comanda en una sola operación. null si era un pedido repetido. */
+  importarPedidoExterno(id: string, datos: ImportacionPedido): Promise<string | null>
+  marcarPedidoExterno(id: string, estado: 'pendiente' | 'error' | 'ignorado', error?: string, datos?: unknown): Promise<void>
+  listMapeos(): Promise<MapeoExterno[]>
+  guardarMapeo(m: Omit<MapeoExterno, 'id'>): Promise<void>
+  eliminarMapeo(id: string): Promise<void>
+  /** Solo demo: como si el programa de Windows hubiera capturado un ticket */
+  simularCaptura?(sucursalId: string, texto: string): Promise<'nuevo' | 'duplicado'>
+
   // ---- Stock
   getStock(sucursalId: string): Promise<StockItem[]>
   registrarIngreso(sucursalId: string, data: NuevoIngreso): Promise<void>
@@ -150,5 +165,5 @@ export interface Repo {
   reporteStockMovimientos(sucursalIds: string[], desde: string, hasta: string, tipos?: TipoMovStock[]): Promise<StockMovimiento[]>
 
   /** Cambios de comandas, cola o menú (realtime / otras pestañas) */
-  subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu') => void): () => void
+  subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos') => void): () => void
 }

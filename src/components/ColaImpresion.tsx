@@ -5,6 +5,7 @@ import { useApp, useNombreLocal } from '../store/app'
 import { hora } from '../lib/format'
 import { Btn, Confirmar, Modal } from './ui'
 import { TicketPreview } from './TicketPreview'
+import { Comanderas } from './Comanderas'
 
 const etiqueta: Record<PrintJob['estado'], string> = {
   pendiente: 'En cola',
@@ -15,7 +16,7 @@ const etiqueta: Record<PrintJob['estado'], string> = {
 
 /** Comanderas y cola de impresión del local activo (pestaña de Administración) */
 export function ImpresionPanel() {
-  const { printJobs, impresoras, comandas, imprimirPrueba, refrescar, avisar } = useApp()
+  const { printJobs, impresoras, comandas, refrescar, avisar } = useApp()
   const local = useNombreLocal()
   const [ver, setVer] = useState<PrintJob | null>(null)
   const [borrar, setBorrar] = useState<{ ids: string[]; texto: string } | null>(null)
@@ -53,28 +54,7 @@ export function ImpresionPanel() {
         </div>
       )}
       <div className="space-y-6">
-        <section>
-          <h3 className="mb-2 font-cond text-2xl font-bold">Comanderas</h3>
-          <ul className="space-y-2">
-            {impresoras.map(i => {
-              const online = i.ultimoPing && Date.now() - new Date(i.ultimoPing).getTime() < 60_000
-              return (
-                <li key={i.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-superficie p-3 ring-1 ring-linea">
-                  <span className={`size-3 rounded-full ${online ? 'bg-albahaca' : 'bg-linea'}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{i.nombre}</div>
-                    <div className="text-sm text-gris">
-                      {[i.imprimeMostrador && 'mostrador', i.imprimeDelivery && 'delivery'].filter(Boolean).join(' y ')}, {i.ancho === 32 ? '58 mm' : '80 mm'}
-                      {repo.modo === 'supabase' && (online ? ', spool conectado' : i.ultimoPing ? `, spool visto a las ${hora(i.ultimoPing)}` : ', spool sin vincular')}
-                    </div>
-                  </div>
-                  <Btn onClick={() => imprimirPrueba(i)}>Imprimir prueba</Btn>
-                </li>
-              )
-            })}
-            {!impresoras.length && <li className="text-gris">No hay comanderas cargadas para este local.</li>}
-          </ul>
-        </section>
+        <Comanderas />
 
         <section>
           <div className="mb-2 flex flex-wrap items-center gap-2">

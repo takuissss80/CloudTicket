@@ -2,7 +2,10 @@ export type Variante = 'entera' | 'mitad' | 'unica'
 export type Coccion = 'horno' | 'frita'
 export type TipoComanda = 'mostrador' | 'delivery'
 export type EstadoComanda = 'pendiente' | 'en_preparacion' | 'listo' | 'en_camino' | 'entregado' | 'anulada'
-export type FormaPago = 'efectivo' | 'mercado_pago' | 'tarjeta' | 'transferencia'
+export type FormaPago = 'efectivo' | 'mercado_pago' | 'tarjeta' | 'transferencia' | 'pedidosya'
+
+/** Por dónde entró el pedido */
+export type CanalVenta = 'propio' | 'pedidosya'
 
 export type Rol = 'admin' | 'local'
 
@@ -252,6 +255,9 @@ export interface Comanda {
   descuento: number
   adicional: number
   total: number
+  /** Por dónde entró (propio o PedidosYa) y el número de pedido externo */
+  canal?: CanalVenta
+  externoId?: string
   /** Cupón usado y cuánto descontó (está incluido en descuento) */
   cuponId?: string
   cuponCodigo?: string
@@ -292,6 +298,13 @@ export interface Impresora {
   copias: number
   ancho: number
   ultimoPing?: string
+  /** Tiene token generado (vinculada o esperando que el programa se conecte) */
+  conToken?: boolean
+  /** Lo reporta el programa de Windows */
+  impresoraWindows?: string
+  pcNombre?: string
+  versionPrograma?: string
+  vinculadaAt?: string
 }
 
 export type LineaTicket =
@@ -330,6 +343,7 @@ export const FORMAS_PAGO: { key: FormaPago; label: string }[] = [
   { key: 'mercado_pago', label: 'Mercado Pago' },
   { key: 'tarjeta', label: 'Tarjeta' },
   { key: 'transferencia', label: 'Transferencia' },
+  { key: 'pedidosya', label: 'PedidosYa (online)' },
 ]
 
 // ---------------------------------------------------------------------
@@ -386,4 +400,53 @@ export interface MovimientoReporte extends MovimientoCaja {
   sucursalId: string
   cajaTurno: string
   cajaFecha: string
+}
+
+// ---------------------------------------------------------------------
+// Importación automática de pedidos (PedidosYa)
+// ---------------------------------------------------------------------
+export type EstadoPedidoExterno = 'pendiente' | 'procesando' | 'importado' | 'error' | 'ignorado'
+
+/** Ticket que capturó el programa de Windows */
+export interface PedidoExterno {
+  id: string
+  canal: CanalVenta
+  texto: string
+  formato: 'texto' | 'imagen'
+  numeroExterno?: string
+  estado: EstadoPedidoExterno
+  error?: string
+  /** Lo que se interpretó (o se importó) */
+  datos?: unknown
+  comandaId?: string
+  createdAt: string
+  procesadoAt?: string
+}
+
+/** "Así se llama en PedidosYa" -> producto del menú (o ignorar la línea) */
+export interface MapeoExterno {
+  id: string
+  canal: CanalVenta
+  texto: string
+  productoId?: string
+  variante?: 'entera' | 'mitad'
+  ignorar: boolean
+}
+
+/** Lo que se manda a importar_pedido_externo() */
+export interface ImportacionPedido {
+  tipo: TipoComanda
+  clienteNombre?: string
+  clienteTel?: string
+  direccion?: string
+  observaciones?: string
+  numeroExterno?: string
+  subtotal: number
+  costoEnvio: number
+  descuento: number
+  adicional: number
+  total: number
+  cobrada: boolean
+  items: { productoId?: string; descripcion: string; variante?: Variante; cantidad: number; precioUnit: number; nota?: string }[]
+  pagos: Pago[]
 }

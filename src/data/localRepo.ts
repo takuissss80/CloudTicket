@@ -1,6 +1,6 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
-  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, NuevaComanda, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
+  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
@@ -47,6 +47,8 @@ interface DB {
   clientes: Cliente[]
   printJobs: PrintJob[]
   cupones?: Cupon[]
+  pedidosExternos?: ConLocal<PedidoExterno>[]
+  mapeos?: MapeoExterno[]
 }
 
 const uid = () =>
@@ -74,8 +76,8 @@ function db(): DB {
   return memoria
 }
 
-const listeners = new Set<(t: 'comandas' | 'print_jobs' | 'menu') => void>()
-function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' = 'comandas') {
+const listeners = new Set<(t: 'comandas' | 'print_jobs' | 'menu' | 'externos') => void>()
+function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' = 'comandas') {
   escribirStorage(KEY, JSON.stringify(memoria))
   listeners.forEach(l => l(tabla))
 }
@@ -532,6 +534,37 @@ export const localRepo: Repo = {
     return pausa(db().impresoras.filter(i => i.sucursalId === sucursalId).map(sinLocal))
   },
 
+  async guardarImpresora(sucursalId, i) {
+    puedeLocal(sucursalId)
+    if (!i.nombre.trim()) throw new Error('Poné un nombre para la comandera (ej: Cocina).')
+    const d = db()
+    const fila = { ...clon(i), nombre: i.nombre.trim(), copias: Math.max(1, Math.min(5, i.copias || 1)), ancho: i.ancho === 32 ? 32 : 48, sucursalId }
+    const k = d.impresoras.findIndex(x => x.id === i.id)
+    if (k >= 0) d.impresoras[k] = { ...d.impresoras[k], ...fila, id: d.impresoras[k].id }
+    else d.impresoras.push({ ...fila, id: uid() })
+    guardar('print_jobs')
+  },
+
+  async eliminarImpresora(id) {
+    const d = db()
+    const i = d.impresoras.find(x => x.id === id)
+    if (!i) return
+    puedeLocal(i.sucursalId)
+    d.impresoras = d.impresoras.filter(x => x.id !== id)
+    guardar('print_jobs')
+  },
+
+  async generarTokenImpresora(id) {
+    const i = db().impresoras.find(x => x.id === id)
+    if (!i) throw new Error('Esa comandera no existe')
+    puedeLocal(i.sucursalId)
+    const hex = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+    i.conToken = true
+    i.vinculadaAt = undefined; i.pcNombre = undefined; i.impresoraWindows = undefined
+    guardar('print_jobs')
+    return `CT-${hex.match(/.{4}/g)!.join('-')}`
+  },
+
   async listRepartidores(sucursalId) {
     puedeLocal(sucursalId)
     return pausa((db().repartidores ?? []).filter(r => r.sucursalId === sucursalId).map(sinLocal))
@@ -861,6 +894,87 @@ export const localRepo: Repo = {
     puedeLocal(sucursalId)
     const imps = new Set(db().impresoras.filter(i => i.sucursalId === sucursalId).map(i => i.id))
     return pausa(clon(db().printJobs.filter(j => imps.has(j.impresoraId)).slice(0, limit)))
+  },
+
+  // ---- Importación de pedidos (demo: mismas reglas que importar_pedido_externo)
+  async listPedidosExternos(sucursalId, limit = 100) {
+    puedeLocal(sucursalId)
+    return pausa(clon((db().pedidosExternos ?? []).filter(p => p.sucursalId === sucursalId).slice(0, limit).map(sinLocal)))
+  },
+
+  async importarPedidoExterno(id, d) {
+    const db_ = db()
+    const pe = (db_.pedidosExternos ?? []).find(p => p.id === id)
+    if (!pe) throw new Error('Pedido no encontrado')
+    puedeLocal(pe.sucursalId)
+    if (pe.estado === 'importado' || pe.estado === 'ignorado') return pe.comandaId ?? null
+    const num = d.numeroExterno?.trim() || undefined
+    if (num && (db_.pedidosExternos ?? []).some(x => x.id !== id && x.sucursalId === pe.sucursalId && x.numeroExterno === num && x.estado === 'importado')) {
+      Object.assign(pe, { estado: 'ignorado', error: `Pedido repetido: ya se importó el ${num}`, procesadoAt: ahora(), datos: clon(d) })
+      guardar('externos')
+      return null
+    }
+    const caja = db_.cajas.find(c => c.sucursalId === pe.sucursalId && c.estado === 'abierta')
+    if (!caja) throw new Error('No hay caja abierta: abrí la caja para importar el pedido')
+    caja.ultimoNumero += 1
+    const comanda: ConLocal<Comanda> = {
+      id: uid(), cajaId: caja.id, sucursalId: caja.sucursalId, numero: caja.ultimoNumero, estado: 'pendiente', tipo: d.tipo,
+      clienteNombre: d.clienteNombre, clienteTel: d.clienteTel, direccion: d.direccion, observaciones: d.observaciones,
+      costoEnvio: d.costoEnvio, subtotal: d.subtotal, descuento: d.descuento, adicional: d.adicional, total: d.total, descuentoCupon: 0,
+      cobrada: d.cobrada, canal: pe.canal, externoId: num, pagos: clon(d.pagos.filter(p => p.monto > 0)),
+      items: d.items.map(i => ({ id: uid(), productoId: i.productoId, descripcion: i.descripcion, variante: i.variante, cantidad: i.cantidad, precioUnit: i.precioUnit, nota: i.nota, componentes: [] })),
+      createdAt: ahora(), updatedAt: ahora(),
+    }
+    db_.comandas.push(comanda)
+    descontarComanda(comanda)
+    Object.assign(pe, { estado: 'importado', comandaId: comanda.id, numeroExterno: num, datos: clon(d), error: undefined, procesadoAt: ahora() })
+    guardar('externos')
+    guardar()
+    return comanda.id
+  },
+
+  async marcarPedidoExterno(id, estado, error, datos) {
+    const pe = (db().pedidosExternos ?? []).find(p => p.id === id)
+    if (!pe) return
+    puedeLocal(pe.sucursalId)
+    if (estado === 'error' && (pe.estado === 'importado' || pe.estado === 'ignorado')) return
+    pe.estado = estado; pe.error = error
+    if (datos !== undefined) pe.datos = clon(datos)
+    guardar('externos')
+  },
+
+  async listMapeos() {
+    ses()
+    return pausa(clon(db().mapeos ?? []))
+  },
+
+  async guardarMapeo(m) {
+    ses()
+    const d = db()
+    d.mapeos ??= []
+    const i = d.mapeos.findIndex(x => x.canal === m.canal && x.texto === m.texto)
+    const fila = { ...clon(m), productoId: m.ignorar ? undefined : m.productoId, id: i >= 0 ? d.mapeos[i].id : uid() }
+    if (i >= 0) d.mapeos[i] = fila
+    else d.mapeos.push(fila)
+    guardar('externos')
+  },
+
+  async eliminarMapeo(id) {
+    ses()
+    const d = db()
+    d.mapeos = (d.mapeos ?? []).filter(x => x.id !== id)
+    guardar('externos')
+  },
+
+  async simularCaptura(sucursalId, texto) {
+    puedeLocal(sucursalId)
+    const d = db()
+    d.pedidosExternos ??= []
+    const hash = texto.replace(/\s+/g, ' ').trim()
+    if (d.pedidosExternos.some(p => p.sucursalId === sucursalId && p.texto.replace(/\s+/g, ' ').trim() === hash)) return 'duplicado'
+    d.pedidosExternos.unshift({ id: uid(), sucursalId, canal: 'pedidosya', texto, formato: 'texto', estado: 'pendiente', createdAt: ahora() })
+    guardar('externos')
+    return 'nuevo'
   },
 
   async eliminarPrintJobs(ids) {

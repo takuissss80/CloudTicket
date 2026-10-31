@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { repo } from '../data'
 import type { Catalogo, MenuData } from '../data/repo'
-import type { Caja, Comanda, EstadoComanda, Impresora, MovimientoCaja, NuevaComanda, Pago, PrintJob, Repartidor, Sesion, Sucursal, TipoGasto } from '../types'
+import type { Caja, Comanda, EstadoComanda, Impresora, MovimientoCaja, NuevaComanda, Pago, PedidoExterno, PrintJob, Repartidor, Sesion, Sucursal, TipoGasto } from '../types'
+import { interpretarPedido } from '../lib/pedidosya'
 import { jobsParaComanda, ticketPrueba } from '../lib/ticket'
 import { resolverCatalogo } from '../lib/menu'
 import { usePedido, totales, faltaClienteMostrador } from './pedido'
@@ -28,6 +29,8 @@ interface AppState {
   movimientos: MovimientoCaja[]
   tiposGasto: TipoGasto[]
   printJobs: PrintJob[]
+  /** Pedidos capturados de PedidosYa (null = la base todavía no tiene la migración 0010) */
+  pedidosExternos: PedidoExterno[] | null
   toasts: Toast[]
 
   iniciar(sesion: Sesion): Promise<void>
@@ -52,9 +55,14 @@ interface AppState {
   imprimirPrueba(i: Impresora): Promise<void>
   marcarAgotado(productoId: string, agotado: boolean): Promise<void>
   avisar(texto: string, tipo?: Toast['tipo']): void
+  cargarExternos(): Promise<void>
+  /** Importa los pedidos capturados pendientes (lo corre cualquier PC con la caja abierta) */
+  procesarExternos(): Promise<void>
 }
 
 let toastSeq = 0
+let procesandoExternos = false
+const avisados = new Set<string>()
 const menuVacio: MenuData = { categorias: [], productos: [], ajustes: [], ingredientes: [] }
 
 /** Recargo de delivery del local activo */
@@ -88,6 +96,7 @@ export const useApp = create<AppState>((set, get) => {
     movimientos: [],
     tiposGasto: [],
     printJobs: [],
+    pedidosExternos: null,
     toasts: [],
 
     async iniciar(sesion) {
@@ -319,6 +328,47 @@ export const useApp = create<AppState>((set, get) => {
         await get().refrescarMenu()
         get().avisar(agotado ? `${prod?.nombre ?? 'Producto'} marcado como agotado` : `${prod?.nombre ?? 'Producto'} disponible de nuevo`)
       } catch (e) { fallo(e) }
+    },
+
+    async cargarExternos() {
+      const id = get().sucursalId
+      if (!id) return
+      try { set({ pedidosExternos: await repo.listPedidosExternos(id) }) } catch { set({ pedidosExternos: null }) }
+    },
+
+    async procesarExternos() {
+      if (procesandoExternos) return
+      procesandoExternos = true
+      try {
+        await get().cargarExternos()
+        const { caja, catalogo, pedidosExternos } = get()
+        if (!caja || !pedidosExternos) return
+        const limite = Date.now() - 24 * 3600_000
+        const pendientes = pedidosExternos.filter(p => p.estado === 'pendiente' && new Date(p.createdAt).getTime() > limite).reverse()
+        if (!pendientes.length) return
+        const mapeos = await repo.listMapeos()
+        let importados = 0
+        for (const p of pendientes) {
+          if (p.formato === 'imagen') {
+            await repo.marcarPedidoExterno(p.id, 'error', 'El ticket llegó como imagen y no se puede leer. La impresora virtual tiene que usar el driver "Generic / Text Only".')
+            continue
+          }
+          const r = interpretarPedido(p.texto, catalogo.productos, mapeos)
+          if (r.error || !r.importacion) {
+            await repo.marcarPedidoExterno(p.id, 'error', r.error, { ticket: r.ticket })
+            if (!avisados.has(p.id)) { avisados.add(p.id); get().avisar(`PedidosYa${r.ticket.numero ? ` #${r.ticket.numero}` : ''}: ${r.error}. Revisalo en el botón PedidosYa.`, 'error') }
+            continue
+          }
+          try {
+            const comandaId = await repo.importarPedidoExterno(p.id, r.importacion)
+            if (comandaId) { importados++; get().avisar(`Pedido PedidosYa${r.importacion.numeroExterno ? ` #${r.importacion.numeroExterno}` : ''} importado`) }
+          } catch (e) {
+            await repo.marcarPedidoExterno(p.id, 'error', mensajeError(e), { ticket: r.ticket }).catch(() => {})
+          }
+        }
+        if (importados) await get().refrescar()
+        await get().cargarExternos()
+      } catch { /* sin conexión: se reintenta en el próximo ciclo */ } finally { procesandoExternos = false }
     },
 
     avisar(texto, tipo = 'ok') {

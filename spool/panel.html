@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudTicket Impresión</title>
+<style>
+  :root { --fondo:#eef1f7; --sup:#fff; --tinta:#0d1226; --gris:#5a6380; --linea:#d7dce8; --acento:#00a383; --sobre:#0d1226;
+          --rojo:#d83c3c; --rojo-c:#fadbdb; --verde-c:#d4f5ec; --amar-c:#fbf0c8; --barra:#0d1226; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo:#0d1226; --sup:#141b39; --tinta:#fafafa; --gris:#a6a6a6; --linea:#232c58; --acento:#00e6b4; --sobre:#0d1226;
+            --rojo:#ef5350; --rojo-c:#3a1720; --verde-c:#0b3b3a; --amar-c:#3a3112; --barra:#090c1c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--fondo); color:var(--tinta); font:15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { background:var(--barra); color:#fff; padding:14px 20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:22px; } header .chip { margin-left:auto; }
+  main { max-width:980px; margin:0 auto; padding:18px 16px 40px; display:grid; gap:16px; }
+  section { background:var(--sup); border:1px solid var(--linea); border-radius:12px; padding:16px; }
+  h2 { margin:0 0 4px; font-size:19px; } p.ayuda { margin:0 0 12px; color:var(--gris); font-size:14px; }
+  label { display:block; font-size:13px; color:var(--gris); margin-bottom:4px; }
+  input, select { width:100%; height:40px; border:1px solid var(--linea); border-radius:8px; padding:0 10px; background:var(--sup); color:var(--tinta); font:inherit; }
+  input[type=checkbox] { width:18px; height:18px; vertical-align:middle; accent-color:var(--acento); }
+  .fila { display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items:end; }
+  button { height:40px; border-radius:8px; border:1px solid var(--linea); background:var(--sup); color:var(--tinta); font:600 14px system-ui, sans-serif; padding:0 14px; cursor:pointer; }
+  button:hover { filter:brightness(.97); } button:disabled { opacity:.45; cursor:not-allowed; }
+  button.prim { background:var(--acento); color:var(--sobre); border-color:var(--acento); }
+  button.peligro { color:var(--rojo); }
+  .chip { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .ok { background:var(--verde-c); color:var(--acento); } .err { background:var(--rojo-c); color:var(--rojo); } .gris { background:var(--linea); color:var(--gris); }
+  .tarjeta { border:1px solid var(--linea); border-radius:10px; padding:12px; margin-top:10px; }
+  .tarjeta .tit { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .tarjeta .tit b { font-size:17px; }
+  .botones { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .msg { margin-top:8px; font-size:14px; font-weight:600; } .msg.e { color:var(--rojo); } .msg.o { color:var(--acento); }
+  pre { background:var(--fondo); border:1px solid var(--linea); border-radius:8px; padding:10px; max-height:260px; overflow:auto; font:13px/1.35 Consolas, monospace; white-space:pre-wrap; }
+  ol { margin:6px 0 0; padding-left:20px; color:var(--gris); font-size:14px; } ol li { margin:3px 0; }
+  .eventos { max-height:260px; overflow:auto; font-size:13px; } .eventos div { padding:3px 0; border-bottom:1px solid var(--linea); }
+  .eventos .t-error { color:var(--rojo); } .eventos .t-ok { color:var(--acento); }
+  .cont { display:flex; gap:14px; flex-wrap:wrap; font-size:14px; color:var(--gris); margin-top:8px; } .cont b { color:var(--tinta); }
+  details summary { cursor:pointer; color:var(--gris); }
+</style>
+</head>
+<body>
+<header>
+  <h1>CloudTicket Impresión</h1>
+  <span id="pc" style="opacity:.75"></span>
+  <span id="servidor" class="chip gris">…</span>
+</header>
+<main>
+  <section>
+    <h2>Comanderas de esta PC</h2>
+    <p class="ayuda">Cada comandera de la web se imprime en una impresora de esta PC. El programa tiene que quedar abierto (corre en segundo plano).</p>
+    <div id="vinculos"></div>
+  </section>
+
+  <section>
+    <h2>Vincular una comandera</h2>
+    <p class="ayuda">En la web: <b>Administración → Impresión</b> → en la comandera tocá <b>Generar token</b>, copialo y pegalo acá.</p>
+    <div class="fila">
+      <div style="grid-column: span 2"><label for="token">Token</label><input id="token" placeholder="CT-XXXX-XXXX-…" autocomplete="off"></div>
+      <div><label for="imp-nueva">Impresora de esta PC</label><select id="imp-nueva"></select></div>
+      <div><label for="cp-nueva">Acentos (página de códigos)</label><select id="cp-nueva"></select></div>
+    </div>
+    <div class="botones"><button class="prim" id="vincular">Vincular</button></div>
+    <div id="msg-vincular" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Importación automática de pedidos (PedidosYa)</h2>
+    <p class="ayuda">El programa hace de impresora para GoWin: lo que GoWin imprime sale igual por la comandera y el pedido se manda a la web para que quede en la caja.</p>
+    <div class="fila">
+      <div><label><input type="checkbox" id="cap-activa"> Activada</label></div>
+      <div><label for="cap-puerto">Puerto</label><input id="cap-puerto" type="number" min="1" max="65535"></div>
+      <div><label for="cap-reenviar">Imprimir igual en</label><select id="cap-reenviar"></select></div>
+      <div><label for="cap-destino">Mandar los pedidos al local de</label><select id="cap-destino"></select></div>
+    </div>
+    <div class="fila" style="margin-top:8px">
+      <div><label><input type="checkbox" id="cap-red"> Aceptar desde otras PCs o tablets de la red</label></div>
+      <div><label><input type="checkbox" id="cap-corte"> Cortar el papel al final</label></div>
+    </div>
+    <div class="botones">
+      <button class="prim" id="cap-guardar">Guardar</button>
+      <button id="cap-virtual">Crear impresora virtual en Windows</button>
+    </div>
+    <div id="msg-captura" class="msg"></div>
+    <div class="cont" id="cap-estado"></div>
+    <details style="margin-top:10px"><summary>Cómo conectarlo con GoWin</summary>
+      <ol>
+        <li>Activá la importación, elegí en qué comandera se imprime igual y a qué local van los pedidos, y guardá.</li>
+        <li><b>Si GoWin está en esta PC:</b> tocá <b>Crear impresora virtual en Windows</b> (pide permiso de administrador). Aparece la impresora <b>"PedidosYa (CloudTicket)"</b>. En GoWin elegí esa impresora.</li>
+        <li><b>Si GoWin está en una tablet:</b> marcá "Aceptar desde otras PCs o tablets", y en GoWin configurá una impresora de red con la IP de esta PC y el puerto de arriba (9100).</li>
+        <li>Hacé un pedido de prueba: tiene que salir por la comandera y aparecer en la web en <b>Pedidos PedidosYa</b>.</li>
+        <li>Si dice que llegó <b>como imagen</b>, la impresora virtual tiene que usar el driver <b>Generic / Text Only</b>.</li>
+      </ol>
+    </details>
+    <details style="margin-top:8px"><summary>Último ticket capturado</summary><pre id="ultimo">Todavía no llegó ninguno.</pre></details>
+  </section>
+
+  <section>
+    <h2>Opciones</h2>
+    <div class="fila">
+      <div><label><input type="checkbox" id="inicio"> Abrir automáticamente al prender la PC</label></div>
+    </div>
+    <details style="margin-top:10px"><summary>Servidor (avanzado)</summary>
+      <div class="fila" style="margin-top:8px">
+        <div style="grid-column: span 2"><label for="srv">Dirección de la web</label><input id="srv"></div>
+        <div><button id="srv-guardar">Conectar</button></div>
+      </div>
+      <div id="msg-srv" class="msg"></div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Actividad</h2>
+    <div class="eventos" id="eventos"></div>
+  </section>
+</main>
+<script>
+const CPS = [[2, 'PC850 (recomendada)'], [19, 'PC858'], [16, 'Windows-1252'], [0, 'PC437 (sin mayúsculas con tilde)']];
+let estado = null, primera = true;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function api(ruta, cuerpo) {
+  const r = await fetch(ruta, cuerpo ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CloudTicket': '1' }, body: JSON.stringify(cuerpo) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Error');
+  return j;
+}
+const opciones = (lista, sel, vacio) => (vacio ? `<option value="">${vacio}</option>` : '') + lista.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join('');
+const msg = (id, t, ok) => { const e = $(id); e.textContent = t; e.className = 'msg ' + (ok ? 'o' : 'e'); if (ok) setTimeout(() => { if (e.textContent === t) e.textContent = '' }, 4000) };
+
+function pintarVinculos() {
+  const cont = $('vinculos');
+  if (cont.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
+  if (!estado.vinculos?.length) { cont.innerHTML = '<p class="ayuda" style="margin:8px 0 0">Todavía no hay comanderas vinculadas en esta PC.</p>'; return; }
+  const imps = (estado.impresoras || []).map(n => [n, n]);
+  cont.innerHTML = estado.vinculos.map(v => {
+    const e = v.estado;
+    const chip = v.pausado ? '<span class="chip gris">Pausada</span>' : e.conectado ? '<span class="chip ok">Conectada</span>' : e.error ? `<span class="chip err">${esc(e.error)}</span>` : '<span class="chip gris">Conectando…</span>';
+    const falta = v.impresora && !(estado.impresoras || []).includes(v.impresora) ? `<div class="msg e">La impresora "${esc(v.impresora)}" no está instalada en esta PC.</div>` : '';
+    return `<div class="tarjeta">
+      <div class="tit"><b>${esc(v.nombre || 'Comandera')}</b><span style="color:var(--gris)">${esc(v.local || '')}</span>${chip}</div>
+      <div class="fila">
+        <div><label>Impresora de esta PC</label><select data-i="${v.indice}" data-campo="impresora">${opciones(imps, v.impresora)}</select></div>
+        <div><label>Acentos</label><select data-i="${v.indice}" data-campo="codepage">${opciones(CPS, v.codepage)}</select></div>
+      </div>${falta}
+      <div class="cont"><span>Token <b>${esc(v.token)}</b></span><span>Impresas <b>${e.impresos}</b></span>${e.fallidos ? `<span>Con error <b>${e.fallidos}</b></span>` : ''}${e.ultimoOk ? `<span>Última a las <b>${esc(e.ultimoOk)}</b></span>` : ''}</div>
+      <div class="botones">
+        <button data-i="${v.indice}" data-accion="prueba">Imprimir prueba</button>
+        <button data-i="${v.indice}" data-accion="${v.pausado ? 'reanudar' : 'pausar'}">${v.pausado ? 'Reanudar' : 'Pausar'}</button>
+        <button class="peligro" data-i="${v.indice}" data-accion="eliminar">Quitar de esta PC</button>
+      </div><div class="msg" id="msg-v${v.indice}"></div></div>`;
+  }).join('');
+}
+
+function pintar() {
+  $('pc').textContent = `PC ${estado.pc} · v${estado.version}`;
+  const s = $('servidor'); s.textContent = estado.servidorListo ? 'Servidor configurado' : 'Sin servidor'; s.className = 'chip ' + (estado.servidorListo ? 'ok' : 'err');
+  const imps = (estado.impresoras || []).map(n => [n, n === estado.predeterminada ? n + ' (predeterminada)' : n]);
+  if (primera) {
+    $('imp-nueva').innerHTML = opciones(imps, estado.predeterminada, 'Elegí la impresora');
+    $('cp-nueva').innerHTML = opciones(CPS, 2);
+    const c = estado.captura;
+    $('cap-activa').checked = c.activa; $('cap-puerto').value = c.puerto; $('cap-red').checked = c.desdeLaRed; $('cap-corte').checked = c.agregarCorte;
+    $('cap-reenviar').innerHTML = opciones(imps, c.reenviar, 'No imprimir (solo importar)');
+    $('inicio').checked = estado.inicio; $('srv').value = estado.servidor;
+  }
+  if (primera || !$('cap-destino').matches(':focus')) {
+    $('cap-destino').innerHTML = opciones((estado.vinculos || []).map(v => [v.indice, `${v.nombre || 'Comandera'} — ${v.local || ''}`]), estado.capturaIndice, 'Vinculá una comandera primero');
+  }
+  primera = false;
+  pintarVinculos();
+  const ce = estado.capturaEstado;
+  $('cap-estado').innerHTML = estado.captura.activa
+    ? (ce.escuchando ? `<span class="chip ok">Escuchando en el puerto ${estado.captura.puerto}</span>` : `<span class="chip err">${esc(ce.error || 'Detenida')}</span>`)
+      + `<span>Recibidos <b>${ce.recibidos}</b></span><span>Pedidos nuevos <b>${ce.enviados}</b></span><span>Repetidos <b>${ce.duplicados}</b></span>${ce.imagenes ? `<span style="color:var(--rojo)">Como imagen <b>${ce.imagenes}</b></span>` : ''}${ce.ultimo ? `<span>Último <b>${esc(ce.ultimo)}</b></span>` : ''}`
+    : '<span class="chip gris">Desactivada</span>';
+  if (estado.ultimoTexto) $('ultimo').textContent = estado.ultimoTexto;
+  $('eventos').innerHTML = (estado.eventos || []).map(e => `<div class="t-${e.tipo}">${esc(e.hora)} · ${esc(e.texto)}</div>`).join('') || '<div>Sin actividad todavía.</div>';
+}
+
+async function refrescar() { try { estado = await api('/api/estado'); pintar(); } catch { $('servidor').textContent = 'El programa no responde'; } }
+
+$('vincular').onclick = async () => {
+  const b = $('vincular'); b.disabled = true;
+  try {
+    const r = await api('/api/vincular', { token: $('token').value, impresora: $('imp-nueva').value, codepage: Number($('cp-nueva').value) });
+    $('token').value = ''; msg('msg-vincular', `Listo: ${r.nombre} de ${r.local} se imprime acá.`, true); await refrescar();
+  } catch (e) { msg('msg-vincular', e.message) }
+  b.disabled = false;
+};
+$('vinculos').addEventListener('click', async ev => {
+  const b = ev.target.closest('button[data-accion]'); if (!b) return;
+  const i = Number(b.dataset.i), accion = b.dataset.accion;
+  if (accion === 'eliminar' && !confirm('¿Quitar esta comandera de esta PC? Va a dejar de imprimir acá.')) return;
+  b.disabled = true;
+  try { await api('/api/vinculo', { indice: i, accion }); if (accion === 'prueba') msg('msg-v' + i, 'Prueba enviada a la impresora.', true); await refrescar(); }
+  catch (e) { msg('msg-v' + i, e.message) }
+  b.disabled = false;
+});
+$('vinculos').addEventListener('change', async ev => {
+  const s = ev.target.closest('select[data-campo]'); if (!s) return;
+  const i = Number(s.dataset.i), v = estado.vinculos.find(x => x.indice === i);
+  const datos = { indice: i, accion: 'guardar', impresora: v.impresora, codepage: v.codepage };
+  datos[s.dataset.campo] = s.dataset.campo === 'codepage' ? Number(s.value) : s.value;
+  s.blur();
+  try { await api('/api/vinculo', datos); msg('msg-v' + i, 'Guardado.', true); await refrescar(); } catch (e) { msg('msg-v' + i, e.message) }
+});
+$('cap-guardar').onclick = async () => {
+  try {
+    await api('/api/captura', { activa: $('cap-activa').checked, puerto: Number($('cap-puerto').value), desdeLaRed: $('cap-red').checked,
+      reenviar: $('cap-reenviar').value, indice: Number($('cap-destino').value === '' ? -1 : $('cap-destino').value), agregarCorte: $('cap-corte').checked });
+    msg('msg-captura', 'Guardado.', true); await refrescar();
+  } catch (e) { msg('msg-captura', e.message) }
+};
+$('cap-virtual').onclick = async () => {
+  msg('msg-captura', 'Aceptá el cartel de Windows para crear la impresora…', true);
+  try { await api('/api/impresora-virtual', {}); msg('msg-captura', 'Impresora "PedidosYa (CloudTicket)" creada. Elegila en GoWin.', true); primera = true; await refrescar(); }
+  catch (e) { msg('msg-captura', e.message) }
+};
+$('inicio').onchange = async e => { try { await api('/api/inicio', { activo: e.target.checked }) } catch (er) { alert(er.message) } };
+$('srv-guardar').onclick = async () => { try { await api('/api/servidor', { servidor: $('srv').value }); msg('msg-srv', 'Conectado.', true); await refrescar(); } catch (e) { msg('msg-srv', e.message) } };
+
+refrescar(); setInterval(refrescar, 2000);
+</script>
+</body>
+</html>

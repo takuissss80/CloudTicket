@@ -3,7 +3,7 @@ import { unirReceta } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Cupon, UsoCupon, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
+  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
 } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -79,6 +79,7 @@ function mapComanda(r: Row): Comanda {
     costoEnvio: num(r.costo_envio), subtotal: num(r.subtotal), descuento: num(r.descuento),
     adicional: num(r.adicional), total: num(r.total), observaciones: opt(r.observaciones),
     cuponId: opt(r.cupon_id), cuponCodigo: opt(r.cupon_codigo), descuentoCupon: num(r.descuento_cupon),
+    canal: r.canal ?? 'propio', externoId: opt(r.externo_id),
     horaEntrega: opt(r.hora_entrega), cobrada: r.cobrada, createdAt: r.created_at, updatedAt: r.updated_at,
     repartidorId: opt(r.repartidor_id), repartidorNombre: opt(r.repartidores?.nombre),
     asignadaAt: opt(r.asignada_at), entregadaAt: opt(r.entregada_at), sucursalId: opt(r.sucursal_id),
@@ -383,8 +384,25 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const r = ok(await sb.from('impresoras').select('*').eq('sucursal_id', sucursalId).eq('activa', true).order('created_at'))
       return (r as Row[]).map((i): Impresora => ({
         id: i.id, nombre: i.nombre, imprimeMostrador: i.imprime_mostrador, imprimeDelivery: i.imprime_delivery,
-        copias: i.copias, ancho: i.ancho, ultimoPing: opt(i.ultimo_ping),
+        copias: i.copias, ancho: i.ancho, ultimoPing: opt(i.ultimo_ping), conToken: !!i.token_hash,
+        impresoraWindows: opt(i.impresora_windows), pcNombre: opt(i.pc_nombre), versionPrograma: opt(i.version_programa),
+        vinculadaAt: opt(i.vinculada_at),
       }))
+    },
+    async guardarImpresora(sucursalId, i) {
+      if (!i.nombre.trim()) throw new Error('Poné un nombre para la comandera (ej: Cocina).')
+      const row = {
+        sucursal_id: sucursalId, nombre: i.nombre.trim(), imprime_mostrador: i.imprimeMostrador, imprime_delivery: i.imprimeDelivery,
+        copias: Math.max(1, Math.min(5, i.copias || 1)), ancho: i.ancho === 32 ? 32 : 48,
+      }
+      if (i.id) ok(await sb.from('impresoras').update(row).eq('id', i.id))
+      else ok(await sb.from('impresoras').insert(row))
+    },
+    async eliminarImpresora(id) {
+      ok(await sb.from('impresoras').update({ activa: false, token_hash: null }).eq('id', id))
+    },
+    async generarTokenImpresora(id) {
+      return ok(await sb.rpc('generar_token_impresora', { p_impresora: id })) as unknown as string
     },
 
     async listRepartidores(sucursalId) {
@@ -549,6 +567,48 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         impresora_id: j.impresoraId, comanda_id: j.comandaId ?? null, tipo: j.tipo, contenido: j.contenido, copias: j.copias,
       }))))
     },
+    // ---- Importación de pedidos
+    async listPedidosExternos(sucursalId, limit = 100) {
+      const r = ok(await sb.from('pedidos_externos').select('*').eq('sucursal_id', sucursalId).order('created_at', { ascending: false }).limit(limit)) as Row[]
+      return r.map((p): PedidoExterno => ({
+        id: p.id, canal: p.canal, texto: p.texto, formato: p.formato, numeroExterno: opt(p.numero_externo), estado: p.estado,
+        error: opt(p.error), datos: p.datos ?? undefined, comandaId: opt(p.comanda_id), createdAt: p.created_at, procesadoAt: opt(p.procesado_at),
+      }))
+    },
+    async importarPedidoExterno(id, d) {
+      const datos = {
+        tipo: d.tipo, cliente_nombre: d.clienteNombre ?? null, cliente_tel: d.clienteTel ?? null, direccion: d.direccion ?? null,
+        observaciones: d.observaciones ?? null, numero_externo: d.numeroExterno ?? null, subtotal: d.subtotal, costo_envio: d.costoEnvio,
+        descuento: d.descuento, adicional: d.adicional, total: d.total, cobrada: d.cobrada,
+        items: d.items.map(i => ({ producto_id: i.productoId ?? null, descripcion: i.descripcion, variante: i.variante ?? null, cantidad: i.cantidad, precio_unit: i.precioUnit, nota: i.nota ?? null })),
+        pagos: d.pagos.map(p => ({ forma: p.forma, monto: p.monto })),
+      }
+      return (ok(await sb.rpc('importar_pedido_externo', { p_id: id, p_datos: datos })) as unknown as string | null) ?? null
+    },
+    async marcarPedidoExterno(id, estado, error, datos) {
+      const fila: Row = { estado, error: error ?? null }
+      if (datos !== undefined) fila.datos = datos
+      let q = sb.from('pedidos_externos').update(fila).eq('id', id)
+      // el procesador automático no pisa uno que ya se importó
+      if (estado === 'error') q = q.in('estado', ['pendiente', 'procesando', 'error'])
+      ok(await q)
+    },
+    async listMapeos() {
+      return (ok(await sb.from('mapeos_externos').select('*').order('texto')) as Row[]).map((m): MapeoExterno => ({
+        id: m.id, canal: m.canal, texto: m.texto, productoId: opt(m.producto_id), variante: opt(m.variante), ignorar: m.ignorar,
+      }))
+    },
+    async guardarMapeo(m) {
+      const p = await perfil()
+      ok(await sb.from('mapeos_externos').upsert({
+        cuenta_id: p?.cuenta_id, canal: m.canal, texto: m.texto, producto_id: m.ignorar ? null : m.productoId ?? null,
+        variante: m.variante ?? null, ignorar: m.ignorar,
+      }, { onConflict: 'cuenta_id,canal,texto' }))
+    },
+    async eliminarMapeo(id) {
+      ok(await sb.from('mapeos_externos').delete().eq('id', id))
+    },
+
     async eliminarPrintJobs(ids) {
       if (!ids.length) return 0
       const r = ok(await sb.from('print_jobs').delete().in('id', ids).in('estado', ['pendiente', 'error']).select('id'))
@@ -572,6 +632,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         .on('postgres_changes', { event: '*', schema: 'public', table: 'producto_sucursal' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, () => onChange('menu'))
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sucursales' }, () => onChange('menu'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_externos' }, () => onChange('externos'))
         .subscribe()
       return () => { sb.removeChannel(ch) }
     },

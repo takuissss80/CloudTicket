@@ -10,6 +10,7 @@ import { MINUTOS_ALERTA_DELIVERY, accionPendiente, etiquetaEstado, minutosDelive
 function colorEstado(c: Comanda) {
   if (c.estado === 'anulada') return 'bg-gris text-papel'
   if (c.estado === 'entregado') return 'bg-linea text-gris'
+  if (c.tipo === 'delivery' && c.canal === 'pedidosya' && !c.repartidorId) return 'bg-muzza text-sobre-muzza'
   if (c.tipo === 'delivery') return c.repartidorId ? 'bg-pizarra text-white' : 'bg-tomate text-white'
   return 'bg-muzza text-sobre-muzza'
 }
@@ -30,7 +31,10 @@ function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Coma
         <div className="flex items-start gap-3">
           <span className={`font-cond text-5xl font-extrabold leading-[0.85] tabular-nums ${c.estado === 'anulada' ? 'line-through' : ''}`}>{c.numero}</span>
           <div className="min-w-0 flex-1 pt-0.5">
-            <div className="truncate font-semibold">{c.clienteNombre || (c.tipo === 'mostrador' ? 'Mostrador' : 'Sin nombre')}</div>
+            <div className="flex items-center gap-2">
+              {c.canal === 'pedidosya' && <span className="shrink-0 rounded bg-tomate px-1.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-white">PedidosYa{c.externoId ? ` #${c.externoId}` : ''}</span>}
+              <span className="truncate font-semibold">{c.clienteNombre || (c.tipo === 'mostrador' ? 'Mostrador' : 'Sin nombre')}</span>
+            </div>
             {c.tipo === 'delivery' && <div className="truncate text-sm text-gris">{c.direccion}</div>}
             {c.tipo === 'mostrador' && c.clienteTel && <div className="truncate text-sm text-gris">Tel. {c.clienteTel}</div>}
           </div>

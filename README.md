@@ -146,7 +146,7 @@ Los colores son los de CloudVision (azul noche y verde agua) y viven como variab
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0009`) en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0010`) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si
@@ -184,7 +184,30 @@ supabase/
   functions/usuarios/
 ```
 
-## Impresión: contrato con el spool
+## Impresión y programa de Windows
+
+- *Administración → Impresión*: cada local agrega sus **comanderas** (nombre, qué imprime, papel 80/58 mm,
+  copias) y genera un **token** para cada una (se muestra una sola vez; uno nuevo desvincula la PC anterior).
+- Desde ahí se descarga **CloudTicket Impresión** (`public/descargas/CloudTicketImpresion.exe`). Se abre,
+  se pega el token y se elige la impresora de Windows. La web muestra si está conectada, en qué PC y a qué impresora.
+- El programa está en `spool/` (Go, sin dependencias). Detalles en [`spool/README.md`](spool/README.md).
+
+## Importación automática de pedidos (PedidosYa)
+
+- El programa hace de impresora para GoWin: lo que imprime sale igual por la comandera y el texto del ticket
+  llega a la web (`pedidos_externos`). Mismo ticket dos veces = un solo pedido.
+- Cualquier PC con la caja abierta lo **interpreta** (`src/lib/pedidosya.ts`: número, cliente, dirección,
+  productos, envío, descuento, total, pago online o efectivo, retiro o delivery) y lo **importa** como comanda con
+  canal **PedidosYa** en una sola operación (`importar_pedido_externo`). El mismo número de pedido no entra dos veces.
+- Productos: se reconocen por **asociación guardada**, por **mismo nombre** o por **nombre parecido**. Si no, el
+  pedido queda "Revisar" (aviso rojo y botón **PedidosYa** arriba) y se elige a qué producto corresponde; la
+  asociación se guarda para todos los locales.
+- El total queda igual al de PedidosYa (las diferencias van a descuento/adicional). Pagado online → cobrado con
+  forma "PedidosYa (online)" (no suma al efectivo de la caja); efectivo → queda a cobrar.
+- Los pedidos de PedidosYa se entregan sin asignar moto. El reporte de ventas los muestra **por canal**.
+- *Probar un ticket*: se pega el texto de un ticket y se ve cómo se lee, sin cargar nada.
+
+## Contrato de impresión (web → programa)
 
 La web **no habla con la impresora**. Al guardar una comanda inserta una fila en
 `print_jobs` por cada comandera del local que corresponda (mostrador y/o delivery).
@@ -225,11 +248,3 @@ Las líneas ya vienen cortadas al ancho de la impresora (`impresoras.ancho`: 48 
 32 para 58 mm). El texto viene con acentos y ñ: el spool lo manda en la página de códigos
 que soporte la comandera (CP858 o CP850 en la mayoría de las genéricas).
 
-### Pendiente para el spool
-
-- Edge Function `spool-vincular`: recibe el token que se pega en el programa, verifica
-  `impresoras.token_hash` y devuelve credenciales limitadas a esa impresora.
-- RPC `spool-tomar-trabajos` con `for update skip locked` para que dos PCs no impriman
-  lo mismo, y `spool-confirmar` para `impreso` / `error`. Actualiza `impresoras.ultimo_ping`.
-- Programa de Windows: escucha `print_jobs` por Realtime con polling de respaldo,
-  imprime en RAW a la impresora USB y expone `localhost` para el modo offline.

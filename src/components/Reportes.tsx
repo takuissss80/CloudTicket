@@ -218,6 +218,17 @@ function RepVentas({ d, periodo, archivo }: { d: Datos; periodo: Periodo; archiv
         <Tarjeta label="Sin cobrar" valor={money(r.sinCobrar)} tono={r.sinCobrar ? 'mal' : undefined} detalle={r.cantSinCobrar ? `${r.cantSinCobrar} comandas` : 'Todo cobrado'} />
       </div>
 
+      {r.porCanal[1].cantidad > 0 && (
+        <Seccion titulo="Por canal">
+          <Tabla cabecera={['Canal', ['Comandas', 'right'], ['Ventas', 'right'], '']} ancho="min-w-[420px]">
+            {r.porCanal.map(x => (
+              <tr key={x.canal}><td className={td}>{x.canal === 'pedidosya' ? 'PedidosYa' : 'Propio (mostrador y delivery)'}</td><td className={tdr}>{x.cantidad}</td>
+                <td className={tdr}>{money(x.total)}</td><td className="w-1/3 px-3"><Barra valor={x.total} max={Math.max(...r.porCanal.map(y => y.total))} tono={x.canal === 'pedidosya' ? 'bg-tomate' : 'bg-pizarra'} /></td></tr>
+            ))}
+          </Tabla>
+        </Seccion>
+      )}
+
       <Seccion titulo="Por forma de pago">
         {r.porForma.length ? (
           <Tabla cabecera={['Forma de pago', ['Cobrado', 'right'], '']} ancho="min-w-[420px]">
