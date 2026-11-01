@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { Impresora } from '../types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { FormatoTicket, Impresora } from '../types'
 import { repo } from '../data'
 import { mensajeError, useApp } from '../store/app'
 import { hora } from '../lib/format'
+import { comandaEjemplo, construirTicket, FORMATOS } from '../lib/ticket'
+import { TicketPreview } from './TicketPreview'
 import { Btn, Campo, Confirmar, Modal, inputCls } from './ui'
 
 const URL_PROGRAMA = '/descargas/CloudTicketImpresion.exe'
@@ -42,7 +44,7 @@ export function Comanderas() {
     <section className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <h3 className="mr-auto font-cond text-2xl font-bold">Comanderas</h3>
-        <Btn tono="albahaca" onClick={() => setEditar({ nombre: '', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })}>+ Agregar comandera</Btn>
+        <Btn tono="albahaca" onClick={() => setEditar({ nombre: '', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48, formato: 'normal', mostrarPrecios: true })}>+ Agregar comandera</Btn>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl bg-pizarra-claro p-4">
@@ -64,7 +66,8 @@ export function Comanderas() {
                   <div className="text-lg font-semibold">{i.nombre}</div>
                   <div className="text-sm text-gris">
                     Imprime {[i.imprimeMostrador && 'mostrador', i.imprimeDelivery && 'delivery'].filter(Boolean).join(' y ') || 'nada (desactivada)'}
-                    , {i.ancho === 32 ? '58 mm' : '80 mm'}{i.copias > 1 ? `, ${i.copias} copias` : ''}
+                    , {i.ancho === 32 ? '58 mm' : '80 mm'}, letra {FORMATOS[i.formato ?? 'normal'].nombre.toLowerCase()}
+                    {i.mostrarPrecios === false ? ', sin precios' : ''}{i.copias > 1 ? `, ${i.copias} copias` : ''}
                   </div>
                   <div className={`mt-1 text-sm font-semibold ${on ? 'text-albahaca' : i.conToken ? 'text-tinta' : 'text-gris'}`}>
                     {on ? `Conectada${i.pcNombre ? ` en ${i.pcNombre}` : ''}${i.impresoraWindows ? ` → ${i.impresoraWindows}` : ''}`
@@ -78,7 +81,7 @@ export function Comanderas() {
                     ? <Btn tono="fantasma" onClick={() => setRegenerar(i)}>Nuevo token</Btn>
                     : <Btn tono="albahaca" onClick={() => generar(i)}>Generar token</Btn>}
                   <Btn tono="fantasma" onClick={() => imprimirPrueba(i)}>Imprimir prueba</Btn>
-                  <Btn tono="fantasma" onClick={() => setEditar(i)}>Editar</Btn>
+                  <Btn tono="fantasma" onClick={() => setEditar(i)}>Editar y formato</Btn>
                   <button aria-label={`Eliminar ${i.nombre}`} title="Eliminar" onClick={() => setBorrar(i)}
                     className="size-10 rounded-full text-xl text-gris hover:bg-tomate-claro hover:text-tomate">×</button>
                 </div>
@@ -127,38 +130,65 @@ export function Comanderas() {
 function EditorComandera({ inicial, onClose, onGuardar }: {
   inicial: Partial<Impresora>; onClose: () => void; onGuardar: (i: Omit<Impresora, 'id'> & { id?: string }) => void
 }) {
+  const nombreLocal = useApp(s => s.sucursales.find(x => x.id === s.sucursalId)?.nombre)
   const [nombre, setNombre] = useState(inicial.nombre ?? '')
   const [mostrador, setMostrador] = useState(inicial.imprimeMostrador ?? true)
   const [delivery, setDelivery] = useState(inicial.imprimeDelivery ?? true)
   const [ancho, setAncho] = useState(inicial.ancho ?? 48)
   const [copias, setCopias] = useState(inicial.copias ?? 1)
+  const [formato, setFormato] = useState<FormatoTicket>(inicial.formato ?? 'normal')
+  const [precios, setPrecios] = useState(inicial.mostrarPrecios ?? true)
+  const ejemplo = useMemo(() => comandaEjemplo(), [])
+  const vista = useMemo(() => construirTicket(ejemplo, { ancho, tipo: 'comanda', formato, mostrarPrecios: precios, nombreLocal }), [ejemplo, ancho, formato, precios, nombreLocal])
+
   const marca = (v: boolean, set: (b: boolean) => void, l: string) => (
     <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-harina px-3 py-2.5">
       <input type="checkbox" className="size-5 accent-albahaca" checked={v} onChange={e => set(e.target.checked)} /> {l}
     </label>
   )
   return (
-    <Modal titulo={inicial.id ? `Editar ${inicial.nombre}` : 'Nueva comandera'} onClose={onClose} ancho="max-w-md"
+    <Modal titulo={inicial.id ? `Editar ${inicial.nombre}` : 'Nueva comandera'} onClose={onClose} ancho="max-w-5xl" alto
       pie={<div className="flex justify-end gap-2"><Btn onClick={onClose}>Cancelar</Btn>
-        <Btn tono="albahaca" disabled={!nombre.trim()} onClick={() => onGuardar({ id: inicial.id, nombre, imprimeMostrador: mostrador, imprimeDelivery: delivery, ancho, copias })}>Guardar</Btn></div>}>
-      <div className="space-y-4 p-5">
-        <Campo label="Nombre"><input id="comandera-nombre" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} className={inputCls} placeholder="Cocina, Mostrador, Horno…" /></Campo>
-        <div>
-          <span className="mb-1 block text-sm font-medium text-gris">Qué imprime</span>
-          <div className="grid grid-cols-2 gap-2">{marca(mostrador, setMostrador, 'Pedidos de mostrador')}{marca(delivery, setDelivery, 'Pedidos de delivery')}</div>
+        <Btn tono="albahaca" disabled={!nombre.trim()} onClick={() => onGuardar({ id: inicial.id, nombre, imprimeMostrador: mostrador, imprimeDelivery: delivery, ancho, copias, formato, mostrarPrecios: precios })}>Guardar</Btn></div>}>
+      <div className="grid gap-6 p-5 lg:grid-cols-[1fr_auto]">
+        <div className="space-y-5">
+          <Campo label="Nombre"><input id="comandera-nombre" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} className={inputCls} placeholder="Cocina, Mostrador, Horno…" /></Campo>
+          <div>
+            <span className="mb-1 block text-sm font-medium text-gris">Qué imprime</span>
+            <div className="grid grid-cols-2 gap-2">{marca(mostrador, setMostrador, 'Pedidos de mostrador')}{marca(delivery, setDelivery, 'Pedidos de delivery')}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Campo label="Papel">
+              <select id="comandera-ancho" value={ancho} onChange={e => setAncho(Number(e.target.value))} className={inputCls}>
+                <option value={48}>80 mm (48 letras)</option><option value={32}>58 mm (32 letras)</option>
+              </select>
+            </Campo>
+            <Campo label="Copias de cada comanda">
+              <select id="comandera-copias" value={copias} onChange={e => setCopias(Number(e.target.value))} className={inputCls}>
+                {[1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </Campo>
+          </div>
+
+          <div>
+            <span className="mb-1 block text-sm font-medium text-gris">Tamaño de la letra</span>
+            <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tamaño de la letra">
+              {(Object.keys(FORMATOS) as FormatoTicket[]).map(k => (
+                <button key={k} type="button" role="radio" aria-checked={formato === k} onClick={() => setFormato(k)}
+                  className={`rounded-xl p-3 text-left ring-2 transition ${formato === k ? 'bg-albahaca-claro ring-albahaca' : 'bg-harina ring-transparent hover:ring-linea'}`}>
+                  <span className={`block font-cond font-bold ${k === 'chico' ? 'text-lg' : k === 'normal' ? 'text-2xl' : 'text-3xl'}`}>{FORMATOS[k].nombre}</span>
+                  <span className="mt-0.5 block text-sm text-gris">{FORMATOS[k].descripcion}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {marca(precios, setPrecios, 'Imprimir precios y totales (desactivalo para la comandera de cocina)')}
+          <p className="text-sm text-gris">La vista previa usa una comanda de ejemplo. Con <b>Imprimir prueba</b> sale esta misma comanda por la comandera.</p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Campo label="Papel">
-            <select id="comandera-ancho" value={ancho} onChange={e => setAncho(Number(e.target.value))} className={inputCls}>
-              <option value={48}>80 mm (48 letras)</option><option value={32}>58 mm (32 letras)</option>
-            </select>
-          </Campo>
-          <Campo label="Copias de cada comanda">
-            <select id="comandera-copias" value={copias} onChange={e => setCopias(Number(e.target.value))} className={inputCls}>
-              {[1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </Campo>
-        </div>
+        <aside className="lg:sticky lg:top-0 lg:self-start">
+          <div className="mb-2 text-sm font-medium text-gris">Así sale en la comandera</div>
+          <div className="max-w-full overflow-x-auto pb-2"><TicketPreview lineas={vista} ancho={ancho} /></div>
+        </aside>
       </div>
     </Modal>
   )

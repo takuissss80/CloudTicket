@@ -385,6 +385,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       return (r as Row[]).map((i): Impresora => ({
         id: i.id, nombre: i.nombre, imprimeMostrador: i.imprime_mostrador, imprimeDelivery: i.imprime_delivery,
         copias: i.copias, ancho: i.ancho, ultimoPing: opt(i.ultimo_ping), conToken: !!i.token_hash,
+        formato: i.formato ?? 'normal', mostrarPrecios: i.mostrar_precios ?? true,
         impresoraWindows: opt(i.impresora_windows), pcNombre: opt(i.pc_nombre), versionPrograma: opt(i.version_programa),
         vinculadaAt: opt(i.vinculada_at),
       }))
@@ -394,6 +395,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const row = {
         sucursal_id: sucursalId, nombre: i.nombre.trim(), imprime_mostrador: i.imprimeMostrador, imprime_delivery: i.imprimeDelivery,
         copias: Math.max(1, Math.min(5, i.copias || 1)), ancho: i.ancho === 32 ? 32 : 48,
+        formato: i.formato ?? 'normal', mostrar_precios: i.mostrarPrecios ?? true,
       }
       if (i.id) ok(await sb.from('impresoras').update(row).eq('id', i.id))
       else ok(await sb.from('impresoras').insert(row))

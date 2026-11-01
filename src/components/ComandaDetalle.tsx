@@ -24,6 +24,7 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
 
   const ticket = useMemo(() => construirTicket(c, {
     ancho: impresoras[0]?.ancho ?? 48, tipo: 'comanda', zonas: catalogo.zonas, nombreLocal: sucursal,
+    formato: impresoras[0]?.formato, mostrarPrecios: impresoras[0]?.mostrarPrecios,
   }), [c, impresoras, catalogo.zonas, sucursal])
 
   const impresiones = printJobs.filter(j => j.comandaId === c.id)

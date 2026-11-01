@@ -146,7 +146,7 @@ Los colores son los de CloudVision (azul noche y verde agua) y viven como variab
 ## Conectar Supabase
 
 1. Creá un proyecto en Supabase.
-2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0010`) en el SQL Editor (o `supabase db push`).
+2. Corré en orden las migraciones de `supabase/migrations/` (`0001` a `0011`) en el SQL Editor (o `supabase db push`).
 3. Desplegá la función de usuarios: `supabase functions deploy usuarios`.
    La usa el admin para crear usuarios de local y cambiarles la contraseña.
 4. En *Authentication → Providers → Email* dejá habilitado el registro con email. Si
@@ -187,7 +187,7 @@ supabase/
 ## Impresión y programa de Windows
 
 - *Administración → Impresión*: cada local agrega sus **comanderas** (nombre, qué imprime, papel 80/58 mm,
-  copias) y genera un **token** para cada una (se muestra una sola vez; uno nuevo desvincula la PC anterior).
+  copias, **tamaño de letra** Chico / Normal / Grande y si imprime precios, con vista previa al editar) y genera un **token** para cada una (se muestra una sola vez; uno nuevo desvincula la PC anterior).
 - Desde ahí se descarga **CloudTicket Impresión** (`public/descargas/CloudTicketImpresion.exe`). Se abre,
   se pega el token y se elige la impresora de Windows. La web muestra si está conectada, en qué PC y a qué impresora.
 - El programa está en `spool/` (Go, sin dependencias). Detalles en [`spool/README.md`](spool/README.md).

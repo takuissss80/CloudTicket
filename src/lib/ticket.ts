@@ -1,4 +1,4 @@
-import type { Comanda, Impresora, LineaTicket, TipoPrintJob, Zona } from '../types'
+import type { Comanda, FormatoTicket, Impresora, LineaTicket, TipoPrintJob, Zona } from '../types'
 import { FORMAS_PAGO } from '../types'
 import { coccionLabel, fecha, hora, money, varianteLabel } from './format'
 
@@ -15,6 +15,7 @@ import { coccionLabel, fecha, hora, money, varianteLabel } from './format'
 export interface OpcionesTicket {
   ancho: number
   tipo: TipoPrintJob
+  formato?: FormatoTicket
   mostrarPrecios?: boolean
   zonas?: Zona[]
   nombreLocal?: string
@@ -55,85 +56,119 @@ export function partir(texto: string, ancho: number, sangria = ''): string[] {
   return out.length ? out : ['']
 }
 
+type Tam = 'normal' | 'large' | 'xl'
+
+/** Tamaño de cada parte del ticket según el formato elegido para la comandera */
+export const FORMATOS: Record<FormatoTicket, {
+  nombre: string; descripcion: string
+  titulo: Tam; tipo: Tam; cliente: Tam; item: Tam; detalle: Tam; total: Tam; avance: number
+}> = {
+  chico: { nombre: 'Chico', descripcion: 'Letra normal en todo. Ahorra papel.', titulo: 'large', tipo: 'normal', cliente: 'normal', item: 'normal', detalle: 'normal', total: 'normal', avance: 2 },
+  normal: { nombre: 'Normal', descripcion: 'Título y cliente grandes, productos en letra normal.', titulo: 'xl', tipo: 'large', cliente: 'large', item: 'normal', detalle: 'normal', total: 'large', avance: 3 },
+  grande: { nombre: 'Grande', descripcion: 'Productos con letra doble. Para leer de lejos en la cocina.', titulo: 'xl', tipo: 'large', cliente: 'large', item: 'large', detalle: 'large', total: 'large', avance: 4 },
+}
+
 const txt = (text: string, extra: Partial<Extract<LineaTicket, { t: 'text' }>> = {}): LineaTicket =>
   ({ t: 'text', text, ...extra })
 
 export function construirTicket(c: Comanda, o: OpcionesTicket): LineaTicket[] {
   const W = o.ancho
+  const F = FORMATOS[o.formato ?? 'normal']
   const L: LineaTicket[] = []
   const precios = o.mostrarPrecios ?? true
+  /** Agrega un texto partido al ancho que permite su tamaño */
+  const linea = (texto: string, size: Tam, extra: Partial<Extract<LineaTicket, { t: 'text' }>> = {}, sangria = '') =>
+    partir(texto, anchoPara(W, size), sangria).forEach(l => L.push(txt(l, { ...extra, ...(size !== 'normal' ? { size } : {}) })))
+  const dos = (izq: string, der: string, size: Tam, extra: Partial<Extract<LineaTicket, { t: 'text' }>> = {}) =>
+    dosColumnas(izq, der, anchoPara(W, size)).forEach(l => L.push(txt(l, { ...extra, ...(size !== 'normal' ? { size } : {}) })))
 
   // ---- Encabezado
-  if (o.nombreLocal) L.push(txt(o.nombreLocal, { align: 'center', bold: true }))
-  L.push(txt(`COMANDA #${c.numero}`, { size: 'xl', bold: true, align: 'center' }))
-  L.push(txt(c.tipo === 'delivery' ? ' DELIVERY ' : ' MOSTRADOR ', { size: 'large', bold: true, align: 'center', invert: true }))
+  if (o.nombreLocal) linea(o.nombreLocal, 'normal', { align: 'center', bold: true })
+  linea(`COMANDA #${c.numero}`, F.titulo, { bold: true, align: 'center' })
+  linea(c.tipo === 'delivery' ? ' DELIVERY ' : ' MOSTRADOR ', F.tipo, { bold: true, align: 'center', invert: true })
   L.push(txt(`${fecha(c.createdAt)} - ${hora(c.createdAt)}`, { align: 'center' }))
 
-  if (o.tipo === 'reimpresion') L.push(txt('** REIMPRESION **', { size: 'large', bold: true, align: 'center' }))
-  if (o.tipo === 'anulacion') L.push(txt('*** ANULADA ***', { size: 'large', bold: true, align: 'center', invert: true }))
+  if (o.tipo === 'reimpresion') linea('** REIMPRESION **', 'large', { bold: true, align: 'center' })
+  if (o.tipo === 'anulacion') linea('*** ANULADA ***', 'large', { bold: true, align: 'center', invert: true })
+  if (o.tipo === 'prueba') linea('** PRUEBA **', 'large', { bold: true, align: 'center' })
 
   L.push({ t: 'line' })
 
   // ---- Cliente
-  if (c.clienteNombre) L.push(txt(c.clienteNombre, { size: 'large', bold: true }))
+  if (c.clienteNombre) linea(c.clienteNombre, F.cliente, { bold: true })
   if (c.tipo === 'delivery') {
-    if (c.direccion) partir(`Dir: ${c.direccion}`, W).forEach(l => L.push(txt(l, { bold: true })))
-    if (c.entreCalles) partir(`Entre: ${c.entreCalles}`, W).forEach(l => L.push(txt(l)))
+    if (c.direccion) linea(`Dir: ${c.direccion}`, 'normal', { bold: true })
+    if (c.entreCalles) linea(`Entre: ${c.entreCalles}`, 'normal')
     const zona = o.zonas?.find(z => z.id === c.zonaId)
-    if (zona) L.push(txt(`Zona: ${zona.nombre}`))
+    if (zona) linea(`Zona: ${zona.nombre}`, 'normal')
   }
-  if (c.clienteTel) L.push(txt(`Tel: ${c.clienteTel}`))
-  if (c.horaEntrega) L.push(txt(`PARA LAS ${c.horaEntrega}`, { size: 'large', bold: true }))
+  if (c.clienteTel) linea(`Tel: ${c.clienteTel}`, 'normal')
+  if (c.horaEntrega) linea(`PARA LAS ${c.horaEntrega}`, F.cliente, { bold: true })
   if (c.clienteNombre || c.tipo === 'delivery' || c.clienteTel || c.horaEntrega) L.push({ t: 'line' })
 
   // ---- Ítems
   for (const it of c.items) {
     const extra = [varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
     const nombre = `${it.cantidad} x ${it.descripcion}${extra ? ` (${extra})` : ''}`
-    const lineas = precios
-      ? dosColumnas(nombre, money(it.precioUnit * it.cantidad), W)
-      : partir(nombre, W)
-    lineas.forEach(l => L.push(txt(l, { bold: true })))
+    if (precios) dos(nombre, money(it.precioUnit * it.cantidad), F.item, { bold: true })
+    else linea(nombre, F.item, { bold: true })
     for (const comp of it.componentes) {
       const e = [varianteLabel(comp.variante), coccionLabel(comp.coccion)].filter(Boolean).join(', ')
-      partir(`  -> ${comp.cantidad} ${comp.descripcion}${e ? ` (${e})` : ''}`, W, '     ').forEach(l => L.push(txt(l)))
+      linea(`  -> ${comp.cantidad} ${comp.descripcion}${e ? ` (${e})` : ''}`, F.detalle, {}, '     ')
     }
-    if (it.nota) partir(`  * ${it.nota}`, W, '    ').forEach(l => L.push(txt(l, { bold: true })))
+    if (it.nota) linea(`  * ${it.nota}`, F.detalle, { bold: true }, '    ')
   }
 
   L.push({ t: 'line' })
 
   // ---- Totales
   if (precios) {
-    const fila = (a: string, b: number) => dosColumnas(a, b < 0 ? `-${money(-b)}` : money(b), W).forEach(l => L.push(txt(l)))
+    const fila = (a: string, b: number) => dos(a, b < 0 ? `-${money(-b)}` : money(b), 'normal')
     if (c.costoEnvio || c.descuento || c.adicional) fila('Subtotal', c.subtotal)
     if (c.costoEnvio) fila('Envio', c.costoEnvio)
     if (c.adicional) fila('Adicional', c.adicional)
     const descCupon = c.descuentoCupon || 0
     if (c.descuento - descCupon > 0.009) fila('Descuento', -(c.descuento - descCupon))
     if (descCupon > 0.009) fila(`Cupon ${c.cuponCodigo ?? ''}`.trim(), -descCupon)
-    const wT = anchoPara(W, 'large')
-    dosColumnas('TOTAL', money(c.total), wT).forEach(l => L.push(txt(l, { size: 'large', bold: true })))
+    dos('TOTAL', money(c.total), F.total, { bold: true })
 
     if (c.pagos.length) {
       for (const p of c.pagos) {
         const label = FORMAS_PAGO.find(f => f.key === p.forma)?.label ?? p.forma
-        dosColumnas(`Pago ${label}`, money(p.monto), W).forEach(l => L.push(txt(l)))
+        dos(`Pago ${label}`, money(p.monto), 'normal')
       }
       const pagado = c.pagos.reduce((s, p) => s + p.monto, 0)
-      if (pagado > c.total) dosColumnas('Vuelto', money(pagado - c.total), W).forEach(l => L.push(txt(l, { bold: true })))
+      if (pagado > c.total) dos('Vuelto', money(pagado - c.total), 'normal', { bold: true })
     }
-    L.push(txt(c.cobrada ? 'COBRADO' : 'A COBRAR', { size: 'large', bold: true, align: 'center', invert: !c.cobrada }))
+    linea(c.cobrada ? 'COBRADO' : 'A COBRAR', F.tipo, { bold: true, align: 'center', invert: !c.cobrada })
   }
 
   if (c.observaciones) {
     L.push({ t: 'line' })
-    partir(`OBS: ${c.observaciones}`, W).forEach(l => L.push(txt(l, { bold: true })))
+    linea(`OBS: ${c.observaciones}`, F.detalle, { bold: true })
   }
 
-  L.push({ t: 'feed', n: 3 })
+  L.push({ t: 'feed', n: F.avance })
   L.push({ t: 'cut' })
   return L
+}
+
+/** Comanda de ejemplo para la vista previa y la prueba de impresión */
+export function comandaEjemplo(): Comanda {
+  const ahora = new Date().toISOString()
+  return {
+    id: 'ejemplo', cajaId: '', numero: 25, tipo: 'delivery', estado: 'pendiente',
+    clienteNombre: 'Lucía Fernández', clienteTel: '11 5555-1234', direccion: 'Av. San Martín 1234, 3° B', entreCalles: 'Güemes y Mitre',
+    horaEntrega: '21:30', costoEnvio: 1500, subtotal: 31500, descuento: 0, adicional: 0, total: 33000, descuentoCupon: 0,
+    observaciones: 'Tocar timbre 3B', cobrada: false, pagos: [{ forma: 'efectivo', monto: 35000 }],
+    items: [
+      { id: '1', descripcion: 'Grande Muzzarella', cantidad: 2, precioUnit: 12000, componentes: [], nota: 'sin aceitunas' },
+      { id: '2', descripcion: 'PROMO 4', cantidad: 1, precioUnit: 7500, componentes: [
+        { descripcion: 'Jamón y queso', cantidad: 2, coccion: 'horno' }, { descripcion: 'Carne a cuchillo', cantidad: 2, coccion: 'frita' },
+      ] },
+    ],
+    createdAt: ahora, updatedAt: ahora,
+  }
 }
 
 /** Arma un print_job por cada impresora que corresponde al tipo de comanda */
@@ -145,25 +180,14 @@ export function jobsParaComanda(c: Comanda, impresoras: Impresora[], tipo: TipoP
       comandaId: c.id,
       tipo,
       copias: i.copias,
-      contenido: construirTicket(c, { ...extra, ancho: i.ancho, tipo }),
+      contenido: construirTicket(c, { ...extra, ancho: i.ancho, tipo, formato: i.formato, mostrarPrecios: i.mostrarPrecios }),
     }))
 }
 
-/** Ticket de prueba para verificar la comandera */
-export function ticketPrueba(impresora: Impresora): LineaTicket[] {
-  const W = impresora.ancho
-  return [
-    txt('PRUEBA DE IMPRESION', { size: 'large', bold: true, align: 'center' }),
-    txt(`Impresora: ${impresora.nombre}`, { align: 'center' }),
-    txt(new Date().toLocaleString('es-AR'), { align: 'center' }),
-    { t: 'line' },
-    txt('Normal: abcdefghijklmnñopqrstuvwxyz'),
-    txt('Negrita: 0123456789', { bold: true }),
-    txt('GRANDE', { size: 'large' }),
-    txt('XL', { size: 'xl' }),
-    txt(' INVERTIDO ', { invert: true }),
-    txt('1234567890'.repeat(Math.ceil(W / 10)).slice(0, W)),
-    { t: 'feed', n: 3 },
-    { t: 'cut' },
-  ]
+/** Ticket de prueba: una comanda de ejemplo con el formato de la comandera */
+export function ticketPrueba(impresora: Impresora, nombreLocal?: string): LineaTicket[] {
+  return construirTicket(comandaEjemplo(), {
+    ancho: impresora.ancho, tipo: 'prueba', formato: impresora.formato, mostrarPrecios: impresora.mostrarPrecios,
+    nombreLocal: nombreLocal ?? impresora.nombre,
+  })
 }

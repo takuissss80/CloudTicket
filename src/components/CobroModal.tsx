@@ -70,6 +70,7 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
     }
     return construirTicket(c, {
       ancho: impresoras[0]?.ancho ?? 48, tipo: p.editandoId ? 'reimpresion' : 'comanda',
+      formato: impresoras[0]?.formato, mostrarPrecios: impresoras[0]?.mostrarPrecios,
       zonas: catalogo.zonas, nombreLocal: sucursal,
     })
   }, [p, envio, subtotal, total, t.descuento, t.adicional, t.descuentoCupon, comandas, impresoras, catalogo.zonas, sucursal])

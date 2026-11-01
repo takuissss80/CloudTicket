@@ -290,6 +290,8 @@ export interface Repartidor {
   activo: boolean
 }
 
+export type FormatoTicket = 'chico' | 'normal' | 'grande'
+
 export interface Impresora {
   id: string
   nombre: string
@@ -297,6 +299,10 @@ export interface Impresora {
   imprimeDelivery: boolean
   copias: number
   ancho: number
+  /** Tamaño de letra del ticket */
+  formato?: FormatoTicket
+  /** false: la comandera imprime sin precios ni totales (p. ej. cocina) */
+  mostrarPrecios?: boolean
   ultimoPing?: string
   /** Tiene token generado (vinculada o esperando que el programa se conecte) */
   conToken?: boolean

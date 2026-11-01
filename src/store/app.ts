@@ -311,7 +311,7 @@ export const useApp = create<AppState>((set, get) => {
 
     async imprimirPrueba(i) {
       try {
-        await repo.encolarImpresion([{ impresoraId: i.id, tipo: 'prueba', copias: 1, contenido: ticketPrueba(i) }])
+        await repo.encolarImpresion([{ impresoraId: i.id, tipo: 'prueba', copias: 1, contenido: ticketPrueba(i, nombreLocal()) }])
         get().avisar(`Prueba enviada a ${i.nombre}`)
         await get().refrescar()
       } catch (e) { fallo(e) }
