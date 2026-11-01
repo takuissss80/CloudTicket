@@ -39,6 +39,15 @@
   .eventos .t-error { color:var(--rojo); } .eventos .t-ok { color:var(--acento); }
   .cont { display:flex; gap:14px; flex-wrap:wrap; font-size:14px; color:var(--gris); margin-top:8px; } .cont b { color:var(--tinta); }
   details summary { cursor:pointer; color:var(--gris); }
+  .papeles { display:flex; gap:16px; overflow-x:auto; padding:8px 2px 12px; align-items:flex-start; }
+  .papel { flex:none; width:calc(48ch + 28px); background:#fff; color:#111; padding:14px; border-radius:2px;
+           box-shadow:0 2px 10px rgba(0,0,0,.25); font:14px/1.25 Consolas, "Courier New", monospace; }
+  .papel .ln { white-space:pre; min-height:1.25em; overflow:hidden; }
+  .papel .seg { display:inline-block; transform-origin:left top; }
+  .papel .inv { background:#111; color:#fff; }
+  .papel .corte { border-top:2px dashed #999; margin:10px -14px; text-align:center; font:11px system-ui; color:#999; }
+  .papel .corte::after { content:'✂ corte'; position:relative; top:-8px; background:#fff; padding:0 6px; }
+  .papel-cab { font:12px system-ui; color:var(--gris); margin-bottom:4px; }
 </style>
 </head>
 <body>
@@ -95,6 +104,13 @@
       </ol>
     </details>
     <details style="margin-top:8px"><summary>Último ticket capturado</summary><pre id="ultimo">Todavía no llegó ninguno.</pre></details>
+  </section>
+
+  <section>
+    <h2>Vista previa en pantalla</h2>
+    <p class="ayuda">Para probar sin comandera: en la comandera de arriba elegí la impresora <b>★ Vista previa en pantalla</b>. Las comandas aparecen acá tal como salen en el papel de 80 mm (no se imprime nada).</p>
+    <div class="botones" style="margin-top:0"><button id="vista-limpiar">Limpiar</button></div>
+    <div class="papeles" id="papeles"><p class="ayuda" style="margin:8px 0">Todavía no llegó nada a la vista previa.</p></div>
   </section>
 
   <section>
@@ -222,7 +238,22 @@ $('cap-virtual').onclick = async () => {
 $('inicio').onchange = async e => { try { await api('/api/inicio', { activo: e.target.checked }) } catch (er) { alert(er.message) } };
 $('srv-guardar').onclick = async () => { try { await api('/api/servidor', { servidor: $('srv').value }); msg('msg-srv', 'Conectado.', true); await refrescar(); } catch (e) { msg('msg-srv', e.message) } };
 
-refrescar(); setInterval(refrescar, 2000);
+let firmaVistas = '';
+async function refrescarVistas() {
+  let v; try { v = await api('/api/vistas'); } catch { return; }
+  const firma = v.map(t => t.hora + t.bytes).join('|'); if (firma === firmaVistas) return; firmaVistas = firma;
+  if (!v.length) { $('papeles').innerHTML = '<p class="ayuda" style="margin:8px 0">Todavía no llegó nada a la vista previa.</p>'; return; }
+  $('papeles').innerHTML = v.map(t => `<div><div class="papel-cab">${esc(t.hora)} · ${esc(t.documento)}</div><div class="papel">` +
+    (t.imagen ? '<div class="ln">[el ticket es una imagen]</div>' : '') +
+    t.lineas.map(l => l.corte ? '<div class="corte"></div>' :
+      `<div class="ln" style="text-align:${l.a || 'left'}">` + (l.s || []).map(sg => {
+        const w = sg.w || 1, h = sg.h || 1;
+        const estilo = h > 1 || w > 1 ? `font-size:${h}em;line-height:1.1;${w !== h ? `transform:scaleX(${w / h});` : ''}` : '';
+        return `<span class="seg${sg.b ? '' : ''}${sg.i ? ' inv' : ''}" style="${sg.b ? 'font-weight:700;' : ''}${estilo}">${esc(sg.t)}</span>`;
+      }).join('') + '</div>').join('') + '</div></div>').join('');
+}
+$('vista-limpiar').onclick = async () => { await api('/api/vistas/limpiar', {}); firmaVistas = '-'; refrescarVistas(); };
+refrescar(); setInterval(refrescar, 2000); refrescarVistas(); setInterval(refrescarVistas, 1500);
 </script>
 </body>
 </html>

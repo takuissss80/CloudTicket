@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func ListarImpresoras() ([]string, string, error) {
+func listarImpresorasSO() ([]string, string, error) {
 	l := strings.Split(os.Getenv("CT_IMPRESORAS"), ",")
 	if os.Getenv("CT_IMPRESORAS") == "" {
 		l = []string{"POS-80 (simulada)", "Microsoft Print to PDF"}
@@ -22,7 +22,7 @@ func ListarImpresoras() ([]string, string, error) {
 	return l, l[0], nil
 }
 
-func ImprimirRAW(impresora, documento string, datos []byte) error {
+func imprimirRAWSO(impresora, documento string, datos []byte) error {
 	if impresora == "" {
 		return errors.New("no hay impresora elegida")
 	}

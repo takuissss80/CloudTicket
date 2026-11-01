@@ -110,6 +110,8 @@ func iniciarPanel() (net.Listener, error) {
 	}
 
 	api("/api/estado", func(r *http.Request) (any, error) { return estadoPanel(), nil })
+	api("/api/vistas", func(r *http.Request) (any, error) { return ultimasVistas(), nil })
+	api("/api/vistas/limpiar", func(r *http.Request) (any, error) { limpiarVistas(); return map[string]bool{"ok": true}, nil })
 
 	api("/api/vincular", func(r *http.Request) (any, error) {
 		var p struct {

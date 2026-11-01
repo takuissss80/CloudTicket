@@ -98,3 +98,39 @@ func TestQRyCodigoDeBarras(t *testing.T) {
 		t.Errorf("txt=%q", txt)
 	}
 }
+
+func TestVistaPrevia(t *testing.T) {
+	l := []Linea{
+		{T: "text", Text: "COMANDA #12", Size: "xl", Bold: true, Align: "center"},
+		{T: "text", Text: " DELIVERY ", Size: "large", Invert: true, Align: "center"},
+		{T: "line"},
+		{T: "text", Text: "1 x Ñoquis con salsa", Bold: true},
+		{T: "text", Text: "TOTAL $9.000", Align: "right"},
+		{T: "feed", N: 2},
+		{T: "cut"},
+	}
+	j, _ := json.Marshal(l)
+	b, _ := Renderizar(j, 48, 2)
+	v, img := RenderizarVista(b)
+	if img {
+		t.Fatal("no es imagen")
+	}
+	if v[0].Alinear != "center" || v[0].Segmentos[0].Texto != "COMANDA #12" || v[0].Segmentos[0].Ancho != 3 || !v[0].Segmentos[0].Negrita {
+		t.Errorf("línea 1: %+v", v[0])
+	}
+	if !v[1].Segmentos[0].Invertir || v[1].Segmentos[0].Ancho != 2 {
+		t.Errorf("línea 2: %+v", v[1])
+	}
+	if len([]rune(v[2].Segmentos[0].Texto)) != 48 {
+		t.Errorf("línea separadora de 48: %q", v[2].Segmentos[0].Texto)
+	}
+	if v[3].Segmentos[0].Texto != "1 x Ñoquis con salsa" || v[4].Alinear != "right" {
+		t.Errorf("acentos o alineación: %+v %+v", v[3], v[4])
+	}
+	if !v[len(v)-1].Corte {
+		t.Error("falta el corte al final")
+	}
+	if ImprimirRAW(nombreVistaPrevia, "prueba", b) != nil || len(ultimasVistas()) != 1 {
+		t.Error("la impresora virtual no guardó el ticket")
+	}
+}

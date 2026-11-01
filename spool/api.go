@@ -64,7 +64,11 @@ func rpc(nombre string, args any, out any) error {
 	cuerpo, _ := json.Marshal(args)
 	req, _ := http.NewRequest("POST", strings.TrimRight(c.SupabaseURL, "/")+"/rest/v1/rpc/"+nombre, bytes.NewReader(cuerpo))
 	req.Header.Set("apikey", c.AnonKey)
-	req.Header.Set("Authorization", "Bearer "+c.AnonKey)
+	// Claves viejas (JWT "eyJ…") van también en Authorization. Las nuevas (sb_publishable_…)
+	// van solo en apikey: Supabase usa el rol anon.
+	if strings.HasPrefix(c.AnonKey, "eyJ") {
+		req.Header.Set("Authorization", "Bearer "+c.AnonKey)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	r, err := cliente.Do(req)
 	if err != nil {

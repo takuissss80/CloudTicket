@@ -14,7 +14,7 @@ que imprime otro programa (GoWin / PedidosYa) para importarlos como pedidos.
 1. En la web, *Administración → Impresión* → **Generar token** en la comandera.
 2. En el programa, **Vincular una comandera**: se pega el token y se elige la impresora de Windows.
 3. El programa baja de la web `/spool-config.json` (URL de Supabase y anon key, que son públicas)
-   y usa estas funciones de la base, que solo aceptan el token:
+   y usa estas funciones (con la clave nueva `sb_publishable_…` solo manda el encabezado `apikey`) de la base, que solo aceptan el token:
    - `spool_ping` cada 30 s (la web muestra "Conectada", la PC y la impresora),
    - `spool_tomar` cada 2 s (toma los trabajos; dos PCs con el mismo token no imprimen lo mismo),
    - `spool_confirmar` (impreso, o vuelve a la cola; a los 5 intentos queda con error),
@@ -22,6 +22,9 @@ que imprime otro programa (GoWin / PedidosYa) para importarlos como pedidos.
    Lo que espera más de 30 minutos en la cola no se imprime (queda "vencido").
 
 ## Impresión
+
+**Vista previa sin comandera:** en el panel, elegir la impresora **★ Vista previa en pantalla (sin imprimir)**.
+Las comandas se ven tal cual salen en el papel de 80 mm (tamaños, negrita, invertido y corte), sin imprimir nada.
 
 Las líneas que arma la web (`src/lib/ticket.ts`) se traducen a ESC/POS: tamaño (`GS !`),
 negrita (`ESC E`), alineación (`ESC a`), invertido (`GS B`), avance (`ESC d`) y corte

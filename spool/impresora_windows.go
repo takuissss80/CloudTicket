@@ -61,7 +61,7 @@ func utf16PtrAString(p *uint16) string {
 }
 
 // ListarImpresoras devuelve las impresoras instaladas en Windows
-func ListarImpresoras() ([]string, string, error) {
+func listarImpresorasSO() ([]string, string, error) {
 	var necesario, cantidad uint32
 	flags := uintptr(printerEnumLocal | printerEnumConnections)
 	procEnumPrintersW.Call(flags, 0, 4, 0, 0, uintptr(unsafe.Pointer(&necesario)), uintptr(unsafe.Pointer(&cantidad)))
@@ -97,7 +97,7 @@ func impresoraPredeterminada() string {
 }
 
 // ImprimirRAW manda bytes tal cual (ESC/POS) a la cola de Windows de esa impresora
-func ImprimirRAW(impresora, documento string, datos []byte) error {
+func imprimirRAWSO(impresora, documento string, datos []byte) error {
 	if impresora == "" {
 		return errors.New("no hay impresora elegida")
 	}
