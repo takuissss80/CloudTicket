@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //go:embed panel.html
@@ -110,6 +112,11 @@ func iniciarPanel() (net.Listener, error) {
 	}
 
 	api("/api/estado", func(r *http.Request) (any, error) { return estadoPanel(), nil })
+	api("/api/salir", func(r *http.Request) (any, error) {
+		registrar("info", "Programa cerrado desde el panel")
+		go func() { time.Sleep(300 * time.Millisecond); os.Exit(0) }()
+		return map[string]bool{"ok": true}, nil
+	})
 	api("/api/vistas", func(r *http.Request) (any, error) { return ultimasVistas(), nil })
 	api("/api/vistas/limpiar", func(r *http.Request) (any, error) { limpiarVistas(); return map[string]bool{"ok": true}, nil })
 

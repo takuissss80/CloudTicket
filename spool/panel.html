@@ -118,6 +118,8 @@
     <div class="fila">
       <div><label><input type="checkbox" id="inicio"> Abrir automáticamente al prender la PC</label></div>
     </div>
+    <div class="botones"><button class="peligro" id="salir">Cerrar programa</button></div>
+    <p class="ayuda" style="margin-top:6px">Mientras está cerrado no se imprimen las comandas. Para actualizarlo: cerrá el programa, descargá el nuevo desde la web y abrilo.</p>
     <details style="margin-top:10px"><summary>Servidor (avanzado)</summary>
       <div class="fila" style="margin-top:8px">
         <div style="grid-column: span 2"><label for="srv">Dirección de la web</label><input id="srv"></div>
@@ -281,6 +283,11 @@ async function refrescarVistas() {
       }).join('') + '</div>').join('') + '</div></div>').join('');
 }
 $('vista-limpiar').onclick = async () => { await api('/api/vistas/limpiar', {}); firmaVistas = '-'; refrescarVistas(); };
+$('salir').onclick = async () => {
+  if (!confirm('¿Cerrar el programa? Mientras esté cerrado no se imprimen las comandas.')) return;
+  try { await api('/api/salir', {}) } catch {}
+  document.body.innerHTML = '<main><section><h2>CloudTicket Impresión está cerrado</h2><p class="ayuda">Las comandas no se van a imprimir hasta que lo vuelvas a abrir.</p></section></main>';
+};
 refrescar(); setInterval(refrescar, 2000); refrescarVistas(); setInterval(refrescarVistas, 1500);
 </script>
 </body>
