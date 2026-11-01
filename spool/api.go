@@ -72,7 +72,8 @@ func rpc(nombre string, args any, out any) error {
 	req.Header.Set("Content-Type", "application/json")
 	r, err := cliente.Do(req)
 	if err != nil {
-		return fmt.Errorf("sin conexión con el servidor: %w", err)
+		registrarDetalle("Conexión: %v", err)
+		return errors.New("Sin conexión con el servidor: revisá que la PC tenga internet")
 	}
 	defer r.Body.Close()
 	b, _ := io.ReadAll(r.Body)

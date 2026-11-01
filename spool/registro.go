@@ -46,3 +46,12 @@ func ultimosEventos() []Evento {
 	}
 	return out
 }
+
+// registrarDetalle: solo al archivo (para soporte), no al panel
+func registrarDetalle(formato string, args ...any) {
+	ruta := filepath.Join(dirDatos(), "registro.txt")
+	if f, err := os.OpenFile(ruta, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+		fmt.Fprintf(f, "%s [detalle] %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(formato, args...))
+		f.Close()
+	}
+}

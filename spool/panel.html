@@ -146,27 +146,43 @@ async function api(ruta, cuerpo) {
 const opciones = (lista, sel, vacio) => (vacio ? `<option value="">${vacio}</option>` : '') + lista.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join('');
 const msg = (id, t, ok) => { const e = $(id); e.textContent = t; e.className = 'msg ' + (ok ? 'o' : 'e'); if (ok) setTimeout(() => { if (e.textContent === t) e.textContent = '' }, 4000) };
 
-function pintarVinculos() {
+// Edición y mensajes por comandera: viven acá para que el refresco cada 2 s no los borre
+const editando = {}, mensajes = {};
+const msgV = (i, t, ok) => { mensajes[i] = { t, ok, hasta: ok ? Date.now() + 6000 : Date.now() + 15000 }; pintarVinculos(true) };
+const nombreCP = n => (CPS.find(c => c[0] === n) || [n, 'PC' + n])[1];
+
+function pintarVinculos(forzar) {
   const cont = $('vinculos');
-  if (cont.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
+  if (!forzar && cont.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
   if (!estado.vinculos?.length) { cont.innerHTML = '<p class="ayuda" style="margin:8px 0 0">Todavía no hay comanderas vinculadas en esta PC.</p>'; return; }
-  const imps = (estado.impresoras || []).map(n => [n, n]);
+  const imps = (estado.impresoras || []).map(n => [n, n === estado.predeterminada ? n + ' (predeterminada)' : n]);
   cont.innerHTML = estado.vinculos.map(v => {
-    const e = v.estado;
+    const e = v.estado, i = v.indice, ed = editando[i];
     const chip = v.pausado ? '<span class="chip gris">Pausada</span>' : e.conectado ? '<span class="chip ok">Conectada</span>' : e.error ? `<span class="chip err">${esc(e.error)}</span>` : '<span class="chip gris">Conectando…</span>';
-    const falta = v.impresora && !(estado.impresoras || []).includes(v.impresora) ? `<div class="msg e">La impresora "${esc(v.impresora)}" no está instalada en esta PC.</div>` : '';
-    return `<div class="tarjeta">
-      <div class="tit"><b>${esc(v.nombre || 'Comandera')}</b><span style="color:var(--gris)">${esc(v.local || '')}</span>${chip}</div>
+    const falta = v.impresora && !(estado.impresoras || []).includes(v.impresora) ? `<div class="msg e">La impresora "${esc(v.impresora)}" no está instalada en esta PC. Tocá <b>Cambiar impresora</b> y elegí otra.</div>` : '';
+    const m = mensajes[i] && mensajes[i].hasta > Date.now() ? mensajes[i] : null;
+    const cuerpo = ed ? `
       <div class="fila">
-        <div><label>Impresora de esta PC</label><select data-i="${v.indice}" data-campo="impresora">${opciones(imps, v.impresora)}</select></div>
-        <div><label>Acentos</label><select data-i="${v.indice}" data-campo="codepage">${opciones(CPS, v.codepage)}</select></div>
-      </div>${falta}
+        <div><label for="ed-imp-${i}">Imprimir en</label><select id="ed-imp-${i}" data-i="${i}" data-ed="impresora">${opciones(imps, ed.impresora)}</select></div>
+        <div><label for="ed-cp-${i}">Acentos</label><select id="ed-cp-${i}" data-i="${i}" data-ed="codepage">${opciones(CPS, ed.codepage)}</select></div>
+      </div>
+      <div class="botones">
+        <button class="prim" data-i="${i}" data-accion="guardar-prueba">Guardar e imprimir prueba</button>
+        <button data-i="${i}" data-accion="guardar">Guardar</button>
+        <button data-i="${i}" data-accion="cancelar">Cancelar</button>
+      </div>` : `
+      <div style="font-size:15px">Imprime en <b>${esc(v.impresora || 'ninguna')}</b> <span style="color:var(--gris)">· Acentos ${esc(nombreCP(v.codepage))}</span></div>${falta}
       <div class="cont"><span>Token <b>${esc(v.token)}</b></span><span>Impresas <b>${e.impresos}</b></span>${e.fallidos ? `<span>Con error <b>${e.fallidos}</b></span>` : ''}${e.ultimoOk ? `<span>Última a las <b>${esc(e.ultimoOk)}</b></span>` : ''}</div>
       <div class="botones">
-        <button data-i="${v.indice}" data-accion="prueba">Imprimir prueba</button>
-        <button data-i="${v.indice}" data-accion="${v.pausado ? 'reanudar' : 'pausar'}">${v.pausado ? 'Reanudar' : 'Pausar'}</button>
-        <button class="peligro" data-i="${v.indice}" data-accion="eliminar">Quitar de esta PC</button>
-      </div><div class="msg" id="msg-v${v.indice}"></div></div>`;
+        <button class="prim" data-i="${i}" data-accion="editar">Cambiar impresora</button>
+        <button data-i="${i}" data-accion="prueba">Imprimir prueba</button>
+        <button data-i="${i}" data-accion="${v.pausado ? 'reanudar' : 'pausar'}">${v.pausado ? 'Reanudar' : 'Pausar'}</button>
+        <button class="peligro" data-i="${i}" data-accion="eliminar">Quitar de esta PC</button>
+      </div>`;
+    return `<div class="tarjeta">
+      <div class="tit"><b>${esc(v.nombre || 'Comandera')}</b><span style="color:var(--gris)">${esc(v.local || '')}</span>${chip}</div>
+      ${cuerpo}
+      <div class="msg ${m ? (m.ok ? 'o' : 'e') : ''}" id="msg-v${i}">${m ? esc(m.t) : ''}</div></div>`;
   }).join('');
 }
 
@@ -183,7 +199,7 @@ function pintar() {
     $('inicio').checked = estado.inicio; $('srv').value = estado.servidor;
   }
   if (primera || !$('cap-destino').matches(':focus')) {
-    $('cap-destino').innerHTML = opciones((estado.vinculos || []).map(v => [v.indice, `${v.nombre || 'Comandera'} — ${v.local || ''}`]), estado.capturaIndice, 'Vinculá una comandera primero');
+    $('cap-destino').innerHTML = opciones((estado.vinculos || []).map(v => [v.indice, `${v.nombre || 'Comandera'} — ${v.local || ''}`]), estado.capturaIndice, estado.vinculos?.length ? 'Elegí la comandera' : 'Vinculá una comandera primero');
   }
   primera = false;
   pintarVinculos();
@@ -208,20 +224,32 @@ $('vincular').onclick = async () => {
 };
 $('vinculos').addEventListener('click', async ev => {
   const b = ev.target.closest('button[data-accion]'); if (!b) return;
-  const i = Number(b.dataset.i), accion = b.dataset.accion;
+  const i = Number(b.dataset.i), accion = b.dataset.accion, v = estado.vinculos.find(x => x.indice === i);
+  if (accion === 'editar') { editando[i] = { impresora: v.impresora, codepage: v.codepage }; delete mensajes[i]; pintarVinculos(true); $('ed-imp-' + i)?.focus(); return; }
+  if (accion === 'cancelar') { delete editando[i]; pintarVinculos(true); return; }
   if (accion === 'eliminar' && !confirm('¿Quitar esta comandera de esta PC? Va a dejar de imprimir acá.')) return;
   b.disabled = true;
-  try { await api('/api/vinculo', { indice: i, accion }); if (accion === 'prueba') msg('msg-v' + i, 'Prueba enviada a la impresora.', true); await refrescar(); }
-  catch (e) { msg('msg-v' + i, e.message) }
+  try {
+    if (accion === 'guardar' || accion === 'guardar-prueba') {
+      const ed = editando[i];
+      if (!ed.impresora) throw new Error('Elegí una impresora.');
+      await api('/api/vinculo', { indice: i, accion: 'guardar', impresora: ed.impresora, codepage: Number(ed.codepage) });
+      delete editando[i];
+      await refrescar();
+      if (accion === 'guardar-prueba') await api('/api/vinculo', { indice: i, accion: 'prueba' });
+      msgV(i, `Listo: ahora imprime en "${ed.impresora}".${accion === 'guardar-prueba' ? ' Se mandó una prueba.' : ''}`, true);
+    } else {
+      await api('/api/vinculo', { indice: i, accion });
+      if (accion === 'prueba') msgV(i, `Prueba enviada a "${v.impresora}".`, true);
+      await refrescar();
+    }
+  } catch (e) { msgV(i, e.message) }
   b.disabled = false;
 });
-$('vinculos').addEventListener('change', async ev => {
-  const s = ev.target.closest('select[data-campo]'); if (!s) return;
-  const i = Number(s.dataset.i), v = estado.vinculos.find(x => x.indice === i);
-  const datos = { indice: i, accion: 'guardar', impresora: v.impresora, codepage: v.codepage };
-  datos[s.dataset.campo] = s.dataset.campo === 'codepage' ? Number(s.value) : s.value;
-  s.blur();
-  try { await api('/api/vinculo', datos); msg('msg-v' + i, 'Guardado.', true); await refrescar(); } catch (e) { msg('msg-v' + i, e.message) }
+$('vinculos').addEventListener('change', ev => {
+  const s = ev.target.closest('select[data-ed]'); if (!s) return;
+  const i = Number(s.dataset.i);
+  if (editando[i]) editando[i][s.dataset.ed] = s.dataset.ed === 'codepage' ? Number(s.value) : s.value;
 });
 $('cap-guardar').onclick = async () => {
   try {
