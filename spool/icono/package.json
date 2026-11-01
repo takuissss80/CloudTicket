@@ -1,0 +1,7 @@
+{
+  "name": "cloudticket-icono",
+  "private": true,
+  "type": "module",
+  "description": "Pone el ícono y los datos de versión al .exe (lo usa compilar.sh)",
+  "dependencies": { "pe-library": "^1.0.1", "resedit": "^2.0.3" }
+}

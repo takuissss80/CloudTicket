@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	version            = "1.1.1"
+	version            = "1.2.0"
 	servidorPorDefecto = "https://cloudticket.com.ar"
 )
 
@@ -42,6 +42,7 @@ func main() {
 	}()
 	reiniciarTrabajadores()
 	reiniciarCaptura()
+	iniciarBandeja(url)
 
 	if !*segundoPlano {
 		time.Sleep(300 * time.Millisecond)

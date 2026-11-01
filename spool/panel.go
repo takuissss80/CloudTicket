@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +12,9 @@ import (
 
 //go:embed panel.html
 var panelHTML []byte
+
+//go:embed icono/icono-128.png
+var iconoPNG []byte
 
 const puertoPanel = 7317
 
@@ -90,6 +92,11 @@ func iniciarPanel() (net.Listener, error) {
 		return nil, err
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/icono.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "max-age=86400")
+		_, _ = w.Write(iconoPNG)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
@@ -114,7 +121,7 @@ func iniciarPanel() (net.Listener, error) {
 	api("/api/estado", func(r *http.Request) (any, error) { return estadoPanel(), nil })
 	api("/api/salir", func(r *http.Request) (any, error) {
 		registrar("info", "Programa cerrado desde el panel")
-		go func() { time.Sleep(300 * time.Millisecond); os.Exit(0) }()
+		go func() { time.Sleep(300 * time.Millisecond); salir() }()
 		return map[string]bool{"ok": true}, nil
 	})
 	api("/api/vistas", func(r *http.Request) (any, error) { return ultimasVistas(), nil })

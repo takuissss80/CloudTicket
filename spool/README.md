@@ -7,6 +7,9 @@ que imprime otro programa (GoWin / PedidosYa) para importarlos como pedidos.
 - Un solo `.exe`, sin instalación. Go sin librerías externas.
 - Panel en `http://127.0.0.1:7317` (se abre solo al ejecutarlo). Si ya está abierto,
   ejecutarlo de nuevo solo muestra el panel.
+- **Ícono en la bandeja** (al lado del reloj): clic abre el panel; clic derecho → *Abrir panel* / *Cerrar programa*.
+  Al pasar el mouse dice cuántas comanderas están conectadas. Si el Explorador de Windows se reinicia, el ícono vuelve solo.
+- Ícono del `.exe` y datos de versión: `icono/cloudticket.ico` (todos los tamaños de 16 a 256), se ponen al compilar.
 - Configuración y registro en `%APPDATA%\CloudTicket\` (`config.json`, `registro.txt`).
 
 ## Cómo se conecta
@@ -53,7 +56,7 @@ comanda (canal PedidosYa) con `importar_pedido_externo`.
 ## Compilar
 
 ```sh
-./compilar.sh      # tests + public/descargas/CloudTicketImpresion.exe
+./compilar.sh      # tests + public/descargas/CloudTicketImpresion.exe (con ícono y versión)
 ```
 
 Fuera de Windows compila con impresoras simuladas (guardan los bytes en `%APPDATA%/CloudTicket/impreso`),
