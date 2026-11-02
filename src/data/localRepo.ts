@@ -1,6 +1,6 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
-  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
+  AjusteLocal, Caja, ItemComanda, Pago, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona,
 } from '../types'
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
@@ -1010,3 +1010,87 @@ export function resetDemo() {
 }
 
 export type { Usuario }
+
+/**
+ * Solo demo de la app del celular: inventa un mes de cajas, comandas y gastos
+ * para que los tableros tengan algo para mostrar. No hace nada si ya hay comandas.
+ */
+export async function sembrarHistorialDemo() {
+  await asegurarMenu()
+  const d = db()
+  if (d.comandas.length) return
+  let semilla = 7
+  const rnd = () => { semilla = (semilla * 16807) % 2147483647; return (semilla - 1) / 2147483646 }
+  const elegir = <T,>(l: T[]) => l[Math.floor(rnd() * l.length)]
+  const vendibles = d.productos.filter(p => p.activo && p.tipo === 'producto' && p.precio > 0)
+  const promos = d.productos.filter(p => p.activo && p.tipo === 'promo' && p.precio > 0)
+  const tipos = TIPOS_GASTO_DEMO
+  const formas: Pago['forma'][] = ['efectivo', 'efectivo', 'efectivo', 'mercado_pago', 'transferencia', 'tarjeta']
+  const hoy = new Date()
+  d.movimientos ??= []
+  for (const suc of d.sucursales) {
+    const escala = suc.esPrincipal ? 1 : 0.6
+    for (let back = 34; back >= 0; back--) {
+      const dia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - back)
+      const turnos = back === 0 ? [{ t: 'Noche', h: 19 }] : [{ t: 'Mañana', h: 11 }, { t: 'Noche', h: 19 }]
+      for (const { t, h } of turnos) {
+        const abre = new Date(dia); abre.setHours(h, 2 + Math.floor(rnd() * 20))
+        if (abre > hoy) abre.setTime(hoy.getTime() - 3 * 3600_000)
+        const abierta = back === 0
+        const caja = {
+          id: uid(), sucursalId: suc.id, turno: t, estado: abierta ? 'abierta' as const : 'cerrada' as const,
+          abiertaAt: abre.toISOString(), dineroInicial: 20000, abiertaPor: suc.esPrincipal ? 'principal' : 'benavidez', ultimoNumero: 0,
+        } as ConLocal<Caja & { ultimoNumero: number }>
+        const finde = [0, 5, 6].includes(dia.getDay())
+        const n = Math.round((t === 'Noche' ? 14 : 5) * escala * (finde ? 1.6 : 1) * (0.7 + rnd() * 0.6))
+        const comandasCaja: Comanda[] = []
+        for (let i = 0; i < n; i++) {
+          const creada = new Date(abre.getTime() + (i + rnd()) * (abierta ? 6 : 14) * 60_000)
+          const items: ItemComanda[] = []
+          for (let k = 0, m = 1 + Math.floor(rnd() * 3); k < m; k++) {
+            const p = rnd() < 0.15 && promos.length ? elegir(promos) : elegir(vendibles)
+            const cant = p.nombre.toLowerCase().includes('empanada') ? 3 + Math.floor(rnd() * 9) : 1 + Math.floor(rnd() * 2)
+            items.push({ id: uid(), productoId: p.id, descripcion: p.nombre, cantidad: cant, precioUnit: p.precio, componentes: [] })
+          }
+          const subtotal = items.reduce((s, x) => s + x.precioUnit * x.cantidad, 0)
+          const r = rnd()
+          const canal = r < 0.25 ? 'pedidosya' as const : 'propio' as const
+          const tipo = canal === 'pedidosya' || r < 0.65 ? 'delivery' as const : 'mostrador' as const
+          const envio = tipo === 'delivery' && canal === 'propio' ? 1500 : 0
+          const anulada = rnd() < 0.03
+          const enCurso = abierta && i >= n - 3
+          const total = subtotal + envio
+          const forma = canal === 'pedidosya' ? 'pedidosya' as const : elegir(formas)
+          comandasCaja.push({
+            id: uid(), cajaId: caja.id, numero: i + 1, tipo, estado: anulada ? 'anulada' : enCurso ? 'pendiente' : 'entregado',
+            canal, clienteNombre: tipo === 'mostrador' ? 'Cliente' : undefined, costoEnvio: envio, subtotal, descuento: 0, adicional: 0, total,
+            descuentoCupon: 0, cobrada: !enCurso, pagos: enCurso ? [] : [{ forma, monto: total }], items, createdAt: creada.toISOString(),
+          } as Comanda)
+        }
+        caja.ultimoNumero = n
+        for (const c of comandasCaja) d.comandas.push({ ...c, sucursalId: suc.id })
+        const movs: MovimientoCaja[] = []
+        const mov = (tipo: MovimientoCaja['tipo'], concepto: string, monto: number, tg?: { id: string; nombre: string }) => movs.push({
+          id: uid(), tipo, concepto, monto, tipoGastoId: tg?.id, tipoGastoNombre: tg?.nombre, creadoPor: caja.abiertaPor,
+          createdAt: new Date(abre.getTime() + (1 + rnd() * 4) * 3600_000 * (abierta ? 0.3 : 1)).toISOString(),
+        })
+        if (rnd() < 0.7) { const tg = elegir(tipos); mov('gasto', tg.nombre === 'Motos' ? 'Nafta motos' : tg.nombre, Math.round((3 + rnd() * 30)) * 1000, tg) }
+        if (t === 'Noche' && rnd() < 0.5) mov('egreso', 'Retiro al cofre', Math.round(5 + rnd() * 10) * 10000)
+        if (t === 'Noche' && [1, 15].includes(dia.getDate())) mov('sueldo', 'Quincena cocinero', 250000)
+        if (rnd() < 0.08) mov('ingreso', 'Cambio', 20000)
+        for (const m of movs) d.movimientos.push({ ...m, cajaId: caja.id })
+        if (!abierta) {
+          const t2 = calcularTotales(caja, comandasCaja, movs)
+          const dif = rnd() < 0.6 ? 0 : Math.round((rnd() - 0.55) * 8) * 500
+          Object.assign(caja, {
+            cerradaAt: new Date(abre.getTime() + 5 * 3600_000).toISOString(), cerradaPor: caja.abiertaPor,
+            dineroCierre: t2.efectivoTeorico + dif, diferencia: dif, totales: t2,
+          })
+        }
+        d.cajas.push(caja)
+      }
+    }
+  }
+  guardar()
+}
+

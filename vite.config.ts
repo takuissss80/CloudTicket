@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
+import { fileURLToPath } from 'node:url'
 
 // El programa de impresión de Windows baja de la web la URL de Supabase y la anon key
 // (las dos son públicas, ya están en el JS de la web) desde /spool-config.json
@@ -18,8 +19,13 @@ function spoolConfig(env: Record<string, string>): Plugin {
   }
 }
 
-// `npm run build:demo` genera un único index.html (modo demo, sin Supabase)
+const raiz = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+
+// Dos webs en el mismo build: la de los locales (/) y la app del celular (/movil/)
+// `--mode demo` genera un único index.html (sin Supabase); `--mode demo-movil` lo mismo para la del celular
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), spoolConfig(loadEnv(mode, process.cwd(), 'VITE_')), ...(mode === 'demo' ? [viteSingleFile()] : [])],
-  build: mode === 'demo' ? { outDir: 'dist-demo' } : undefined,
+  plugins: [react(), tailwindcss(), spoolConfig(loadEnv(mode, process.cwd(), 'VITE_')), ...(mode.startsWith('demo') ? [viteSingleFile()] : [])],
+  build: mode === 'demo' ? { outDir: 'dist-demo' }
+    : mode === 'demo-movil' ? { outDir: 'dist-demo-movil', rollupOptions: { input: raiz('./movil/index.html') } }
+    : { rollupOptions: { input: { main: raiz('./index.html'), movil: raiz('./movil/index.html') } } },
 }))

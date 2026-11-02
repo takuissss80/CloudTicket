@@ -106,8 +106,12 @@ const comandaRow = (d: NuevaComanda) => ({
 const SELECT_COMANDA = '*, comanda_items(*), pagos(*), repartidores(nombre)'
 const SELECT_PRODUCTO = '*, recetas(*), promo_fijos!promo_fijos_promo_id_fkey(*), promo_slots(*)'
 
-export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { headers?: Record<string, string> }): Repo & { client: SupabaseClient } {
-  const sb = createClient(url, anonKey, opciones?.headers ? { global: { headers: opciones.headers } } : undefined)
+export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { headers?: Record<string, string>; storageKey?: string }): Repo & { client: SupabaseClient } {
+  // storageKey: la app del celular guarda una sesión aparte por cada cuenta
+  const sb = createClient(url, anonKey, {
+    ...(opciones?.headers ? { global: { headers: opciones.headers } } : {}),
+    ...(opciones?.storageKey ? { auth: { storageKey: opciones.storageKey } } : {}),
+  })
 
   const ok = <T,>(res: { data: T; error: unknown }): T => {
     if (res.error) throw traducirError(res.error)

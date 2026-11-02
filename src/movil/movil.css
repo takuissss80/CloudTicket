@@ -1,0 +1,26 @@
+@import "../index.css";
+
+/* Colores de los gráficos (validados para daltonismo en claro y oscuro) */
+:root {
+  --g-mostrador: #3355cc;
+  --g-pedidosya: #d83c3c;
+  --g-delivery: #e09200;
+  --g-ok: #00a383;
+  --g-curso: #e09200;
+  --g-anulada: #8a93ad;
+  --g-barra: #3355cc;
+}
+:root[data-theme="dark"] {
+  --g-mostrador: #5470ea;
+  --g-pedidosya: #e34a6a;
+  --g-delivery: #c98500;
+  --g-ok: #00a383;
+  --g-curso: #c98500;
+  --g-anulada: #6b7391;
+  --g-barra: #5470ea;
+}
+
+html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+body { padding-bottom: env(safe-area-inset-bottom); }
+.pt-seguro { padding-top: env(safe-area-inset-top); }
+.num { font-variant-numeric: tabular-nums; }
