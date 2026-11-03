@@ -148,3 +148,13 @@ func TestLetraChica(t *testing.T) {
 		t.Fatalf("texto mal extraído: %q", txt)
 	}
 }
+
+func TestLetraAlta(t *testing.T) {
+	out, err := Renderizar(json.RawMessage(`[{"t":"text","text":"Dir: Calle 123","size":"tall"}]`), 48, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte{0x1D, '!', 0x01}) {
+		t.Fatal("la letra alta tiene que mandar GS ! 0x01")
+	}
+}

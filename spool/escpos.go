@@ -13,7 +13,7 @@ import (
 type Linea struct {
 	T      string `json:"t"` // text | line | feed | cut
 	Text   string `json:"text"`
-	Size   string `json:"size"` // small | normal | large | xl
+	Size   string `json:"size"` // small | normal | tall | large | xl
 	Bold   bool   `json:"bold"`
 	Align  string `json:"align"` // left | center | right
 	Invert bool   `json:"invert"`
@@ -107,6 +107,8 @@ func Renderizar(contenido json.RawMessage, ancho, codepage int) ([]byte, error) 
 			}
 			tam := byte(0x00)
 			switch l.Size {
+			case "tall": // doble alto, mismo ancho
+				tam = 0x01
 			case "large":
 				tam = 0x11
 			case "xl":

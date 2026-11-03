@@ -8,7 +8,7 @@ import { coccionLabel, fecha, hora, money, varianteLabel } from './format'
  * traduce a ESC/POS. Así el diseño del ticket vive en un solo lugar
  * (la web) y el spool solo sabe imprimir líneas.
  *
- * Tamaños: 'small' = letra chica (fuente B), 'normal' = 1x, 'large' = doble alto y ancho, 'xl' = triple.
+ * Tamaños: 'small' = letra chica (fuente B), 'normal' = 1x, 'tall' = doble alto (mismo ancho), 'large' = doble alto y ancho, 'xl' = triple.
  * El ancho en caracteres depende de la comandera: 48 (80mm) o 32 (58mm).
  */
 
@@ -25,6 +25,8 @@ export interface OpcionesTicket {
 
 /** Versión mínima del programa que imprime la letra chica (fuente B) */
 export const VERSION_LETRA_CHICA = '1.3.0'
+/** Versión mínima que imprime todos los tamaños (la letra alta llegó en la 1.4.0) */
+export const VERSION_TAMANOS = '1.4.0'
 export function versionAlMenos(v: string | undefined, minima: string) {
   if (!v) return false
   const a = v.split('.').map(Number), b = minima.split('.').map(Number)
@@ -68,16 +70,16 @@ export function partir(texto: string, ancho: number, sangria = ''): string[] {
   return out.length ? out : ['']
 }
 
-type Tam = 'small' | 'normal' | 'large' | 'xl'
+type Tam = 'small' | 'normal' | 'tall' | 'large' | 'xl'
 
 /** Tamaño de cada parte del ticket según el formato elegido para la comandera */
 export const FORMATOS: Record<FormatoTicket, {
   nombre: string; descripcion: string
-  titulo: Tam; tipo: Tam; cliente: Tam; item: Tam; detalle: Tam; total: Tam; avance: number
+  titulo: Tam; tipo: Tam; cliente: Tam; direccion: Tam; item: Tam; detalle: Tam; total: Tam; avance: number
 }> = {
-  chico: { nombre: 'Chico', descripcion: 'Productos en letra chica. Ahorra papel.', titulo: 'large', tipo: 'normal', cliente: 'normal', item: 'small', detalle: 'small', total: 'normal', avance: 2 },
-  normal: { nombre: 'Normal', descripcion: 'Título y cliente grandes, productos en letra normal.', titulo: 'xl', tipo: 'large', cliente: 'large', item: 'normal', detalle: 'normal', total: 'large', avance: 3 },
-  grande: { nombre: 'Grande', descripcion: 'Productos con letra doble. Para leer de lejos en la cocina.', titulo: 'xl', tipo: 'large', cliente: 'large', item: 'large', detalle: 'large', total: 'large', avance: 4 },
+  chico: { nombre: 'Chico', descripcion: 'Productos en letra chica. Ahorra papel.', titulo: 'large', tipo: 'normal', cliente: 'normal', direccion: 'normal', item: 'small', detalle: 'small', total: 'normal', avance: 2 },
+  normal: { nombre: 'Normal', descripcion: 'Productos y dirección en letra alta, fácil de leer.', titulo: 'xl', tipo: 'large', cliente: 'large', direccion: 'tall', item: 'tall', detalle: 'tall', total: 'large', avance: 3 },
+  grande: { nombre: 'Grande', descripcion: 'Productos y dirección con letra doble. Para leer de lejos en la cocina.', titulo: 'xl', tipo: 'large', cliente: 'large', direccion: 'large', item: 'large', detalle: 'large', total: 'large', avance: 4 },
 }
 
 const txt = (text: string, extra: Partial<Extract<LineaTicket, { t: 'text' }>> = {}): LineaTicket =>
@@ -113,8 +115,8 @@ export function construirTicket(c: Comanda, o: OpcionesTicket): LineaTicket[] {
   // ---- Cliente
   if (c.clienteNombre) linea(c.clienteNombre, F.cliente, { bold: true })
   if (c.tipo === 'delivery') {
-    if (c.direccion) linea(`Dir: ${c.direccion}`, 'normal', { bold: true })
-    if (c.entreCalles) linea(`Entre: ${c.entreCalles}`, 'normal')
+    if (c.direccion) linea(`Dir: ${c.direccion}`, F.direccion, { bold: true })
+    if (c.entreCalles) linea(`Entre: ${c.entreCalles}`, F.direccion)
     const zona = o.zonas?.find(z => z.id === c.zonaId)
     if (zona) linea(`Zona: ${zona.nombre}`, 'normal')
   }

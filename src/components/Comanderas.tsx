@@ -3,7 +3,7 @@ import type { FormatoTicket, Impresora } from '../types'
 import { repo } from '../data'
 import { mensajeError, useApp } from '../store/app'
 import { hora } from '../lib/format'
-import { comandaEjemplo, construirTicket, FORMATOS, versionAlMenos, VERSION_LETRA_CHICA } from '../lib/ticket'
+import { comandaEjemplo, construirTicket, FORMATOS, versionAlMenos, VERSION_TAMANOS } from '../lib/ticket'
 import { TicketPreview } from './TicketPreview'
 import { Btn, Campo, Confirmar, Modal, inputCls } from './ui'
 
@@ -195,9 +195,9 @@ function EditorComandera({ inicial, onClose, onGuardar }: {
               ))}
             </div>
           </div>
-          {formato === 'chico' && inicial.versionPrograma && !versionAlMenos(inicial.versionPrograma, VERSION_LETRA_CHICA) && (
+          {inicial.versionPrograma && !versionAlMenos(inicial.versionPrograma, VERSION_TAMANOS) && (
             <p className="rounded-lg bg-muzza-claro p-3 text-sm">
-              Esta PC tiene el programa {inicial.versionPrograma}: hasta que lo actualices (botón <b>Descargar programa</b>), los productos salen en letra normal.
+              Esta PC tiene el programa {inicial.versionPrograma}: hasta que lo actualices (botón <b>Descargar programa</b>), los productos y la dirección no van a salir con este tamaño.
             </p>
           )}
           {marca(precios, setPrecios, 'Imprimir precios y totales (desactivalo para la comandera de cocina)')}
