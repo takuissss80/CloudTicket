@@ -16,11 +16,12 @@ export type Pestana = 'menu' | 'caja' | 'stock' | 'ingredientes' | 'repartidores
 export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => void; inicial?: Pestana }) {
   const sesion = useApp(s => s.sesion)
   const esAdmin = sesion?.rol === 'admin'
-  const [pestana, setPestana] = useState<Pestana>(inicial)
+  const esEncargado = !!sesion?.puedeDescontar
+  const [pestana, setPestana] = useState<Pestana>(inicial === 'menu' && !esEncargado ? 'caja' : inicial)
 
   const pestanas: { key: Pestana; label: string }[] = esAdmin
     ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'delivery', label: 'Delivery' }, { key: 'cupones', label: 'Cupones' }, { key: 'impresion', label: 'Impresión' }, { key: 'locales', label: 'Locales y usuarios' }]
-    : [{ key: 'menu', label: 'Menú del local' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }]
+    : [...(esEncargado ? [{ key: 'menu' as const, label: 'Menú del local' }] : []), { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }]
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
@@ -39,7 +40,7 @@ export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => v
         )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {pestana === 'menu' && <MenuAdmin />}
+        {pestana === 'menu' && esEncargado && <MenuAdmin />}
         {pestana === 'caja' && <CajasAdmin />}
         {pestana === 'stock' && <Stock />}
         {pestana === 'ingredientes' && esAdmin && <Ingredientes />}

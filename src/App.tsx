@@ -59,6 +59,8 @@ function Principal({ onSalir }: { onSalir: () => void }) {
 
   const conError = printJobs.filter(j => j.estado === 'error').length
   const esAdmin = sesion?.rol === 'admin'
+  // Encargado o admin: reportes y menú. El usuario común solo opera.
+  const esEncargado = !!sesion?.puedeDescontar
   const erroresPY = (pedidosExternos ?? []).filter(p => p.estado === 'error').length
   const local = sucursales.find(s => s.id === sucursalId)
 
@@ -89,8 +91,8 @@ function Principal({ onSalir }: { onSalir: () => void }) {
                 PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
               </Btn>
             )}
-            <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>
-            <Btn onClick={() => setVerAdmin('menu')}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
+            {esEncargado && <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>}
+            <Btn onClick={() => setVerAdmin(esEncargado ? 'menu' : 'caja')}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
             {conError > 0 && (
               <button onClick={() => setVerAdmin('impresion')} className="h-10 rounded-lg bg-tomate px-3 font-semibold text-white">
                 Impresión: {conError} con error
@@ -109,7 +111,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
 
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion inicial={verAdmin} onClose={() => setVerAdmin(null)} />}
-      {verReportes && <Reportes onClose={() => setVerReportes(false)} />}
+      {verReportes && esEncargado && <Reportes onClose={() => setVerReportes(false)} />}
       {verPY && <PedidosYa onClose={() => setVerPY(false)} />}
       {verCierre && <CajaPanel onClose={() => setVerCierre(false)} />}
       {verReset && (

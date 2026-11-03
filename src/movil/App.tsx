@@ -54,6 +54,9 @@ export default function App() {
     return <Login onCancelar={reingresar && cuentas.length > 1 ? cancelarReingreso : undefined} />
   }
 
+  // La app del celular es para ver números: solo admin y encargados
+  if (!sesion.puedeDescontar) return <SinPermiso />
+
   const titulo = MENU.find(m => m.key === pantalla)!.label
 
   return (
@@ -110,6 +113,30 @@ export default function App() {
           </button>
         </div>
       </nav>
+    </div>
+  )
+}
+
+function SinPermiso() {
+  const { sesion, activaId, cuentas, quitar, cambiar } = useCuentas()
+  const otra = cuentas.find(c => c.id !== activaId)
+  return (
+    <div className="pt-seguro flex min-h-full flex-col items-center justify-center bg-harina px-6 text-center">
+      <Logo className="size-16" />
+      <h1 className="mt-3 font-cond text-[26px] font-bold text-tinta">Tu usuario no tiene acceso</h1>
+      <p className="mt-2 max-w-xs text-[15px] text-gris">
+        <b>{sesion?.usuario}</b> es un usuario común: puede tomar pedidos en la web, pero los números del negocio solo los ven el administrador y los encargados.
+      </p>
+      <div className="mt-6 w-full max-w-xs space-y-2">
+        {otra && (
+          <button type="button" onClick={() => void cambiar(otra.id)} className="h-12 w-full rounded-xl border border-linea bg-superficie text-[16px] font-semibold text-tinta">
+            Usar {otra.nombre} ({otra.usuario})
+          </button>
+        )}
+        <button type="button" onClick={() => activaId && void quitar(activaId)} className="h-12 w-full rounded-xl bg-primario text-[16px] font-bold text-sobre-primario">
+          Entrar con otro usuario
+        </button>
+      </div>
     </div>
   )
 }
