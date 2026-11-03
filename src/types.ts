@@ -314,7 +314,7 @@ export interface Impresora {
 }
 
 export type LineaTicket =
-  | { t: 'text'; text: string; size?: 'normal' | 'large' | 'xl'; bold?: boolean; align?: 'left' | 'center' | 'right'; invert?: boolean }
+  | { t: 'text'; text: string; size?: 'small' | 'normal' | 'large' | 'xl'; bold?: boolean; align?: 'left' | 'center' | 'right'; invert?: boolean }
   | { t: 'line'; char?: string }
   | { t: 'feed'; n: number }
   | { t: 'cut' }

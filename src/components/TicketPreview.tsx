@@ -12,7 +12,7 @@ export function TicketPreview({ lineas, ancho = 48 }: { lineas: LineaTicket[]; a
           if (l.t === 'line') return <div key={i} className="overflow-hidden whitespace-pre">{(l.char ?? '-').repeat(ancho)}</div>
           if (l.t === 'feed') return <div key={i} style={{ height: `${l.n * 0.6}em` }} />
           if (l.t === 'cut') return <div key={i} className="mt-1 border-t-2 border-dashed border-black/30 pt-1 text-center text-[10px] text-black/40">corte</div>
-          const escala = l.size === 'xl' ? 3 : l.size === 'large' ? 2 : 1
+          const escala = l.size === 'xl' ? 3 : l.size === 'large' ? 2 : l.size === 'small' ? 6 / 7 : 1
           return (
             <div
               key={i}

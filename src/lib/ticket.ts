@@ -8,7 +8,7 @@ import { coccionLabel, fecha, hora, money, varianteLabel } from './format'
  * traduce a ESC/POS. Así el diseño del ticket vive en un solo lugar
  * (la web) y el spool solo sabe imprimir líneas.
  *
- * Tamaños: 'normal' = 1x, 'large' = doble alto y ancho, 'xl' = triple.
+ * Tamaños: 'small' = letra chica (fuente B), 'normal' = 1x, 'large' = doble alto y ancho, 'xl' = triple.
  * El ancho en caracteres depende de la comandera: 48 (80mm) o 32 (58mm).
  */
 
@@ -19,10 +19,22 @@ export interface OpcionesTicket {
   mostrarPrecios?: boolean
   zonas?: Zona[]
   nombreLocal?: string
+  /** El programa de Windows sabe imprimir letra chica (desde la versión 1.3.0) */
+  letraChica?: boolean
 }
 
-const anchoPara = (ancho: number, size?: 'normal' | 'large' | 'xl') =>
-  size === 'large' ? Math.floor(ancho / 2) : size === 'xl' ? Math.floor(ancho / 3) : ancho
+/** Versión mínima del programa que imprime la letra chica (fuente B) */
+export const VERSION_LETRA_CHICA = '1.3.0'
+export function versionAlMenos(v: string | undefined, minima: string) {
+  if (!v) return false
+  const a = v.split('.').map(Number), b = minima.split('.').map(Number)
+  for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0) }
+  return true
+}
+
+// Letra chica (fuente B, 9 puntos): 56 caracteres en 80 mm y 37 en 58 mm (con margen para cabezales de 512 puntos)
+const anchoPara = (ancho: number, size?: Tam) =>
+  size === 'small' ? Math.floor((ancho * 7) / 6) : size === 'large' ? Math.floor(ancho / 2) : size === 'xl' ? Math.floor(ancho / 3) : ancho
 
 /** Texto a la izquierda y a la derecha en la misma línea */
 export function dosColumnas(izq: string, der: string, ancho: number) {
@@ -56,14 +68,14 @@ export function partir(texto: string, ancho: number, sangria = ''): string[] {
   return out.length ? out : ['']
 }
 
-type Tam = 'normal' | 'large' | 'xl'
+type Tam = 'small' | 'normal' | 'large' | 'xl'
 
 /** Tamaño de cada parte del ticket según el formato elegido para la comandera */
 export const FORMATOS: Record<FormatoTicket, {
   nombre: string; descripcion: string
   titulo: Tam; tipo: Tam; cliente: Tam; item: Tam; detalle: Tam; total: Tam; avance: number
 }> = {
-  chico: { nombre: 'Chico', descripcion: 'Letra normal en todo. Ahorra papel.', titulo: 'large', tipo: 'normal', cliente: 'normal', item: 'normal', detalle: 'normal', total: 'normal', avance: 2 },
+  chico: { nombre: 'Chico', descripcion: 'Productos en letra chica. Ahorra papel.', titulo: 'large', tipo: 'normal', cliente: 'normal', item: 'small', detalle: 'small', total: 'normal', avance: 2 },
   normal: { nombre: 'Normal', descripcion: 'Título y cliente grandes, productos en letra normal.', titulo: 'xl', tipo: 'large', cliente: 'large', item: 'normal', detalle: 'normal', total: 'large', avance: 3 },
   grande: { nombre: 'Grande', descripcion: 'Productos con letra doble. Para leer de lejos en la cocina.', titulo: 'xl', tipo: 'large', cliente: 'large', item: 'large', detalle: 'large', total: 'large', avance: 4 },
 }
@@ -73,7 +85,11 @@ const txt = (text: string, extra: Partial<Extract<LineaTicket, { t: 'text' }>> =
 
 export function construirTicket(c: Comanda, o: OpcionesTicket): LineaTicket[] {
   const W = o.ancho
-  const F = FORMATOS[o.formato ?? 'normal']
+  const base = FORMATOS[o.formato ?? 'normal']
+  // Con un programa viejo que no conoce la letra chica, se imprime en normal
+  const F = o.letraChica === false
+    ? Object.fromEntries(Object.entries(base).map(([k, v]) => [k, v === 'small' ? 'normal' : v])) as typeof base
+    : base
   const L: LineaTicket[] = []
   const precios = o.mostrarPrecios ?? true
   /** Agrega un texto partido al ancho que permite su tamaño */
@@ -180,7 +196,7 @@ export function jobsParaComanda(c: Comanda, impresoras: Impresora[], tipo: TipoP
       comandaId: c.id,
       tipo,
       copias: i.copias,
-      contenido: construirTicket(c, { ...extra, ancho: i.ancho, tipo, formato: i.formato, mostrarPrecios: i.mostrarPrecios }),
+      contenido: construirTicket(c, { ...extra, ancho: i.ancho, tipo, formato: i.formato, mostrarPrecios: i.mostrarPrecios, letraChica: versionAlMenos(i.versionPrograma, VERSION_LETRA_CHICA) }),
     }))
 }
 
@@ -188,6 +204,7 @@ export function jobsParaComanda(c: Comanda, impresoras: Impresora[], tipo: TipoP
 export function ticketPrueba(impresora: Impresora, nombreLocal?: string): LineaTicket[] {
   return construirTicket(comandaEjemplo(), {
     ancho: impresora.ancho, tipo: 'prueba', formato: impresora.formato, mostrarPrecios: impresora.mostrarPrecios,
+    letraChica: !impresora.versionPrograma || versionAlMenos(impresora.versionPrograma, VERSION_LETRA_CHICA),
     nombreLocal: nombreLocal ?? impresora.nombre,
   })
 }

@@ -27,6 +27,8 @@ type LineaVista struct {
 type TicketVista struct {
 	Hora      string       `json:"hora"`
 	Documento string       `json:"documento"`
+	Impresora string       `json:"impresora"`
+	Error     string       `json:"error,omitempty"`
 	Bytes     int          `json:"bytes"`
 	Lineas    []LineaVista `json:"lineas"`
 	Imagen    bool         `json:"imagen,omitempty"`
@@ -37,9 +39,12 @@ var (
 	vistas  []TicketVista
 )
 
-func guardarVista(documento string, datos []byte) {
+func guardarVista(impresora, documento string, datos []byte, errImpresion error) {
 	lineas, img := RenderizarVista(datos)
-	t := TicketVista{Hora: time.Now().Format("15:04:05"), Documento: documento, Bytes: len(datos), Lineas: lineas, Imagen: img}
+	t := TicketVista{Hora: time.Now().Format("15:04:05"), Documento: documento, Impresora: impresora, Bytes: len(datos), Lineas: lineas, Imagen: img}
+	if errImpresion != nil {
+		t.Error = errImpresion.Error()
+	}
 	vistaMu.Lock()
 	vistas = append([]TicketVista{t}, vistas...)
 	if len(vistas) > 30 {
@@ -62,13 +67,28 @@ func ListarImpresoras() ([]string, string, error) {
 	return append([]string{nombreVistaPrevia}, l...), pred, err
 }
 
-// ImprimirRAW: a la impresora de Windows, o a la vista previa
+// EsImpresoraDeArchivos: impresoras de Windows que generan archivos (PDF, XPS…).
+// No entienden ESC/POS: si se les manda, sale un archivo roto.
+func EsImpresoraDeArchivos(nombre string) bool {
+	n := strings.ToLower(nombre)
+	for _, p := range []string{"pdf", "xps", "onenote", "fax", "send to", "enviar a", "document writer"} {
+		if strings.Contains(n, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// ImprimirRAW: a la impresora de Windows (o solo a la pantalla si es la vista previa o
+// una impresora de archivos). Siempre queda una copia para ver en el panel.
 func ImprimirRAW(impresora, documento string, datos []byte) error {
-	if impresora == nombreVistaPrevia {
-		guardarVista(documento, datos)
+	if impresora == nombreVistaPrevia || EsImpresoraDeArchivos(impresora) {
+		guardarVista(impresora, documento, datos, nil)
 		return nil
 	}
-	return imprimirRAWSO(impresora, documento, datos)
+	err := imprimirRAWSO(impresora, documento, datos)
+	guardarVista(impresora, documento, datos, err)
+	return err
 }
 
 // RenderizarVista interpreta ESC/POS como lo haría una comandera de 80 mm

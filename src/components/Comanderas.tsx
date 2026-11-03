@@ -3,12 +3,25 @@ import type { FormatoTicket, Impresora } from '../types'
 import { repo } from '../data'
 import { mensajeError, useApp } from '../store/app'
 import { hora } from '../lib/format'
-import { comandaEjemplo, construirTicket, FORMATOS } from '../lib/ticket'
+import { comandaEjemplo, construirTicket, FORMATOS, versionAlMenos, VERSION_LETRA_CHICA } from '../lib/ticket'
 import { TicketPreview } from './TicketPreview'
 import { Btn, Campo, Confirmar, Modal, inputCls } from './ui'
 
 const URL_PROGRAMA = '/descargas/CloudTicketImpresion.exe'
-const conectada = (i: Impresora) => !!i.ultimoPing && Date.now() - new Date(i.ultimoPing).getTime() < 90_000
+/**
+ * Verde si el programa avisó que está vivo en el último minuto y medio (avisa cada 30 s).
+ * Si se lo ve avisar mientras la pantalla está abierta, se usa eso y no la hora de la PC,
+ * así un reloj de Windows corrido no la pinta de amarillo estando conectada.
+ */
+const pings = new Map<string, { ping: string; cambio: number | null }>()
+function conectada(i: Impresora) {
+  if (!i.ultimoPing) return false
+  const prev = pings.get(i.id)
+  if (!prev) pings.set(i.id, { ping: i.ultimoPing, cambio: null })
+  else if (prev.ping !== i.ultimoPing) pings.set(i.id, { ping: i.ultimoPing, cambio: Date.now() })
+  const cambio = pings.get(i.id)!.cambio
+  return Date.now() - (cambio ?? new Date(i.ultimoPing).getTime()) < 90_000
+}
 
 /** Comanderas del local: alta, token para el programa de Windows y estado */
 export function Comanderas() {
@@ -182,6 +195,11 @@ function EditorComandera({ inicial, onClose, onGuardar }: {
               ))}
             </div>
           </div>
+          {formato === 'chico' && inicial.versionPrograma && !versionAlMenos(inicial.versionPrograma, VERSION_LETRA_CHICA) && (
+            <p className="rounded-lg bg-muzza-claro p-3 text-sm">
+              Esta PC tiene el programa {inicial.versionPrograma}: hasta que lo actualices (botón <b>Descargar programa</b>), los productos salen en letra normal.
+            </p>
+          )}
           {marca(precios, setPrecios, 'Imprimir precios y totales (desactivalo para la comandera de cocina)')}
           <p className="text-sm text-gris">La vista previa usa una comanda de ejemplo. Con <b>Imprimir prueba</b> sale esta misma comanda por la comandera.</p>
         </div>

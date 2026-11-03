@@ -134,3 +134,17 @@ func TestVistaPrevia(t *testing.T) {
 		t.Error("la impresora virtual no guardó el ticket")
 	}
 }
+
+func TestLetraChica(t *testing.T) {
+	out, err := Renderizar(json.RawMessage(`[{"t":"text","text":"1x Muzza","size":"small"},{"t":"text","text":"Total"}]`), 48, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte{0x1B, 'M', 1}) || !bytes.Contains(out, []byte{0x1B, 'M', 0}) {
+		t.Fatal("la letra chica tiene que activar y desactivar la fuente B")
+	}
+	txt, _, _ := ExtraerTexto(out)
+	if !strings.Contains(txt, "1x Muzza") || !strings.Contains(txt, "Total") {
+		t.Fatalf("texto mal extraído: %q", txt)
+	}
+}

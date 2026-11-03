@@ -48,6 +48,7 @@ type vinculoVista struct {
 	Local     string        `json:"local"`
 	Ancho     int           `json:"ancho"`
 	Pausado   bool          `json:"pausado"`
+	Archivos  bool          `json:"archivos"` // impresora de archivos (PDF…): solo se ve en pantalla
 	Estado    EstadoVinculo `json:"estado"`
 }
 
@@ -60,7 +61,7 @@ func estadoPanel() map[string]any {
 	}
 	var vs []vinculoVista
 	for i, v := range c.Vinculos {
-		vs = append(vs, vinculoVista{i, tokenCorto(v.Token), v.Impresora, v.CodePage, v.Nombre, v.Local, v.Ancho, v.Desactivar, copiaEstado(v.Token)})
+		vs = append(vs, vinculoVista{i, tokenCorto(v.Token), v.Impresora, v.CodePage, v.Nombre, v.Local, v.Ancho, v.Desactivar, EsImpresoraDeArchivos(v.Impresora), copiaEstado(v.Token)})
 	}
 	capMu.Lock()
 	ce := capEstado

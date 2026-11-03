@@ -66,6 +66,13 @@
   </section>
 
   <section>
+    <h2>Lo último que se imprimió</h2>
+    <p class="ayuda">Así salen en el papel de 80 mm. Para probar sin comandera, en <b>Cambiar impresora</b> elegí <b>★ Vista previa en pantalla</b>: se ven acá y no se imprime nada.</p>
+    <div class="botones" style="margin-top:0"><button id="vista-limpiar">Limpiar</button></div>
+    <div class="papeles" id="papeles"><p class="ayuda" style="margin:8px 0">Todavía no se imprimió nada desde que se abrió el programa.</p></div>
+  </section>
+
+  <section>
     <h2>Vincular una comandera</h2>
     <p class="ayuda">En la web: <b>Administración → Impresión</b> → en la comandera tocá <b>Generar token</b>, copialo y pegalo acá.</p>
     <div class="fila">
@@ -108,12 +115,6 @@
     <details style="margin-top:8px"><summary>Último ticket capturado</summary><pre id="ultimo">Todavía no llegó ninguno.</pre></details>
   </section>
 
-  <section>
-    <h2>Vista previa en pantalla</h2>
-    <p class="ayuda">Para probar sin comandera: en la comandera de arriba elegí la impresora <b>★ Vista previa en pantalla</b>. Las comandas aparecen acá tal como salen en el papel de 80 mm (no se imprime nada).</p>
-    <div class="botones" style="margin-top:0"><button id="vista-limpiar">Limpiar</button></div>
-    <div class="papeles" id="papeles"><p class="ayuda" style="margin:8px 0">Todavía no llegó nada a la vista previa.</p></div>
-  </section>
 
   <section>
     <h2>Opciones</h2>
@@ -176,6 +177,7 @@ function pintarVinculos(forzar) {
         <button data-i="${i}" data-accion="cancelar">Cancelar</button>
       </div>` : `
       <div style="font-size:15px">Imprime en <b>${esc(v.impresora || 'ninguna')}</b> <span style="color:var(--gris)">· Acentos ${esc(nombreCP(v.codepage))}</span></div>${falta}
+      ${v.archivos ? `<div class="msg" style="color:var(--gris);font-weight:500">"${esc(v.impresora)}" no imprime comandas (es para archivos): se muestran abajo, en <b>Lo último que se imprimió</b>.</div>` : ''}
       <div class="cont"><span>Token <b>${esc(v.token)}</b></span><span>Impresas <b>${e.impresos}</b></span>${e.fallidos ? `<span>Con error <b>${e.fallidos}</b></span>` : ''}${e.ultimoOk ? `<span>Última a las <b>${esc(e.ultimoOk)}</b></span>` : ''}</div>
       <div class="botones">
         <button class="prim" data-i="${i}" data-accion="editar">Cambiar impresora</button>
@@ -273,9 +275,9 @@ $('srv-guardar').onclick = async () => { try { await api('/api/servidor', { serv
 let firmaVistas = '';
 async function refrescarVistas() {
   let v; try { v = await api('/api/vistas'); } catch { return; }
-  const firma = v.map(t => t.hora + t.bytes).join('|'); if (firma === firmaVistas) return; firmaVistas = firma;
-  if (!v.length) { $('papeles').innerHTML = '<p class="ayuda" style="margin:8px 0">Todavía no llegó nada a la vista previa.</p>'; return; }
-  $('papeles').innerHTML = v.map(t => `<div><div class="papel-cab">${esc(t.hora)} · ${esc(t.documento)}</div><div class="papel">` +
+  const firma = v.map(t => t.hora + t.bytes + t.impresora).join('|'); if (firma === firmaVistas) return; firmaVistas = firma;
+  if (!v.length) { $('papeles').innerHTML = '<p class="ayuda" style="margin:8px 0">Todavía no se imprimió nada desde que se abrió el programa.</p>'; return; }
+  $('papeles').innerHTML = v.map(t => `<div><div class="papel-cab">${esc(t.hora)} · ${esc(t.documento.replace('CloudTicket ', ''))} → ${esc(t.impresora.startsWith('★') ? 'solo pantalla' : t.impresora)}${t.error ? ` · <b style="color:var(--rojo)">no se pudo imprimir</b>` : ''}</div><div class="papel">` +
     (t.imagen ? '<div class="ln">[el ticket es una imagen]</div>' : '') +
     t.lineas.map(l => l.corte ? '<div class="corte"></div>' :
       `<div class="ln" style="text-align:${l.a || 'left'}">` + (l.s || []).map(sg => {

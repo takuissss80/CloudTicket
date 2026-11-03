@@ -13,7 +13,7 @@ import (
 type Linea struct {
 	T      string `json:"t"` // text | line | feed | cut
 	Text   string `json:"text"`
-	Size   string `json:"size"` // normal | large | xl
+	Size   string `json:"size"` // small | normal | large | xl
 	Bold   bool   `json:"bold"`
 	Align  string `json:"align"` // left | center | right
 	Invert bool   `json:"invert"`
@@ -113,6 +113,9 @@ func Renderizar(contenido json.RawMessage, ancho, codepage int) ([]byte, error) 
 				tam = 0x22
 			}
 			b.Write([]byte{esc, 'a', al, gs, '!', tam})
+			if l.Size == "small" {
+				b.Write([]byte{esc, 'M', 1}) // fuente B (letra chica)
+			}
 			if l.Bold {
 				b.Write([]byte{esc, 'E', 1})
 			}
@@ -125,6 +128,9 @@ func Renderizar(contenido json.RawMessage, ancho, codepage int) ([]byte, error) 
 			}
 			if l.Bold {
 				b.Write([]byte{esc, 'E', 0})
+			}
+			if l.Size == "small" {
+				b.Write([]byte{esc, 'M', 0})
 			}
 			b.Write([]byte{gs, '!', 0, esc, 'a', 0, '\n'})
 		case "line":
