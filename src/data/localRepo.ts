@@ -434,6 +434,18 @@ export const localRepo: Repo = {
     return clon(nueva)
   },
 
+  async actualizarProductos(cambios) {
+    const d = db()
+    for (const c of cambios) {
+      const p = d.productos.find(x => x.id === c.id)
+      if (!p) continue
+      puedeEditarProducto(p.sucursalId)
+      Object.assign(p, { precio: c.precio, precioMitad: c.precioMitad, activo: c.activo })
+    }
+    guardar('menu')
+    await pausa(null)
+  },
+
   async guardarProducto(p) {
     puedeEditarProducto(p.sucursalId)
     const d = db()

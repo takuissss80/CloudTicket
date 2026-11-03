@@ -39,6 +39,8 @@ export type EstadoSesion =
   | { estado: 'sin_cuenta'; email: string }   // logueado, pero todavía no creó su cuenta
   | { estado: 'ok'; sesion: Sesion }
 
+export interface CambioProducto { id: string; precio: number; precioMitad?: number; activo: boolean }
+
 export type ProductoEdicion = Omit<Producto, 'id' | 'agotado'> & { id?: string }
 export type CategoriaEdicion = Omit<Categoria, 'id'> & { id?: string }
 export type IngredienteEdicion = Omit<Ingrediente, 'id'> & { id?: string }
@@ -90,6 +92,8 @@ export interface Repo {
   getMenu(sucursalId: string | null): Promise<MenuData>
   guardarCategoria(c: CategoriaEdicion): Promise<Categoria>
   guardarProducto(p: ProductoEdicion): Promise<Producto>
+  /** Cambia precio, precio mitad y activo de varios productos a la vez (no toca recetas) */
+  actualizarProductos(cambios: CambioProducto[]): Promise<void>
   guardarAjuste(sucursalId: string, a: AjusteLocal): Promise<void>
   quitarAjuste(sucursalId: string, productoId: string): Promise<void>
   aumentarPrecios(categoriaId: string, porcentaje: number, sucursalId: string | null, redondeo: number): Promise<number>

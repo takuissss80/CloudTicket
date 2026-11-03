@@ -33,6 +33,10 @@ export function MenuAdmin() {
   const [catEdit, setCatEdit] = useState<Categoria | 'nueva' | null>(null)
   const [verAumento, setVerAumento] = useState(false)
   const [importando, setImportando] = useState('')
+  // Edición de varios precios a la vez: cambios pendientes por producto (sobreviven al cambiar de categoría)
+  const [masivo, setMasivo] = useState(false)
+  const [borrador, setBorrador] = useState<Record<string, { precio: string; mitad: string; activo: boolean }>>({})
+  const [guardandoMasivo, setGuardandoMasivo] = useState(false)
 
   const cargar = useCallback(async () => {
     try {
@@ -68,6 +72,35 @@ export function MenuAdmin() {
       else await repo.guardarAjuste(vista, nuevo)
       await despuesDeGuardar()
     } catch (e) { avisar(mensajeError(e), 'error') }
+  }
+
+  const valorBorrador = (p: Producto) => borrador[p.id] ?? { precio: String(p.precio), mitad: p.precioMitad != null ? String(p.precioMitad) : '', activo: p.activo }
+  const cambiarBorrador = (p: Producto, c: Partial<{ precio: string; mitad: string; activo: boolean }>) =>
+    setBorrador(b => ({ ...b, [p.id]: { ...valorBorrador(p), ...c } }))
+  const cambiosMasivos = (menu?.productos ?? []).flatMap(p => {
+    const b = borrador[p.id]
+    if (!b) return []
+    const precio = numero(b.precio) ?? 0
+    const precioMitad = p.precioMitad != null || b.mitad.trim() ? numero(b.mitad) : undefined
+    if (precio === p.precio && precioMitad === p.precioMitad && b.activo === p.activo) return []
+    return [{ id: p.id, precio, precioMitad, activo: b.activo }]
+  })
+  const salirMasivo = () => { setMasivo(false); setBorrador({}) }
+  const guardarMasivo = async () => {
+    setGuardandoMasivo(true)
+    try {
+      await repo.actualizarProductos(cambiosMasivos)
+      avisar(`${cambiosMasivos.length} producto${cambiosMasivos.length === 1 ? '' : 's'} actualizado${cambiosMasivos.length === 1 ? '' : 's'}`)
+      salirMasivo()
+      await despuesDeGuardar()
+    } catch (e) { avisar(mensajeError(e), 'error') } finally { setGuardandoMasivo(false) }
+  }
+  /** Enter pasa al próximo precio, como en una planilla */
+  const siguiente = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const todos = [...document.querySelectorAll<HTMLInputElement>('input[data-masivo]')]
+    todos[todos.indexOf(e.currentTarget) + 1]?.focus()
   }
 
   const cargarEjemplo = async () => {
@@ -138,7 +171,8 @@ export function MenuAdmin() {
               <h2 className="mr-auto font-cond text-3xl font-bold">{busqueda ? 'Resultados' : cat?.nombre}</h2>
               <input id="menu-buscar" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar en todo el menú" className={`${inputBase} h-10 w-56`} />
               {cat && !busqueda && puedeEditar(cat) && <Btn onClick={() => setCatEdit(cat)}>Editar categoría</Btn>}
-              {cat && !busqueda && <Btn onClick={() => setVerAumento(true)}>Aumentar precios</Btn>}
+              {cat && !busqueda && !masivo && <Btn onClick={() => setVerAumento(true)}>Aumentar precios</Btn>}
+              {!masivo && productos.some(puedeEditar) && <Btn onClick={() => setMasivo(true)}>Editar precios</Btn>}
               <Btn tono="albahaca" onClick={() => setEditando('nuevo')}>+ Nuevo producto{enLocal ? ' propio' : ''}</Btn>
             </div>
 
@@ -181,7 +215,24 @@ export function MenuAdmin() {
                           </td>
                         )}
                         <td className="px-3 py-2.5 text-right tabular-nums">
-                          {enLocal && !propio ? (
+                          {masivo && puedeEditar(p) ? (() => {
+                            const b = valorBorrador(p)
+                            const tocado = (v: string, orig?: number) => (numero(v) ?? (orig == null ? undefined : 0)) !== orig
+                            const cls = (t: boolean) => `h-9 rounded-lg border px-2 text-right tabular-nums outline-none focus:border-pizarra ${t ? 'border-muzza bg-muzza-claro font-semibold' : 'border-linea bg-superficie'}`
+                            return (
+                              <div className="flex flex-col items-end gap-1">
+                                <input data-masivo aria-label={`Precio de ${p.nombre}`} inputMode="decimal" value={b.precio} onFocus={e => e.target.select()}
+                                  onChange={e => cambiarBorrador(p, { precio: e.target.value })} onKeyDown={siguiente} className={`${cls(tocado(b.precio, p.precio))} w-28`} />
+                                {(p.precioMitad != null || cat?.nombre.toUpperCase().includes('GRANDE')) && p.tipo !== 'promo' && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-gris">½</span>
+                                    <input data-masivo aria-label={`Precio mitad de ${p.nombre}`} inputMode="decimal" value={b.mitad} placeholder="sin mitad" onFocus={e => e.target.select()}
+                                      onChange={e => cambiarBorrador(p, { mitad: e.target.value })} onKeyDown={siguiente} className={`${cls(tocado(b.mitad, p.precioMitad))} w-24 text-sm`} />
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })() : enLocal && !propio ? (
                             <div className="flex flex-col items-end gap-1">
                               <PrecioLocal valor={a?.precio} base={p.precio} etiqueta={`Precio de ${p.nombre} en el local`}
                                 onGuardar={v => guardarAjuste(p, { precio: v })} />
@@ -214,7 +265,13 @@ export function MenuAdmin() {
                           </td>
                         )}
                         <td className="px-3 py-2.5 text-right">
-                          {puedeEditar(p) && <Btn onClick={() => setEditando(p)}>Editar</Btn>}
+                          {masivo && puedeEditar(p) ? (
+                            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                              <input type="checkbox" className="size-5 accent-albahaca" checked={valorBorrador(p).activo}
+                                onChange={e => cambiarBorrador(p, { activo: e.target.checked })} />
+                              Activo
+                            </label>
+                          ) : !masivo && puedeEditar(p) && <Btn onClick={() => setEditando(p)}>Editar</Btn>}
                         </td>
                       </tr>
                     )
@@ -227,6 +284,22 @@ export function MenuAdmin() {
                 </tbody>
               </table>
             </div>
+            {masivo && (
+              <div className="sticky bottom-0 z-10 mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-barra px-4 py-3 text-white shadow-lg">
+                <span className="mr-auto text-[15px]">
+                  {cambiosMasivos.length ? <><b>{cambiosMasivos.length}</b> producto{cambiosMasivos.length === 1 ? '' : 's'} con cambios</> : 'Cambiá los precios (Enter pasa al siguiente). Podés recorrer varias categorías y guardar todo junto.'}
+                </span>
+                {productos.some(x => puedeEditar(x) && !valorBorrador(x).activo) && (
+                  <button onClick={() => productos.filter(puedeEditar).forEach(x => cambiarBorrador(x, { activo: true }))}
+                    className="h-10 rounded-lg bg-white/15 px-4 font-semibold hover:bg-white/25">Activar todos {busqueda ? 'los de la búsqueda' : 'los de la categoría'}</button>
+                )}
+                <button onClick={salirMasivo} className="h-10 rounded-lg bg-white/15 px-4 font-semibold hover:bg-white/25">Cancelar</button>
+                <button onClick={guardarMasivo} disabled={!cambiosMasivos.length || guardandoMasivo}
+                  className="h-10 rounded-lg bg-albahaca px-4 font-semibold text-sobre-albahaca disabled:opacity-50">
+                  {guardandoMasivo ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+              </div>
+            )}
           </section>
         </div>
       )}

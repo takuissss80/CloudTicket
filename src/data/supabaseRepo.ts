@@ -348,6 +348,15 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       return mapProducto(ok(await sb.from('productos').select(SELECT_PRODUCTO).eq('id', id).single()) as Row)
     },
 
+    async actualizarProductos(cambios) {
+      // De a tandas para no saturar la conexión
+      for (let i = 0; i < cambios.length; i += 10) {
+        await Promise.all(cambios.slice(i, i + 10).map(async c => {
+          ok(await sb.from('productos').update({ precio: c.precio, precio_mitad: c.precioMitad ?? null, activo: c.activo }).eq('id', c.id).select('id').single())
+        }))
+      }
+    },
+
     async guardarAjuste(sucursalId, a) {
       ok(await sb.from('producto_sucursal').upsert({
         producto_id: a.productoId, sucursal_id: sucursalId, precio: a.precio ?? null,
