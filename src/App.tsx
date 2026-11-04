@@ -12,6 +12,7 @@ import { CrearCuenta, Login } from './components/Login'
 import { Administracion, type Pestana } from './components/admin/Administracion'
 import { Reportes } from './components/Reportes'
 import { PedidosYa } from './components/PedidosYa'
+import { PantallaCocina } from './components/PantallaCocina'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
@@ -22,6 +23,13 @@ function Principal({ onSalir }: { onSalir: () => void }) {
   const [verReportes, setVerReportes] = useState(false)
   const [verPY, setVerPY] = useState(false)
   const [verReset, setVerReset] = useState(false)
+  // Pantalla de cocina: se abre en otra pestaña con #cocina (así queda fija en la PC/tablet de la cocina)
+  const [enCocina, setEnCocina] = useState(() => location.hash === '#cocina')
+  useEffect(() => {
+    const f = () => setEnCocina(location.hash === '#cocina')
+    addEventListener('hashchange', f)
+    return () => removeEventListener('hashchange', f)
+  }, [])
 
   // Cambios en tiempo real: otras PCs, el spool, cambios de menú
   useEffect(() => {
@@ -57,6 +65,19 @@ function Principal({ onSalir }: { onSalir: () => void }) {
     </div>
   )
 
+  const cocinaActiva = !!sucursales.find(s => s.id === sucursalId)?.cocinaActiva
+  if (enCocina) return (
+    <>
+      {cocinaActiva ? <PantallaCocina onClose={() => { history.replaceState(null, '', location.pathname); setEnCocina(false) }} /> : (
+        <div className="mx-auto mt-[20vh] max-w-lg px-4 text-center">
+          <h1 className="font-cond text-4xl font-bold">La pantalla de cocina está apagada</h1>
+          <p className="mt-2 text-gris">Se activa en Administración → Cocina.</p>
+          <Btn className="mt-6" onClick={() => { history.replaceState(null, '', location.pathname); setEnCocina(false) }}>Ir a los pedidos</Btn>
+        </div>
+      )}
+    </>
+  )
+
   const conError = printJobs.filter(j => j.estado === 'error').length
   const esAdmin = sesion?.rol === 'admin'
   // Encargado o admin: reportes y menú. El usuario común solo opera.
@@ -90,6 +111,10 @@ function Principal({ onSalir }: { onSalir: () => void }) {
               <Btn onClick={() => setVerPY(true)} className={erroresPY ? '!border-tomate !text-tomate' : ''}>
                 PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
               </Btn>
+            )}
+            {cocinaActiva && (
+              <a href="#cocina" target="_blank" rel="noopener" title="Abre la pantalla de cocina en otra pestaña"
+                className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Cocina</a>
             )}
             {esEncargado && <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>}
             <Btn onClick={() => setVerAdmin(esEncargado ? 'menu' : 'caja')}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>

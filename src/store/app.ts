@@ -43,7 +43,14 @@ interface AppState {
   reabrirCaja(id: string): Promise<void>
   agregarMovimiento(m: Pick<MovimientoCaja, 'tipo' | 'tipoGastoId' | 'concepto' | 'monto'>): Promise<boolean>
   eliminarMovimiento(id: string): Promise<void>
-  guardarPedido(imprimir: boolean): Promise<Comanda | null>
+  /** aCocina: con la pantalla de cocina activa, la deja directo en cocina (sin imprimir) */
+  guardarPedido(imprimir: boolean, aCocina?: boolean): Promise<Comanda | null>
+  /** Cocina: el pedido pasa a preparación (no se imprime) */
+  pasarACocina(c: Comanda): Promise<void>
+  /** Cocina: pedido listo, recién ahí se imprime el ticket */
+  marcarListo(c: Comanda): Promise<void>
+  /** Cocina: deshace un "listo" por error */
+  volverACocina(c: Comanda): Promise<void>
   cambiarEstado(c: Comanda, estado: EstadoComanda): Promise<void>
   marcarCobrada(c: Comanda, cobrada: boolean): Promise<void>
   asignarRepartidor(c: Comanda, repartidorId: string): Promise<boolean>
@@ -67,6 +74,8 @@ const menuVacio: MenuData = { categorias: [], productos: [], ajustes: [], ingred
 
 /** Recargo de delivery del local activo */
 export const useLocalActivo = () => useApp(s => s.sucursales.find(x => x.id === s.sucursalId))
+/** El local trabaja con pantalla de cocina */
+export const useCocinaActiva = () => useApp(s => !!s.sucursales.find(x => x.id === s.sucursalId)?.cocinaActiva)
 
 export const mensajeError = (e: unknown) =>
   e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)
@@ -199,7 +208,7 @@ export const useApp = create<AppState>((set, get) => {
       } catch (e) { fallo(e) }
     },
 
-    async guardarPedido(imprimir) {
+    async guardarPedido(imprimir, aCocina) {
       const p = usePedido.getState()
       const { caja, catalogo, sucursales, sucursalId, sesion } = get()
       if (!caja) { get().avisar('Abrí la caja antes de cargar pedidos', 'error'); return null }
@@ -243,9 +252,10 @@ export const useApp = create<AppState>((set, get) => {
         }
         const editando = p.editandoId
         const c = editando ? await repo.actualizarComanda(editando, data) : await repo.crearComanda(caja.id, data)
-        if (imprimir) await encolar(c, editando ? 'reimpresion' : 'comanda')
+        if (aCocina && c.estado === 'pendiente') await repo.cambiarEstado(c.id, 'en_preparacion')
+        else if (imprimir) await encolar(c, editando ? 'reimpresion' : 'comanda')
         p.cerrar()
-        get().avisar(`Comanda #${c.numero} ${editando ? 'actualizada' : 'guardada'}${imprimir ? ' y enviada a imprimir' : ''}`)
+        get().avisar(`Comanda #${c.numero} ${editando ? 'actualizada' : 'guardada'}${aCocina && c.estado === 'pendiente' ? ' y pasada a cocina' : imprimir ? ' y enviada a imprimir' : ''}`)
         await get().refrescar()
         return c
       } catch (e) { fallo(e); return null }
@@ -253,6 +263,31 @@ export const useApp = create<AppState>((set, get) => {
 
     async cambiarEstado(c, estado) {
       try { await repo.cambiarEstado(c.id, estado); await get().refrescar() } catch (e) { fallo(e) }
+    },
+
+    async pasarACocina(c) {
+      try {
+        await repo.cambiarEstado(c.id, 'en_preparacion')
+        get().avisar(`Comanda #${c.numero} pasada a cocina`)
+        await get().refrescar()
+      } catch (e) { fallo(e) }
+    },
+
+    async marcarListo(c) {
+      try {
+        await repo.cambiarEstado(c.id, 'listo')
+        // El ticket sale recién ahora, para pegarlo en el pedido
+        await encolar({ ...c, estado: 'listo' }, 'comanda')
+        await get().refrescar()
+      } catch (e) { fallo(e) }
+    },
+
+    async volverACocina(c) {
+      try {
+        await repo.cambiarEstado(c.id, 'en_preparacion')
+        get().avisar(`Comanda #${c.numero} volvió a cocina`)
+        await get().refrescar()
+      } catch (e) { fallo(e) }
     },
 
     async marcarCobrada(c, cobrada) {

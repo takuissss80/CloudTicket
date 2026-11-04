@@ -66,6 +66,10 @@ export interface Repo {
   // ---- Locales y usuarios (admin)
   listSucursales(): Promise<Sucursal[]>
   crearSucursal(nombre: string): Promise<Sucursal>
+  /** Pantalla de cocina del local (admin o encargado del local) */
+  configCocina(sucursalId: string, c: { activa: boolean; amarillo: number; rojo: number }): Promise<void>
+  /** Hora de la base, para corregir el reloj de la PC */
+  horaServidor(): Promise<string>
   actualizarSucursal(id: string, data: Partial<Pick<Sucursal, 'nombre' | 'activa' | 'recargoDelivery' | 'recargoDeliveryTipo'>>): Promise<void>
 
   // ---- Cupones (admin crea; cualquiera valida un código)

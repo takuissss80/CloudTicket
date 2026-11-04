@@ -32,6 +32,11 @@ export interface Sucursal {
   /** Recargo automático a los pedidos de delivery */
   recargoDelivery: number
   recargoDeliveryTipo: TipoValor
+  /** Pantalla de cocina: los pedidos pasan por cocina antes de entregarse */
+  cocinaActiva: boolean
+  /** Minutos en cocina para ponerse amarillo y rojo */
+  cocinaAmarillo: number
+  cocinaRojo: number
 }
 
 /** Cupón de descuento (lo crea el administrador) */
@@ -272,6 +277,9 @@ export interface Comanda {
   repartidorNombre?: string
   asignadaAt?: string
   entregadaAt?: string
+  /** Cocina: cuándo entró y cuándo quedó listo */
+  cocinaAt?: string
+  listoAt?: string
   /** Solo en reportes */
   sucursalId?: string
   createdAt: string
@@ -279,7 +287,7 @@ export interface Comanda {
 }
 
 /** Datos para crear una comanda (sin campos que asigna el sistema) */
-export type NuevaComanda = Omit<Comanda, 'id' | 'numero' | 'estado' | 'createdAt' | 'updatedAt' | 'cajaId' | 'sucursalId' | 'repartidorId' | 'repartidorNombre' | 'asignadaAt' | 'entregadaAt'>
+export type NuevaComanda = Omit<Comanda, 'id' | 'numero' | 'estado' | 'createdAt' | 'updatedAt' | 'cajaId' | 'sucursalId' | 'repartidorId' | 'repartidorNombre' | 'asignadaAt' | 'entregadaAt' | 'cocinaAt' | 'listoAt'>
 
 /** Moto / repartidor de un local */
 export interface Repartidor {

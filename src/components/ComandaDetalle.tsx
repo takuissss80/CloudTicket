@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { Comanda } from '../types'
 import { FORMAS_PAGO } from '../types'
-import { accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
+import { TEXTO_ACCION, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
 import type { AccionTablero } from './Tablero'
-import { useApp, useNombreLocal } from '../store/app'
+import { useApp, useCocinaActiva, useNombreLocal } from '../store/app'
 import { usePedido } from '../store/pedido'
 import { construirTicket } from '../lib/ticket'
 import { hora, money } from '../lib/format'
@@ -11,14 +11,15 @@ import { Btn, Confirmar, Modal } from './ui'
 import { TicketPreview } from './TicketPreview'
 
 export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comanda; onClose: () => void; onAccion: (a: AccionTablero) => void }) {
-  const { reimprimir, anular, marcarCobrada, impresoras, catalogo, printJobs, sesion } = useApp()
+  const { reimprimir, anular, marcarCobrada, impresoras, catalogo, printJobs, sesion, pasarACocina, volverACocina } = useApp()
+  const cocina = useCocinaActiva()
   // Modificar y anular: solo admin o encargado
   const encargado = !!sesion?.puedeDescontar
   const sucursal = useNombreLocal()
   const editar = usePedido(s => s.editar)
   const [confirmarAnular, setConfirmarAnular] = useState(false)
   const c = comanda
-  const accion = accionPendiente(c)
+  const accion = accionPendiente(c, cocina)
   const viaje = minutosDelivery(c)
   const anulada = c.estado === 'anulada'
 
@@ -44,9 +45,11 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
             {c.tipo === 'delivery' && c.repartidorId && accion && (
               <Btn onClick={() => onAccion({ tipo: 'asignar', id: c.id })}>Cambiar moto</Btn>
             )}
+            {c.estado === 'listo' && c.listoAt && <Btn onClick={() => volverACocina(c)}>Volver a cocina</Btn>}
             {accion && (
-              <Btn tono={accion === 'asignar' ? 'tomate' : 'albahaca'} onClick={() => onAccion({ tipo: accion, id: c.id })}>
-                {accion === 'asignar' ? 'Asignar delivery' : 'Entregar pedido'}
+              <Btn tono={accion === 'asignar' ? 'tomate' : accion === 'cocina' ? 'pizarra' : 'albahaca'}
+                onClick={() => accion === 'cocina' ? pasarACocina(c).then(onClose) : onAccion({ tipo: accion, id: c.id })}>
+                {TEXTO_ACCION[accion]}
               </Btn>
             )}
           </div>

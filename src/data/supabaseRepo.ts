@@ -30,6 +30,7 @@ const mapCaja = (r: Row): Caja => ({
 const mapSucursal = (r: Row): Sucursal => ({
   id: r.id, nombre: r.nombre, esPrincipal: r.es_principal, activa: r.activa,
   recargoDelivery: num(r.recargo_delivery), recargoDeliveryTipo: r.recargo_delivery_tipo ?? 'monto',
+  cocinaActiva: !!r.cocina_activa, cocinaAmarillo: r.cocina_amarillo ?? 7, cocinaRojo: r.cocina_rojo ?? 15,
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
@@ -83,6 +84,7 @@ function mapComanda(r: Row): Comanda {
     horaEntrega: opt(r.hora_entrega), cobrada: r.cobrada, createdAt: r.created_at, updatedAt: r.updated_at,
     repartidorId: opt(r.repartidor_id), repartidorNombre: opt(r.repartidores?.nombre),
     asignadaAt: opt(r.asignada_at), entregadaAt: opt(r.entregada_at), sucursalId: opt(r.sucursal_id),
+    cocinaAt: opt(r.cocina_at), listoAt: opt(r.listo_at),
     pagos: (r.pagos ?? []).map((p: Row) => ({ forma: p.forma, monto: num(p.monto) })),
     items: (r.comanda_items ?? [])
       .sort((a: Row, b: Row) => a.orden - b.orden)
@@ -221,6 +223,12 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async crearSucursal(nombre) {
       const id = ok(await sb.rpc('crear_sucursal', { p_nombre: nombre })) as unknown as string
       return mapSucursal(ok(await sb.from('sucursales').select('*').eq('id', id).single()) as Row)
+    },
+    async configCocina(sucursalId, c) {
+      ok(await sb.rpc('config_cocina', { p_sucursal: sucursalId, p_activa: c.activa, p_amarillo: c.amarillo, p_rojo: c.rojo }))
+    },
+    async horaServidor() {
+      return ok(await sb.rpc('hora_servidor')) as unknown as string
     },
     async actualizarSucursal(id, data) {
       const row: Row = {}
@@ -548,7 +556,9 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       ok(await sb.from('comandas').update({ repartidor_id: repartidorId, asignada_at: new Date().toISOString(), estado: 'en_camino' }).eq('id', comandaId))
     },
     async quitarRepartidor(comandaId) {
-      ok(await sb.from('comandas').update({ repartidor_id: null, asignada_at: null, estado: 'pendiente' })
+      // Si ya había salido de la cocina, vuelve a "listo"
+      const r = ok(await sb.from('comandas').select('listo_at').eq('id', comandaId).single()) as Row
+      ok(await sb.from('comandas').update({ repartidor_id: null, asignada_at: null, estado: r.listo_at ? 'listo' : 'pendiente' })
         .eq('id', comandaId).not('estado', 'in', '(entregado,anulada)'))
     },
     async entregarComanda(comandaId, pagos: Pago[], cobrada) {

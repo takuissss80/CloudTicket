@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Comanda, TipoValor } from '../types'
 import { FORMAS_PAGO } from '../types'
-import { mensajeError, useApp, useLocalActivo, useNombreLocal } from '../store/app'
+import { mensajeError, useApp, useLocalActivo, useNombreLocal, useCocinaActiva } from '../store/app'
 import { repo } from '../data'
 import { normalizarCodigo, textoValor } from '../lib/descuentos'
 import { faltaClienteMostrador, totales, usePedido } from '../store/pedido'
@@ -75,9 +75,13 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
     })
   }, [p, envio, subtotal, total, t.descuento, t.adicional, t.descuentoCupon, comandas, impresoras, catalogo.zonas, sucursal])
 
-  const guardar = async (imprimir: boolean) => {
+  const cocina = useCocinaActiva()
+  // Con pantalla de cocina, un pedido nuevo (o uno sin pasar) va a cocina en vez de imprimirse
+  const editada = comandas.find(x => x.id === p.editandoId)
+  const ofrecerCocina = cocina && (!editada || editada.estado === 'pendiente')
+  const guardar = async (imprimir: boolean, aCocina = false) => {
     setGuardando(true)
-    const ok = await guardarPedido(imprimir)
+    const ok = await guardarPedido(imprimir, aCocina)
     setGuardando(false)
     if (ok) onClose()
   }
@@ -96,10 +100,25 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
           {faltaCliente && <p className="w-full text-right text-sm font-semibold text-tomate">{faltaCliente}: completalo arriba para poder guardar.</p>}
           <div className="mr-auto font-cond text-3xl font-bold">Total {money(total)}</div>
           <Btn onClick={onClose}>Seguir cargando</Btn>
-          <Btn disabled={guardando || !!faltaCliente} onClick={() => guardar(false)}>Guardar sin imprimir</Btn>
-          <Btn tono="albahaca" grande disabled={guardando || !!faltaCliente} onClick={() => guardar(true)}>
-            {guardando ? 'Guardando…' : 'Guardar e imprimir'}
-          </Btn>
+          {ofrecerCocina ? (
+            <>
+              <Btn disabled={guardando || !!faltaCliente} onClick={() => guardar(false)}>Guardar</Btn>
+              <Btn tono="pizarra" grande disabled={guardando || !!faltaCliente} onClick={() => guardar(false, true)}>
+                {guardando ? 'Guardando…' : 'Guardar y pasar a cocina'}
+              </Btn>
+            </>
+          ) : cocina && editada?.estado === 'en_preparacion' ? (
+            <Btn tono="albahaca" grande disabled={guardando || !!faltaCliente} onClick={() => guardar(false)}>
+              {guardando ? 'Guardando…' : 'Guardar (la cocina ve el cambio)'}
+            </Btn>
+          ) : (
+            <>
+              <Btn disabled={guardando || !!faltaCliente} onClick={() => guardar(false)}>Guardar sin imprimir</Btn>
+              <Btn tono="albahaca" grande disabled={guardando || !!faltaCliente} onClick={() => guardar(true)}>
+                {guardando ? 'Guardando…' : 'Guardar e imprimir'}
+              </Btn>
+            </>
+          )}
         </div>
       }
     >

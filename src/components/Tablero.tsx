@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import type { Comanda, TipoComanda } from '../types'
-import { useApp } from '../store/app'
+import { useApp, useCocinaActiva } from '../store/app'
 import { usePedido } from '../store/pedido'
 import { hora, minutosDesde, money } from '../lib/format'
 import { ComandaDetalle } from './ComandaDetalle'
 import { AsignarRepartidorModal, EntregarModal } from './Entrega'
-import { MINUTOS_ALERTA_DELIVERY, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
+import { MINUTOS_ALERTA_DELIVERY, TEXTO_ACCION, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
 
 function colorEstado(c: Comanda) {
   if (c.estado === 'anulada') return 'bg-gris text-papel'
   if (c.estado === 'entregado') return 'bg-linea text-gris'
+  if (c.estado === 'en_preparacion') return 'bg-pizarra-claro text-pizarra'
+  if (c.estado === 'listo') return 'bg-albahaca text-sobre-albahaca'
   if (c.tipo === 'delivery' && c.canal === 'pedidosya' && !c.repartidorId) return 'bg-muzza text-sobre-muzza'
   if (c.tipo === 'delivery') return c.repartidorId ? 'bg-pizarra text-white' : 'bg-tomate text-white'
   return 'bg-muzza text-sobre-muzza'
@@ -18,7 +20,10 @@ function colorEstado(c: Comanda) {
 export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
 
 function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Comanda; onAbrir: () => void; onAccion: (a: AccionTablero) => void; onQuitarMoto: () => void; ahora: number }) {
-  const accion = accionPendiente(c)
+  const cocina = useCocinaActiva()
+  const pasarACocina = useApp(s => s.pasarACocina)
+  const [enviando, setEnviando] = useState(false)
+  const accion = accionPendiente(c, cocina)
   const mins = minutosDesde(c.createdAt, ahora)
   const cerrada = c.estado === 'entregado' || c.estado === 'anulada'
   const demorada = !cerrada && mins >= 40
@@ -77,11 +82,22 @@ function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Coma
           {!c.cobrada && c.estado !== 'anulada' && <span className="rounded bg-tomate px-1.5 py-0.5 text-xs font-bold text-white">A cobrar</span>}
         </div>
       </button>
+      {c.estado === 'en_preparacion' && (
+        <div className="px-4 pt-2">
+          <div className="flex h-11 items-center justify-center gap-2 rounded-lg bg-pizarra-claro font-cond text-lg font-bold text-pizarra">
+            En cocina{c.cocinaAt ? ` hace ${minutosDesde(c.cocinaAt, ahora)}′` : ''}
+          </div>
+        </div>
+      )}
       {accion && (
         <div className="px-4 pt-2">
-          <button onClick={() => onAccion({ tipo: accion, id: c.id })}
-            className={`h-11 w-full rounded-lg font-cond text-lg font-bold ${accion === 'asignar' ? 'bg-tomate text-white hover:brightness-110' : 'bg-albahaca text-sobre-albahaca hover:brightness-110'}`}>
-            {accion === 'asignar' ? 'Asignar delivery' : 'Entregar pedido'}
+          <button disabled={enviando}
+            onClick={async () => {
+              if (accion === 'cocina') { setEnviando(true); await pasarACocina(c); setEnviando(false) }
+              else onAccion({ tipo: accion, id: c.id })
+            }}
+            className={`h-11 w-full rounded-lg font-cond text-lg font-bold disabled:opacity-60 ${accion === 'asignar' ? 'bg-tomate text-white hover:brightness-110' : accion === 'cocina' ? 'bg-pizarra text-white hover:brightness-110' : 'bg-albahaca text-sobre-albahaca hover:brightness-110'}`}>
+            {TEXTO_ACCION[accion]}
           </button>
         </div>
       )}

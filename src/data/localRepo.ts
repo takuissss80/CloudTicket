@@ -83,8 +83,8 @@ function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' = 'coman
 }
 
 function baseVacia(): DB {
-  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto' }
-  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc' }
+  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15 }
+  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15 }
   return {
     cuenta: { id: uid(), nombre: 'Napoles' },
     sucursales: [principal, benavidez],
@@ -259,13 +259,13 @@ export const localRepo: Repo = {
   async listSucursales() {
     const s = ses()
     return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
-      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto' }))))
+      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15 }))))
   },
 
   async crearSucursal(nombre) {
     soloAdmin()
     const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto' }
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15 }
     d.sucursales.push(suc)
     d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
     guardar('menu')
@@ -354,6 +354,16 @@ export const localRepo: Repo = {
     if (p) throw new Error(p)
     return pausa({ id: c.id, codigo: c.codigo, descripcion: c.descripcion, tipo: c.tipo, valor: c.valor })
   },
+
+  async configCocina(sucursalId, c) {
+    const s = ses()
+    if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar la cocina')
+    if (c.amarillo < 1 || c.rojo <= c.amarillo) throw new Error('Los minutos de rojo tienen que ser más que los de amarillo')
+    const suc = db().sucursales.find(x => x.id === sucursalId)
+    if (suc) Object.assign(suc, { cocinaActiva: c.activa, cocinaAmarillo: c.amarillo, cocinaRojo: c.rojo })
+    guardar('menu')
+  },
+  async horaServidor() { return ahora() },
 
   async actualizarSucursal(id, data) {
     soloAdmin()
@@ -823,6 +833,8 @@ export const localRepo: Repo = {
     puedeLocal(c.sucursalId)
     if ((estado === 'anulada') !== (c.estado === 'anulada') && !ses().puedeDescontar) throw new Error('Solo el administrador o un encargado pueden anular comandas')
     if (estado === 'anulada' && c.estado !== 'anulada') devolverComanda(c.id)
+    if (estado !== c.estado && estado === 'en_preparacion') { c.cocinaAt = c.cocinaAt ?? ahora(); c.listoAt = undefined }
+    if (estado !== c.estado && estado === 'listo') { c.listoAt = ahora(); c.cocinaAt = c.cocinaAt ?? ahora() }
     c.estado = estado; c.updatedAt = ahora()
     guardar()
   },
@@ -853,7 +865,7 @@ export const localRepo: Repo = {
     puedeLocal(c.sucursalId)
     if (c.estado === 'entregado' || c.estado === 'anulada') throw new Error('El pedido ya está cerrado')
     c.repartidorId = undefined; c.repartidorNombre = undefined
-    c.asignadaAt = undefined; c.estado = 'pendiente'; c.updatedAt = ahora()
+    c.asignadaAt = undefined; c.estado = c.listoAt ? 'listo' : 'pendiente'; c.updatedAt = ahora()
     guardar()
   },
 
