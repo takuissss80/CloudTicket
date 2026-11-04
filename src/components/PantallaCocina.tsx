@@ -217,7 +217,7 @@ function TarjetaCocina({ c, orden, ahora, amarillo, rojo, marcando, onListo }: {
         ))}
       </ul>
       {c.observaciones && (
-        <p className="mt-2 rounded-lg bg-papel px-3 py-2 text-lg font-semibold ring-1 ring-linea">{c.observaciones}</p>
+        <p className="mt-2 rounded-lg bg-papel px-3 py-2 text-xl font-extrabold text-tomate ring-1 ring-tomate">{c.observaciones}</p>
       )}
 
       <button onClick={onListo} disabled={marcando}
