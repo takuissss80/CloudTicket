@@ -78,24 +78,22 @@ export function PantallaMostrador({ onClose }: { onClose?: () => void }) {
       ) : (
         <main className="grid min-h-0 flex-1 grid-cols-1 gap-6 p-6 md:grid-cols-2">
           <section className="flex min-h-0 flex-col rounded-2xl bg-superficie p-6 ring-1 ring-linea">
-            <h2 className="mb-4 flex items-baseline gap-3 font-cond text-5xl font-extrabold text-gris">
-              En preparación <span className="text-4xl tabular-nums">{enProceso.length}</span>
-            </h2>
+            <h2 className="font-cond text-5xl font-extrabold leading-none text-gris">En preparación</h2>
+            <p className="mb-5 mt-1 text-xl font-semibold text-gris tabular-nums">{enProceso.length === 1 ? '1 pedido' : `${enProceso.length} pedidos`}</p>
             <ul className="min-h-0 flex-1 space-y-3 overflow-hidden">
               {enProceso.map(c => (
-                <li key={c.id} className="truncate font-cond text-5xl font-bold leading-tight text-tinta">{nombre(c)}</li>
+                <li key={c.id} className="nombre-entra truncate font-cond text-5xl font-bold leading-tight text-tinta">{nombre(c)}</li>
               ))}
               {!enProceso.length && <li className="font-cond text-3xl text-gris">—</li>}
             </ul>
           </section>
 
           <section className="flex min-h-0 flex-col rounded-2xl bg-albahaca-claro p-6 ring-2 ring-albahaca">
-            <h2 className="mb-4 flex items-baseline gap-3 font-cond text-5xl font-extrabold text-tinta">
-              ¡Listo para retirar! <span className="text-4xl tabular-nums">{listos.length}</span>
-            </h2>
+            <h2 className="font-cond text-5xl font-extrabold leading-none text-tinta">Listo para retirar</h2>
+            <p className="mb-5 mt-1 text-xl font-semibold text-tinta/70 tabular-nums">{listos.length === 1 ? '1 pedido' : `${listos.length} pedidos`}</p>
             <ul className="min-h-0 flex-1 space-y-3 overflow-hidden">
               {listos.map(c => (
-                <li key={c.id} className={`truncate rounded-xl px-4 py-2 font-cond text-6xl font-extrabold leading-tight ${nuevos.has(c.id) ? 'animate-pulse bg-albahaca text-sobre-albahaca' : 'text-tinta'}`}>
+                <li key={c.id} className={`truncate rounded-xl px-4 py-2 font-cond text-6xl font-extrabold leading-tight ${nuevos.has(c.id) ? 'nombre-listo bg-albahaca text-sobre-albahaca' : 'nombre-entra text-tinta'}`}>
                   {nombre(c)}
                 </li>
               ))}

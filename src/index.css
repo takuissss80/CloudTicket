@@ -105,6 +105,13 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: no-preference) {
   .entra { animation: entra .18s ease-out; }
   @keyframes entra { from { opacity: 0; transform: translateY(6px); } }
+
+  /* Pantalla de clientes: los nombres entran deslizando; el que queda listo "salta" y brilla */
+  .nombre-entra { animation: nombre-entra .6s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes nombre-entra { from { opacity: 0; transform: translateY(24px) scale(.96); } }
+  .nombre-listo { animation: nombre-listo .7s cubic-bezier(.3,1.6,.5,1) both, nombre-brilla 1.6s ease-in-out .7s 6; }
+  @keyframes nombre-listo { 0% { opacity: 0; transform: scale(.6); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes nombre-brilla { 50% { filter: brightness(1.18); box-shadow: 0 0 0 6px color-mix(in srgb, var(--c-albahaca) 35%, transparent); } }
 }
 
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
