@@ -13,6 +13,7 @@ import { Administracion, type Pestana } from './components/admin/Administracion'
 import { Reportes } from './components/Reportes'
 import { PedidosYa } from './components/PedidosYa'
 import { PantallaCocina } from './components/PantallaCocina'
+import { PantallaMostrador } from './components/PantallaMostrador'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
@@ -24,9 +25,11 @@ function Principal({ onSalir }: { onSalir: () => void }) {
   const [verPY, setVerPY] = useState(false)
   const [verReset, setVerReset] = useState(false)
   // Pantalla de cocina: se abre en otra pestaña con #cocina (así queda fija en la PC/tablet de la cocina)
+  // Pantalla para los clientes del mostrador: #mostrador
   const [enCocina, setEnCocina] = useState(() => location.hash === '#cocina')
+  const [enPantallaMostrador, setEnPantallaMostrador] = useState(() => location.hash === '#mostrador')
   useEffect(() => {
-    const f = () => setEnCocina(location.hash === '#cocina')
+    const f = () => { setEnCocina(location.hash === '#cocina'); setEnPantallaMostrador(location.hash === '#mostrador') }
     addEventListener('hashchange', f)
     return () => removeEventListener('hashchange', f)
   }, [])
@@ -66,6 +69,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
   )
 
   const cocinaActiva = !!sucursales.find(s => s.id === sucursalId)?.cocinaActiva
+  if (enPantallaMostrador) return <PantallaMostrador onClose={() => { history.replaceState(null, '', location.pathname); setEnPantallaMostrador(false) }} />
   if (enCocina) return (
     <>
       {cocinaActiva ? <PantallaCocina onClose={() => { history.replaceState(null, '', location.pathname); setEnCocina(false) }} /> : (
@@ -112,6 +116,8 @@ function Principal({ onSalir }: { onSalir: () => void }) {
                 PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
               </Btn>
             )}
+            <a href="#mostrador" target="_blank" rel="noopener" title="Pantalla para los clientes del mostrador (en otra pestaña)"
+              className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Pantalla clientes</a>
             {cocinaActiva && (
               <a href="#cocina" target="_blank" rel="noopener" title="Abre la pantalla de cocina en otra pestaña"
                 className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Cocina</a>

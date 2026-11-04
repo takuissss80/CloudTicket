@@ -15,7 +15,7 @@ const CLAVE_SONIDO = 'cocina-sonido'
 const leer = (k: string, def: string) => { try { return localStorage.getItem(k) ?? def } catch { return def } }
 const escribir = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* sin storage */ } }
 
-function pitido() {
+export function pitido() {
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     const ctx = new Ctx()
@@ -33,6 +33,20 @@ function pitido() {
   } catch { /* sin audio */ }
 }
 
+
+/** Que la pantalla no se apague mientras está abierta */
+export function usePantallaEncendida() {
+  useEffect(() => {
+    let lock: { release: () => Promise<void> } | null = null
+    const pedir = async () => {
+      try { lock = await (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen') ?? null } catch { /* no soportado */ }
+    }
+    pedir()
+    const vis = () => { if (document.visibilityState === 'visible') pedir() }
+    document.addEventListener('visibilitychange', vis)
+    return () => { document.removeEventListener('visibilitychange', vis); lock?.release().catch(() => {}) }
+  }, [])
+}
 
 export function PantallaCocina({ onClose }: { onClose?: () => void }) {
   const { comandas, caja, marcarListo, volverACocina, refrescar } = useApp()
@@ -54,17 +68,7 @@ export function PantallaCocina({ onClose }: { onClose?: () => void }) {
   // Por si se pierde algún aviso en tiempo real
   useEffect(() => { const t = setInterval(() => { refrescar().catch(() => {}) }, 20_000); return () => clearInterval(t) }, [refrescar])
 
-  // Que la pantalla no se apague
-  useEffect(() => {
-    let lock: { release: () => Promise<void> } | null = null
-    const pedir = async () => {
-      try { lock = await (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen') ?? null } catch { /* no soportado */ }
-    }
-    pedir()
-    const vis = () => { if (document.visibilityState === 'visible') pedir() }
-    document.addEventListener('visibilitychange', vis)
-    return () => { document.removeEventListener('visibilitychange', vis); lock?.release().catch(() => {}) }
-  }, [])
+  usePantallaEncendida()
 
   const enCocina = useMemo(() => comandas
     .filter(c => c.estado === 'en_preparacion')
