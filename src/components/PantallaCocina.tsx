@@ -3,6 +3,7 @@ import type { Comanda } from '../types'
 import { repo } from '../data'
 import { useApp, useLocalActivo } from '../store/app'
 import { coccionLabel, hora } from '../lib/format'
+import { BotonTema } from './ui'
 
 /**
  * Pantalla para la cocina: los pedidos "en cocina" en el orden en que entraron,
@@ -135,6 +136,7 @@ export function PantallaCocina({ onClose }: { onClose?: () => void }) {
             {sonido ? 'Sonido: sí' : 'Sonido: no'}
           </button>
           <button onClick={pantallaCompleta} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Pantalla completa</button>
+          <BotonTema className="!border-white/20 !bg-white/15 !text-white hover:!bg-white/25" />
           <span className="font-cond text-3xl font-bold tabular-nums">{hora(new Date(ahoraServidor).toISOString())}</span>
         </div>
       </header>
@@ -192,7 +194,7 @@ function TarjetaCocina({ c, orden, ahora, amarillo, rojo, marcando, onListo }: {
           {c.horaEntrega && <div className="font-cond text-xl font-extrabold text-tomate">PARA LAS {c.horaEntrega}</div>}
         </div>
         <div className={`text-right font-cond text-4xl font-extrabold tabular-nums leading-none ${nivel === 'rojo' ? 'text-tomate' : 'text-tinta'}`}>
-          {Math.floor(Math.max(0, seg) / 60)}′<span className="text-xl">{String(Math.floor(Math.max(0, seg)) % 60).padStart(2, '0')}″</span>
+          {Math.floor(Math.max(0, seg) / 60)}<span className="text-2xl"> min</span>
           <div className="mt-1 text-xs font-semibold text-gris">entró {hora(c.cocinaAt ?? c.createdAt)}</div>
         </div>
       </div>
