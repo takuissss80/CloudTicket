@@ -74,8 +74,9 @@ export function parsearTicket(texto: string): TicketLeido {
   t.telefono = campo(/(?:tel[eé]fono|tel\.?|cel(?:ular)?|whats?app)\s*[:\-]?\s*([+\d][\d\s\-()]{6,}\d)/i)?.replace(/\s+/g, ' ')
   t.direccion = campo(/^\s*(?:direcci[oó]n(?: de entrega)?|domicilio|entregar en|entrega en)\s*[:\-]\s*(.+)$/im)
   t.notas = campo(/^\s*(?:notas?|observaciones?|comentarios?|aclaraci[oó]n(?:es)?|indicaciones)\s*[:\-]\s*(.+)$/im)
+  if (!t.cliente) leerBloqueCliente(lineas, t)
   t.retiro = /retir[ao] en (el )?local|retiro en|para retirar|take\s?away|pick\s?up|retira el cliente/i.test(todo)
-  if (/pag(ad)?o (con )?(online|en l[ií]nea|tarjeta|mercado ?pago)|ya pagad|pagado|pago online|online/i.test(todo)) t.pago = 'online'
+  if (/pag(ad)?o (con )?(online|en l[ií]nea|tarjeta|mercado ?pago)|ya pagad|pagado|pago online|online|medio de pago\s*:\s*(visa|master|amex|american|cabal|naranja|maestro|d[eé]bito|cr[eé]dito|tarjeta|mercado ?pago|pago online)/i.test(todo)) t.pago = 'online'
   if (/efectivo|abona con|paga con|cash/i.test(todo) && !/no (abona|paga) en efectivo/i.test(todo)) t.pago = t.pago === 'online' && /pagado/i.test(todo) ? 'online' : 'efectivo'
 
   // Totales: la última línea "Total" (que no sea subtotal)
@@ -104,6 +105,31 @@ export function parsearTicket(texto: string): TicketLeido {
     if (item) { t.items.push(item); empezo = true }
   }
   return t
+}
+
+/**
+ * Tickets de GoWin: el cliente viene sin etiquetas, en un bloque entre separadores:
+ *   ALAN BARTKUS / Alemania 334 / El Talar,Tigre / Tel.: +54... / (indicaciones)
+ * Se toma el bloque donde está la línea del teléfono.
+ */
+const reSeparador = /^[\s\-=_*.·~]{5,}$/
+const reTelLinea = /^\s*(?:tel[eé]fono|tel\.?|cel(?:ular)?|whats?app)\s*[:.\-]?\s*[+\d]/i
+function leerBloqueCliente(lineas: string[], t: TicketLeido) {
+  const iTel = lineas.findIndex(l => reTelLinea.test(l))
+  if (iTel < 0) return
+  let ini = iTel, fin = iTel
+  while (ini > 0 && !reSeparador.test(lineas[ini - 1])) ini--
+  while (fin < lineas.length - 1 && !reSeparador.test(lineas[fin + 1])) fin++
+  const antes = lineas.slice(ini, iTel).map(l => l.trim()).filter(Boolean)
+  const despues = lineas.slice(iTel + 1, fin + 1).map(l => l.trim()).filter(Boolean)
+  // Si el bloque arranca con fecha u hora (no hubo separador), se saltean
+  while (antes.length && /^(\w{2,4},?\s*)?\d{1,2}[\/:.-]\d{1,2}([\/.-]\d{2,4})?$|^(entrega|retiro|delivery|pedidos ?ya)\b/i.test(antes[0])) antes.shift()
+  if (!antes.length || antes.length > 6) return
+  if (antes.some(l => reMontoFinal.test(' ' + l) && /\$/.test(l))) return
+  // "ALAN BARTKUS" -> "Alan Bartkus"
+  t.cliente = antes[0] === antes[0].toUpperCase() ? antes[0].toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : antes[0]
+  if (!t.direccion && antes.length > 1) t.direccion = antes.slice(1).join(', ')
+  if (!t.notas && despues.length) t.notas = despues.join(' ')
 }
 
 function leerItem(linea: string): ItemTicket | null {
