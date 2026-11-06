@@ -324,10 +324,13 @@ export function CajaPanel({ onClose }: { onClose: () => void }) {
 // Cierre: efectivo contado y diferencia
 // ---------------------------------------------------------------------
 function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onClose: () => void; onCerrada: () => void }) {
-  const { caja, comandas, cerrarCaja } = useApp()
+  const { caja, comandas, cerrarCaja, impresoras, imprimirCierre, sesion } = useApp()
   const [contado, setContado] = useState('')
   const [obs, setObs] = useState('')
   const [enviando, setEnviando] = useState(false)
+  // Imprimir el cierre para guardarlo con las comandas (se recuerda en esta PC)
+  const [imprimir, setImprimir] = useState(() => { try { return localStorage.getItem('cierre-imprimir') !== '0' } catch { return true } })
+  const [impresoraId, setImpresoraId] = useState(() => (impresoras.find(i => i.imprimeMostrador) ?? impresoras[0])?.id ?? '')
   if (!caja) return null
   const real = numero(contado)
   const diferencia = real - totales.efectivoTeorico
@@ -337,7 +340,12 @@ function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onC
 
   const cerrar = async () => {
     setEnviando(true)
+    const cerrada: Caja = {
+      ...caja, estado: 'cerrada', cerradaAt: new Date().toISOString(), cerradaPor: sesion?.usuario,
+      dineroCierre: real, diferencia: real - totales.efectivoTeorico, observaciones: obs.trim() || undefined, totales,
+    }
     const ok = await cerrarCaja(real, obs)
+    if (ok && imprimir && impresoras.length) await imprimirCierre(cerrada, impresoraId)
     setEnviando(false)
     if (ok) { onClose(); onCerrada() }
   }
@@ -366,6 +374,20 @@ function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onC
         <Campo label="Observaciones (opcional)">
           <textarea id="caja-obs" rows={2} value={obs} onChange={e => setObs(e.target.value)} className={`${inputCls} h-auto py-2`} placeholder="Ej: faltante por vuelto mal dado" />
         </Campo>
+        {impresoras.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-harina px-4 py-3">
+            <label className="flex cursor-pointer items-center gap-2 font-semibold">
+              <input type="checkbox" className="size-5 accent-albahaca" checked={imprimir}
+                onChange={e => { setImprimir(e.target.checked); try { localStorage.setItem('cierre-imprimir', e.target.checked ? '1' : '0') } catch { /* */ } }} />
+              Imprimir el cierre de caja
+            </label>
+            {imprimir && impresoras.length > 1 && (
+              <select aria-label="Comandera para el cierre" value={impresoraId} onChange={e => setImpresoraId(e.target.value)} className={`${inputBase} h-10 w-auto`}>
+                {impresoras.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
+              </select>
+            )}
+          </div>
+        ) : <p className="text-sm text-gris">Para imprimir el cierre, configurá una comandera en Administración → Impresión.</p>}
         <p className="text-sm text-gris">Lo contado queda como dinero al inicio sugerido para la próxima caja.</p>
       </div>
     </Modal>

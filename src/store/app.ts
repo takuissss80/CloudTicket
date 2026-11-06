@@ -1,9 +1,10 @@
+import { calcularTotales } from '../lib/caja'
 import { create } from 'zustand'
 import { repo } from '../data'
 import type { Catalogo, MenuData } from '../data/repo'
 import type { Caja, Comanda, EstadoComanda, Impresora, MovimientoCaja, NuevaComanda, Pago, PedidoExterno, PrintJob, Repartidor, Sesion, Sucursal, TipoGasto } from '../types'
 import { interpretarPedido } from '../lib/pedidosya'
-import { jobsParaComanda, ticketPrueba } from '../lib/ticket'
+import { jobsParaComanda, ticketPrueba, ticketCierre } from '../lib/ticket'
 import { resolverCatalogo } from '../lib/menu'
 import { usePedido, totales, faltaClienteMostrador } from './pedido'
 
@@ -47,6 +48,8 @@ interface AppState {
   guardarPedido(imprimir: boolean, aCocina?: boolean): Promise<Comanda | null>
   /** Cocina: el pedido pasa a preparación (no se imprime) */
   pasarACocina(c: Comanda): Promise<void>
+  /** Imprime el cierre de una caja (o el parcial si sigue abierta) en una comandera del local */
+  imprimirCierre(caja: Caja, impresoraId?: string): Promise<boolean>
   /** Cocina: pedido listo, recién ahí se imprime el ticket */
   marcarListo(c: Comanda): Promise<void>
   /** Cocina: deshace un "listo" por error */
@@ -263,6 +266,22 @@ export const useApp = create<AppState>((set, get) => {
 
     async cambiarEstado(c, estado) {
       try { await repo.cambiarEstado(c.id, estado); await get().refrescar() } catch (e) { fallo(e) }
+    },
+
+    async imprimirCierre(caja, impresoraId) {
+      try {
+        const { impresoras } = get()
+        const imp = impresoras.find(i => i.id === impresoraId) ?? impresoras.find(i => i.imprimeMostrador) ?? impresoras[0]
+        if (!imp) { get().avisar('Este local no tiene comanderas configuradas', 'error'); return false }
+        const [comandas, movimientos] = await Promise.all([repo.listComandas(caja.id), repo.listMovimientos(caja.id)])
+        const totales = caja.totales ?? calcularTotales(caja, comandas, movimientos)
+        await repo.encolarImpresion([{
+          impresoraId: imp.id, tipo: 'cierre', copias: 1,
+          contenido: ticketCierre({ caja, totales, comandas, movimientos, nombreLocal: nombreLocal() }, imp.ancho),
+        }])
+        get().avisar(`Cierre enviado a imprimir en ${imp.nombre}`)
+        return true
+      } catch (e) { fallo(e); return false }
     },
 
     async pasarACocina(c) {

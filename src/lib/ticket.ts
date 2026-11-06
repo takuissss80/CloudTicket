@@ -1,4 +1,4 @@
-import type { Comanda, FormatoTicket, Impresora, LineaTicket, TipoPrintJob, Zona } from '../types'
+import type { Caja, Comanda, FormatoTicket, Impresora, LineaTicket, MovimientoCaja, TipoPrintJob, TotalesCaja, Zona } from '../types'
 import { FORMAS_PAGO } from '../types'
 import { coccionLabel, fecha, hora, money, varianteLabel } from './format'
 
@@ -209,4 +209,99 @@ export function ticketPrueba(impresora: Impresora, nombreLocal?: string): LineaT
     letraChica: !impresora.versionPrograma || versionAlMenos(impresora.versionPrograma, VERSION_LETRA_CHICA),
     nombreLocal: nombreLocal ?? impresora.nombre,
   })
+}
+
+// ---------------------------------------------------------------------
+// Cierre de caja impreso (para guardar con las comandas del turno)
+// ---------------------------------------------------------------------
+export interface DatosCierre {
+  caja: Caja
+  totales: TotalesCaja
+  comandas: Comanda[]
+  movimientos: MovimientoCaja[]
+  nombreLocal?: string
+}
+
+export function ticketCierre(d: DatosCierre, ancho: number): LineaTicket[] {
+  const { caja, totales: t, comandas, movimientos } = d
+  const L: LineaTicket[] = []
+  const linea = (texto: string, size: Tam = 'normal', extra: Partial<Extract<LineaTicket, { t: 'text' }>> = {}) =>
+    partir(texto, anchoPara(ancho, size)).forEach(l => L.push(txt(l, { ...extra, ...(size !== 'normal' ? { size } : {}) })))
+  const dos = (izq: string, der: string, extra: Partial<Extract<LineaTicket, { t: 'text' }>> = {}) =>
+    dosColumnas(izq, der, ancho).forEach(l => L.push(txt(l, extra)))
+  const titulo = (s: string) => { L.push({ t: 'line' }); linea(s, 'normal', { bold: true }) }
+
+  if (d.nombreLocal) linea(d.nombreLocal, 'normal', { align: 'center', bold: true })
+  linea('CIERRE DE CAJA', 'large', { bold: true, align: 'center' })
+  linea(` TURNO ${caja.turno.toUpperCase()} `, 'normal', { bold: true, align: 'center', invert: true })
+  linea(`Abrio: ${fecha(caja.abiertaAt)} ${hora(caja.abiertaAt)}${caja.abiertaPor ? ` (${caja.abiertaPor})` : ''}`, 'normal', { align: 'center' })
+  if (caja.cerradaAt) linea(`Cerro: ${fecha(caja.cerradaAt)} ${hora(caja.cerradaAt)}${caja.cerradaPor ? ` (${caja.cerradaPor})` : ''}`, 'normal', { align: 'center' })
+  else linea('(caja abierta: cierre parcial)', 'normal', { align: 'center' })
+
+  // Ventas
+  const validas = comandas.filter(c => c.estado !== 'anulada')
+  titulo('VENTAS')
+  dos(`Comandas: ${t.cantComandas}`, money(t.totalVentas), { bold: true })
+  if (t.cantAnuladas) dos('Anuladas', String(t.cantAnuladas))
+  const grupo = (f: (c: Comanda) => boolean) => { const l = validas.filter(f); return [l.length, l.reduce((s, c) => s + c.total, 0)] as const }
+  for (const [label, f] of [
+    ['Mostrador', (c: Comanda) => c.tipo === 'mostrador' && c.canal !== 'pedidosya'],
+    ['Delivery', (c: Comanda) => c.tipo === 'delivery' && c.canal !== 'pedidosya'],
+    ['PedidosYa', (c: Comanda) => c.canal === 'pedidosya'],
+  ] as const) {
+    const [n, m] = grupo(f)
+    if (n) dos(`  ${label} (${n})`, money(m))
+  }
+  const sinCobrar = validas.filter(c => !c.cobrada)
+  if (sinCobrar.length) dos(`  Sin cobrar (${sinCobrar.length})`, money(sinCobrar.reduce((s, c) => s + c.total, 0)))
+  const descuentos = validas.reduce((s, c) => s + (c.descuento || 0), 0)
+  if (descuentos > 0.009) dos('  Descuentos', `-${money(descuentos)}`)
+  const envios = validas.reduce((s, c) => s + (c.costoEnvio || 0), 0)
+  if (envios > 0.009) dos('  Envios cobrados', money(envios))
+
+  // Cobrado por forma de pago
+  const porForma = new Map<string, number>()
+  for (const c of validas) {
+    if (!c.cobrada) continue
+    const vuelto = Math.max(0, c.pagos.reduce((s, p) => s + p.monto, 0) - c.total)
+    for (const p of c.pagos) porForma.set(p.forma, (porForma.get(p.forma) ?? 0) + (p.forma === 'efectivo' ? Math.max(0, p.monto - vuelto) : p.monto))
+  }
+  if (porForma.size) {
+    titulo('COBRADO POR FORMA DE PAGO')
+    for (const [forma, monto] of porForma) dos(`  ${FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma}`, money(monto))
+  }
+
+  // Efectivo
+  titulo('EFECTIVO')
+  dos('Dinero al inicio', money(caja.dineroInicial || 0))
+  dos('+ Ventas en efectivo', money(t.ventasEfectivo))
+  if (t.totalIngresos) dos('+ Ingresos', money(t.totalIngresos))
+  if (t.totalGastos) dos('- Gastos', money(t.totalGastos))
+  if (t.totalEgresos) dos('- Retiros', money(t.totalEgresos))
+  if (t.totalSueldos) dos('- Sueldos', money(t.totalSueldos))
+  dos('TEORICO EN CAJA', money(t.efectivoTeorico), { bold: true })
+  if (caja.dineroCierre != null) {
+    dos('CONTADO', money(caja.dineroCierre), { bold: true })
+    const dif = caja.diferencia ?? caja.dineroCierre - t.efectivoTeorico
+    linea(Math.abs(dif) < 0.01 ? 'SIN DIFERENCIA' : `${dif > 0 ? 'SOBRA' : 'FALTA'} ${money(Math.abs(dif))}`, 'tall', { bold: true, align: 'center', invert: dif < -0.009 })
+  }
+
+  // Detalle de movimientos
+  const salidas = movimientos.filter(m => m.tipo !== 'ingreso')
+  if (movimientos.length) {
+    titulo('MOVIMIENTOS')
+    const nombre = { gasto: 'Gasto', egreso: 'Retiro', sueldo: 'Sueldo', ingreso: 'Ingreso' } as const
+    for (const m of movimientos) dos(`${hora(m.createdAt)} ${nombre[m.tipo]}: ${m.concepto}`, `${m.tipo === 'ingreso' ? '' : '-'}${money(m.monto)}`)
+    if (salidas.length) dos('Total salidas', `-${money(salidas.reduce((s, m) => s + m.monto, 0))}`, { bold: true })
+  }
+
+  if (caja.observaciones) { titulo('OBSERVACIONES'); linea(caja.observaciones) }
+
+  L.push({ t: 'line' })
+  L.push({ t: 'feed', n: 1 })
+  linea('Firma: ______________________', 'normal')
+  linea(`Impreso ${fecha(new Date().toISOString())} ${hora(new Date().toISOString())}`, 'small', { align: 'center' })
+  L.push({ t: 'feed', n: 3 })
+  L.push({ t: 'cut' })
+  return L
 }

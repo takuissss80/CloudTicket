@@ -327,7 +327,7 @@ export type LineaTicket =
   | { t: 'feed'; n: number }
   | { t: 'cut' }
 
-export type TipoPrintJob = 'comanda' | 'reimpresion' | 'anulacion' | 'cuenta' | 'prueba'
+export type TipoPrintJob = 'comanda' | 'reimpresion' | 'anulacion' | 'cuenta' | 'prueba' | 'cierre'
 
 export interface PrintJob {
   id: string

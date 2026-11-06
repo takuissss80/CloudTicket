@@ -14,6 +14,7 @@ const textoDif = (d?: number) => (d == null ? '—' : Math.abs(d) < 0.01 ? '$0' 
 
 /** Historial de cajas de un local: lista y detalle (sin encabezado propio) */
 export function HistorialPanel({ sucursalId, onReabierta }: { sucursalId: string; onReabierta?: () => void }) {
+  const sucursalActual = useApp(s => s.sucursalId)
   const { avisar, refrescar, sucursalId: localActivo } = useApp()
   const [cajas, setCajas] = useState<Caja[] | null>(null)
   const [sel, setSel] = useState<Caja | null>(null)
@@ -41,7 +42,7 @@ export function HistorialPanel({ sucursalId, onReabierta }: { sucursalId: string
           <Btn onClick={() => setSel(null)}>Volver a la lista</Btn>
           <h2 className="font-cond text-2xl font-bold">Caja {sel.turno.toLowerCase()}, {fechaLarga(sel.abiertaAt)}</h2>
         </div>
-        <DetalleCaja caja={sel} esUltima={cajas?.[0]?.id === sel.id} hayAbierta={!!cajas?.some(c => c.estado === 'abierta')}
+        <DetalleCaja caja={sel} delLocalActual={sucursalId === sucursalActual} esUltima={cajas?.[0]?.id === sel.id} hayAbierta={!!cajas?.some(c => c.estado === 'abierta')}
           onReabrir={() => reabrir(sel)} />
       </div>
     )
@@ -108,8 +109,11 @@ export function HistorialCajas({ onClose }: { onClose: () => void }) {
   )
 }
 
-function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir }: { caja: Caja; esUltima: boolean; hayAbierta: boolean; onReabrir: () => void }) {
+function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir, delLocalActual }: { caja: Caja; esUltima: boolean; hayAbierta: boolean; onReabrir: () => void; delLocalActual: boolean }) {
   const avisar = useApp(s => s.avisar)
+  const imprimirCierre = useApp(s => s.imprimirCierre)
+  const hayImpresoras = useApp(s => s.impresoras.length > 0)
+  const [imprimiendo, setImprimiendo] = useState(false)
   const [comandas, setComandas] = useState<Comanda[] | null>(null)
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([])
   const [pestana, setPestana] = useState<'resumen' | 'comandas' | 'movimientos'>('resumen')
@@ -137,7 +141,14 @@ function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir }: { caja: Caja; es
             {caja.observaciones && <p className="rounded-lg bg-muzza-claro p-2"><b>Obs:</b> {caja.observaciones}</p>}
           </>
         ) : <p className="font-semibold text-albahaca">La caja sigue abierta.</p>}
-        {puedeReabrir && <Btn className="mt-2" onClick={() => setConfirmar(true)}>Reabrir esta caja</Btn>}
+        <div className="flex flex-wrap gap-2 pt-1">
+          {delLocalActual && hayImpresoras && (
+            <Btn className="mt-1" disabled={imprimiendo} onClick={async () => { setImprimiendo(true); await imprimirCierre(caja); setImprimiendo(false) }}>
+              {imprimiendo ? 'Enviando…' : caja.estado === 'cerrada' ? 'Imprimir cierre' : 'Imprimir parcial'}
+            </Btn>
+          )}
+          {puedeReabrir && <Btn className="mt-1" onClick={() => setConfirmar(true)}>Reabrir esta caja</Btn>}
+        </div>
       </section>
 
       <div className="flex gap-1 rounded-xl bg-superficie p-1 ring-1 ring-linea" role="tablist">
