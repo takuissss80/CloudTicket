@@ -19,6 +19,18 @@ export function Ingredientes() {
   const [productos, setProductos] = useState<Producto[]>([])
   const [filtro, setFiltro] = useState('')
   const [nuevo, setNuevo] = useState({ nombre: '', unidad: 'g' as UnidadIngrediente, costo: '' })
+  const [borrando, setBorrando] = useState<string | null>(null)
+  const [verUsos, setVerUsos] = useState<string | null>(null)
+
+  const eliminar = async (i: Ingrediente) => {
+    try {
+      await repo.eliminarIngrediente(i.id)
+      setBorrando(null)
+      await cargar()
+      await refrescarMenu()
+      avisar(`Ingrediente "${i.nombre}" eliminado`)
+    } catch (e) { setBorrando(null); avisar(mensajeError(e), 'error') }
+  }
 
   const cargar = useCallback(async () => {
     const m = await repo.getMenu(null)
@@ -87,6 +99,7 @@ export function Ingredientes() {
               <th className="px-3 py-2 text-right font-medium">Costo</th>
               <th className="px-3 py-2 font-medium">Se usa en</th>
               <th className="px-3 py-2 text-center font-medium">Activo</th>
+              <th className="px-3 py-2"><span className="sr-only">Acciones</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-linea">
@@ -111,15 +124,39 @@ export function Ingredientes() {
                     </div>
                   </td>
                   <td className="max-w-56 px-3 py-2 text-sm text-gris">
-                    {u.length ? <span title={u.map(p => p.nombre).join(', ')}>{u.length} {u.length === 1 ? 'producto' : 'productos'}</span> : 'Sin usar'}
+                    {u.length ? (
+                      <button type="button" onClick={() => setVerUsos(v => (v === i.id ? null : i.id))} title={u.map(p => p.nombre).join(', ')}
+                        className="text-left underline decoration-dotted underline-offset-2 hover:text-tinta">
+                        {u.length} {u.length === 1 ? 'producto' : 'productos'}
+                      </button>
+                    ) : 'Sin usar'}
+                    {verUsos === i.id && <div className="mt-1 text-tinta">{u.map(p => p.nombre).join(', ')}</div>}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <input type="checkbox" aria-label={`${i.nombre} activo`} className="size-5 accent-albahaca" checked={i.activo} onChange={e => guardar(i, { activo: e.target.checked })} />
                   </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    {borrando === i.id ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="mr-1 text-sm font-semibold text-tinta">¿Eliminar?</span>
+                        <Btn onClick={() => setBorrando(null)}>No</Btn>
+                        <Btn tono="tomate" onClick={() => eliminar(i)}>Sí, eliminar</Btn>
+                      </span>
+                    ) : (
+                      <button type="button" aria-label={`Eliminar ${i.nombre}`}
+                        title={u.length ? `Está en ${u.length === 1 ? 'la receta de ' + u[0].nombre : u.length + ' recetas'}: sacalo de ahí primero` : 'Eliminar ingrediente'}
+                        onClick={() => u.length ? (setVerUsos(i.id), avisar(`"${i.nombre}" está en ${u.length === 1 ? 'la receta de ' + u[0].nombre : u.length + ' recetas'}. Sacalo de esas recetas primero.`, 'error')) : setBorrando(i.id)}
+                        className={`grid size-9 place-items-center rounded-lg ${u.length ? 'text-gris/60 hover:bg-harina' : 'text-tomate hover:bg-tomate-claro'}`}>
+                        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                        </svg>
+                      </button>
+                    )}
+                  </td>
                 </tr>
               )
             })}
-            {!visibles.length && <tr><td colSpan={5} className="px-3 py-10 text-center text-gris">{filtro ? `No hay ingredientes con “${filtro}”.` : 'Todavía no cargaste ingredientes.'}</td></tr>}
+            {!visibles.length && <tr><td colSpan={6} className="px-3 py-10 text-center text-gris">{filtro ? `No hay ingredientes con “${filtro}”.` : 'Todavía no cargaste ingredientes.'}</td></tr>}
           </tbody>
         </table>
       </div>

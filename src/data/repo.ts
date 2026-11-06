@@ -102,6 +102,8 @@ export interface Repo {
   quitarAjuste(sucursalId: string, productoId: string): Promise<void>
   aumentarPrecios(categoriaId: string, porcentaje: number, sucursalId: string | null, redondeo: number): Promise<number>
   guardarIngrediente(i: IngredienteEdicion): Promise<Ingrediente>
+  /** Borra un ingrediente. Falla si alguna receta (de cualquier local) lo usa. */
+  eliminarIngrediente(id: string): Promise<void>
 
   // ---- Zonas e impresoras de un local
   listZonas(sucursalId: string): Promise<Zona[]>

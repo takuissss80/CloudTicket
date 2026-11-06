@@ -6,7 +6,7 @@ import type {
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
 import { descuentoCupon, normalizarCodigo, problemaCupon } from '../lib/descuentos'
-import { importarMenuEjemplo, unirReceta } from '../lib/menu'
+import { errorIngredienteEnUso, importarMenuEjemplo, unirReceta } from '../lib/menu'
 
 /**
  * Modo demo: todo vive en el navegador (localStorage).
@@ -514,6 +514,16 @@ export const localRepo: Repo = {
     }
     guardar('menu')
     return n
+  },
+
+  async eliminarIngrediente(id) {
+    soloAdmin()
+    const d = db()
+    const usan = d.productos.filter(p => p.receta.some(r => r.ingredienteId === id)).map(p => p.nombre)
+    if (usan.length) throw new Error(errorIngredienteEnUso(usan))
+    d.ingredientes = d.ingredientes.filter(x => x.id !== id)
+    if (d.stock) d.stock = d.stock.filter(x => x.ingredienteId !== id)
+    guardar('menu')
   },
 
   async guardarIngrediente(i) {

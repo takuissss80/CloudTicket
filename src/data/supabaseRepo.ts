@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { unirReceta } from '../lib/menu'
+import { unirReceta, errorIngredienteEnUso } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
@@ -387,6 +387,14 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         ? ok(await sb.from('ingredientes').update(row).eq('id', i.id).select().single())
         : ok(await sb.from('ingredientes').insert(row).select().single())
       return mapIngrediente(r as Row)
+    },
+
+    async eliminarIngrediente(id) {
+      // Primero se fija en todas las recetas de la cuenta (también productos propios de cada local)
+      const usos = ok(await sb.from('recetas').select('productos(nombre)').eq('ingrediente_id', id)) as Row[]
+      const nombres = usos.map(u => (u.productos as Row | null)?.nombre as string).filter(Boolean)
+      if (nombres.length) throw new Error(errorIngredienteEnUso(nombres))
+      ok(await sb.from('ingredientes').delete().eq('id', id).select('id').single())
     },
 
     // ---- Zonas e impresoras

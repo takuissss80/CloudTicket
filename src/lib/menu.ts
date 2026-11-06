@@ -129,3 +129,9 @@ export async function importarMenuEjemplo(repo: Repo, onProgreso?: (texto: strin
     prod.set(p.key, g.id)
   }
 }
+
+/** Mensaje cuando se quiere borrar un ingrediente que está en recetas */
+export function errorIngredienteEnUso(productos: string[]) {
+  const lista = productos.slice(0, 5).join(', ') + (productos.length > 5 ? ` y ${productos.length - 5} más` : '')
+  return `No se puede eliminar: está en la receta de ${productos.length === 1 ? '' : `${productos.length} productos: `}${lista}. Sacalo de esas recetas primero.`
+}
