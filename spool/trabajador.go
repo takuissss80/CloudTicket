@@ -73,9 +73,33 @@ func vinculoActual(token string) (Vinculo, bool) {
 
 const intervaloCola = 2 * time.Second
 
+// esperaTokenInvalido: con un token que ya no sirve no tiene sentido insistir cada 10 s
+// (llena de errores la base). Se espera cada vez más: 30 s, 1, 2, 5 y después cada 10 minutos.
+func esperaTokenInvalido(fallos int) time.Duration {
+	pasos := []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute}
+	if fallos-1 < len(pasos) {
+		return pasos[max(0, fallos-1)]
+	}
+	return pasos[len(pasos)-1]
+}
+
+func esTokenInvalido(err error) bool {
+	var es errorServidor
+	return errors.As(err, &es) && strings.Contains(es.msg, "Token")
+}
+
 func trabajar(token string, parar chan struct{}) {
 	ultimoPing := time.Time{}
 	espera := intervaloCola
+	fallosToken := 0
+	// Según el error, cuánto esperar antes de reintentar
+	esperaPorError := func(err error) time.Duration {
+		if esTokenInvalido(err) {
+			fallosToken++
+			return esperaTokenInvalido(fallosToken)
+		}
+		return 10 * time.Second
+	}
 	for {
 		select {
 		case <-parar:
@@ -92,9 +116,10 @@ func trabajar(token string, parar chan struct{}) {
 			info, err := apiPing(token, v.Impresora)
 			if err != nil {
 				marcarError(est, token, v, err)
-				espera = 10 * time.Second
+				espera = esperaPorError(err)
 				continue
 			}
+			fallosToken = 0
 			ultimoPing = time.Now()
 			cfgMu.Lock()
 			for i := range cfg.Vinculos {
@@ -109,7 +134,7 @@ func trabajar(token string, parar chan struct{}) {
 		trabajos, err := apiTomar(token)
 		if err != nil {
 			marcarError(est, token, v, err)
-			espera = 10 * time.Second
+			espera = esperaPorError(err)
 			continue
 		}
 		estMu.Lock()
@@ -136,9 +161,8 @@ func marcarError(est *EstadoVinculo, token string, v Vinculo, err error) {
 	est.Error = err.Error()
 	estMu.Unlock()
 	if cambio {
-		var es errorServidor
-		if errors.As(err, &es) && strings.Contains(es.msg, "Token") {
-			registrar("error", "%s: el token no es válido. Generá uno nuevo en la web y volvé a vincular.", nombreVinculo(v))
+		if esTokenInvalido(err) {
+			registrar("error", "%s: el token ya no es válido (se generó uno nuevo o se borró la comandera). Quitala de esta PC o volvé a vincularla. Se reintenta cada vez más espaciado.", nombreVinculo(v))
 		} else {
 			registrar("error", "%s: %v", nombreVinculo(v), err)
 		}

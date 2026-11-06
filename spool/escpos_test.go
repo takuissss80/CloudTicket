@@ -1,6 +1,7 @@
 package main
 
 import (
+	"time"
 	"bytes"
 	"encoding/json"
 	"strings"
@@ -156,5 +157,14 @@ func TestLetraAlta(t *testing.T) {
 	}
 	if !bytes.Contains(out, []byte{0x1D, '!', 0x01}) {
 		t.Fatal("la letra alta tiene que mandar GS ! 0x01")
+	}
+}
+
+func TestEsperaTokenInvalido(t *testing.T) {
+	if esperaTokenInvalido(1) != 30*time.Second || esperaTokenInvalido(5) != 10*time.Minute || esperaTokenInvalido(50) != 10*time.Minute {
+		t.Fatal("la espera con token inválido tiene que crecer hasta 10 minutos")
+	}
+	if !esTokenInvalido(errorServidor{"Token inválido o comandera desactivada"}) || esTokenInvalido(errorServidor{"otra cosa"}) {
+		t.Fatal("detección de token inválido")
 	}
 }
