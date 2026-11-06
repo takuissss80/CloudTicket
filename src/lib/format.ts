@@ -18,5 +18,9 @@ export const normalizar = (s: string) =>
 export const varianteLabel = (v?: string) =>
   v === 'entera' ? 'Entera' : v === 'mitad' ? 'Mitad' : ''
 
+/** Mitades: "Grande Muzzarella" -> "Mitad Muzzarella" (así no parece una pizza entera) */
+export const nombreConVariante = (descripcion: string, variante?: string) =>
+  variante === 'mitad' ? `Mitad ${descripcion.replace(/\s*\(½\)\s*$/, '').replace(/^grande\s+/i, '')}` : descripcion
+
 export const coccionLabel = (c?: string) =>
   c === 'horno' ? 'Horno' : c === 'frita' ? 'Frita' : ''

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Comanda } from '../types'
 import { repo } from '../data'
 import { useApp, useLocalActivo } from '../store/app'
-import { coccionLabel, hora } from '../lib/format'
+import { coccionLabel, hora, nombreConVariante } from '../lib/format'
 import { BotonTema } from './ui'
 import { esArmado } from '../store/pedido'
 
@@ -209,13 +209,12 @@ function TarjetaCocina({ c, orden, ahora, amarillo, rojo, marcando, onListo }: {
         {c.items.map(i => (
           <li key={i.id}>
             <div className="text-2xl leading-tight">
-              <b className="tabular-nums">{i.cantidad}</b> <span className="font-semibold">{i.descripcion}</span>
-              {i.variante === 'mitad' && <b> (½)</b>}
+              <b className="tabular-nums">{i.cantidad}</b> <span className="font-semibold">{nombreConVariante(i.descripcion, i.variante)}</span>
               {i.coccion && <span className="font-bold text-pizarra"> · {coccionLabel(i.coccion)}</span>}
             </div>
             {i.componentes.map((comp, k) => (
               <div key={k} className="pl-6 text-xl leading-snug">
-                → <b>{comp.cantidad}</b> {comp.descripcion}{comp.variante === 'mitad' ? ' (½)' : ''}{comp.coccion ? <b className="text-pizarra"> · {coccionLabel(comp.coccion)}</b> : ''}
+                → <b>{comp.cantidad}</b> {nombreConVariante(comp.descripcion, comp.variante)}{comp.coccion ? <b className="text-pizarra"> · {coccionLabel(comp.coccion)}</b> : ''}
               </div>
             ))}
             {i.nota && <div className="pl-6 text-xl font-bold text-tomate">* {i.nota}</div>}

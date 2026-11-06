@@ -1,6 +1,6 @@
 import type { Caja, Comanda, FormatoTicket, Impresora, LineaTicket, MovimientoCaja, TipoPrintJob, TotalesCaja, Zona } from '../types'
 import { FORMAS_PAGO } from '../types'
-import { coccionLabel, fecha, hora, money, varianteLabel } from './format'
+import { coccionLabel, fecha, hora, money, nombreConVariante, varianteLabel } from './format'
 
 /**
  * Arma la comanda como una lista de líneas con formato.
@@ -126,13 +126,15 @@ export function construirTicket(c: Comanda, o: OpcionesTicket): LineaTicket[] {
 
   // ---- Ítems
   for (const it of c.items) {
-    const extra = [varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
-    const nombre = `${it.cantidad} x ${it.descripcion}${extra ? ` (${extra})` : ''}`
+    const esMitad = it.variante === 'mitad'
+    const extra = [esMitad ? '' : varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
+    // Mitades: "1 Mitad Muzzarella" (sin "x", para que no parezca una pizza entera)
+    const nombre = `${it.cantidad}${esMitad ? '' : ' x'} ${nombreConVariante(it.descripcion, it.variante)}${extra ? ` (${extra})` : ''}`
     if (precios) dos(nombre, money(it.precioUnit * it.cantidad), F.item, { bold: true })
     else linea(nombre, F.item, { bold: true })
     for (const comp of it.componentes) {
-      const e = [varianteLabel(comp.variante), coccionLabel(comp.coccion)].filter(Boolean).join(', ')
-      linea(`  -> ${comp.cantidad} ${comp.descripcion}${e ? ` (${e})` : ''}`, F.detalle, {}, '     ')
+      const e = [comp.variante === 'mitad' ? '' : varianteLabel(comp.variante), coccionLabel(comp.coccion)].filter(Boolean).join(', ')
+      linea(`  -> ${comp.cantidad} ${nombreConVariante(comp.descripcion, comp.variante)}${e ? ` (${e})` : ''}`, F.detalle, {}, '     ')
     }
     if (it.nota) linea(`  * ${it.nota}`, F.detalle, { bold: true }, '    ')
   }

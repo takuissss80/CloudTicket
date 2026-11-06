@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Categoria, Producto } from '../types'
 import { useLocalActivo, useApp } from '../store/app'
 import { itemProducto, itemPromo, totales, usePedido, esArmado, faltaOtraMitad, mitadesSueltas } from '../store/pedido'
-import { coccionLabel, money, normalizar, varianteLabel } from '../lib/format'
+import { coccionLabel, money, nombreConVariante, normalizar, varianteLabel } from '../lib/format'
 import { Btn, Confirmar, Stepper, inputCls } from './ui'
 import { CategoriaModal } from './CategoriaModal'
 import { PromoModal } from './PromoModal'
@@ -213,7 +213,7 @@ export function TomarPedido() {
             )}
             <ul className="space-y-2">
               {p.items.map(it => {
-                const extra = [varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
+                const extra = [it.variante === 'mitad' ? '' : varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
                 if (armado && it.productoId === armado.id) return (
                   <li key={it.id} className="flex items-start justify-between gap-2 rounded-lg border border-dashed border-linea bg-harina px-2.5 py-2">
                     <div className="min-w-0">
@@ -227,11 +227,11 @@ export function TomarPedido() {
                   <li key={it.id} className="rounded-lg border border-linea bg-superficie p-2.5">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold leading-tight">{it.descripcion}{extra && <span className="font-normal text-gris"> ({extra})</span>}</div>
+                        <div className="font-semibold leading-tight">{nombreConVariante(it.descripcion, it.variante)}{extra && <span className="font-normal text-gris"> ({extra})</span>}</div>
                         {it.componentes.length > 0 && (
                           <ul className="mt-1 text-sm leading-snug text-gris">
                             {it.componentes.map((c, i) => (
-                              <li key={i}>{c.cantidad} {c.descripcion}{c.coccion ? ` (${coccionLabel(c.coccion)})` : ''}{c.variante === 'mitad' ? ' (Mitad)' : ''}</li>
+                              <li key={i}>{c.cantidad} {nombreConVariante(c.descripcion, c.variante)}{c.coccion ? ` (${coccionLabel(c.coccion)})` : ''}</li>
                             ))}
                           </ul>
                         )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Comanda, TipoComanda } from '../types'
 import { useApp, useCocinaActiva } from '../store/app'
 import { usePedido } from '../store/pedido'
-import { hora, minutosDesde, money } from '../lib/format'
+import { hora, minutosDesde, money, nombreConVariante } from '../lib/format'
 import { ComandaDetalle } from './ComandaDetalle'
 import { AsignarRepartidorModal, EntregarModal } from './Entrega'
 import { MINUTOS_ALERTA_DELIVERY, TEXTO_ACCION, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
@@ -51,7 +51,7 @@ function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Coma
 
         <ul className="mt-2 border-t border-dashed border-linea pt-2 text-[15px] leading-snug">
           {c.items.slice(0, 4).map(i => (
-            <li key={i.id} className="truncate"><b>{i.cantidad}</b> {i.descripcion}{i.variante === 'mitad' ? ' (½)' : ''}</li>
+            <li key={i.id} className="truncate"><b>{i.cantidad}</b> {nombreConVariante(i.descripcion, i.variante)}</li>
           ))}
           {c.items.length > 4 && <li className="text-gris">y {c.items.length - 4} más</li>}
         </ul>
