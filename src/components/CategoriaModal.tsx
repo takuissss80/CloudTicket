@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Categoria, Coccion, Producto, Variante } from '../types'
 import { useApp } from '../store/app'
-import { itemProducto, itemPromo, usePedido } from '../store/pedido'
+import { itemProducto, itemPromo, usePedido, esArmado } from '../store/pedido'
 import { money } from '../lib/format'
 import { Btn, Modal, Stepper } from './ui'
 
@@ -23,7 +23,7 @@ export function CategoriaModal({ categoria, onClose, onPromo }: {
   const [borrador, setBorrador] = useState<Record<Clave, number>>({})
   const [filtro, setFiltro] = useState('')
 
-  const delCat = useMemo(() => productos.filter(p => p.categoriaId === categoria.id), [productos, categoria.id])
+  const delCat = useMemo(() => productos.filter(p => p.categoriaId === categoria.id && !esArmado(p)), [productos, categoria.id])
   const f = filtro.trim().toLowerCase()
   const visibles = f ? delCat.filter(p => (p.nombre + ' ' + (p.codigo ?? '') + ' ' + (p.descripcion ?? '')).toLowerCase().includes(f)) : delCat
   const extras = visibles.filter(p => p.tipo === 'extra')

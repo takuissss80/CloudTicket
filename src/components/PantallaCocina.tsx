@@ -4,6 +4,7 @@ import { repo } from '../data'
 import { useApp, useLocalActivo } from '../store/app'
 import { coccionLabel, hora } from '../lib/format'
 import { BotonTema } from './ui'
+import { esArmado } from '../store/pedido'
 
 /**
  * Pantalla para la cocina: los pedidos "en cocina" en el orden en que entraron,
@@ -49,7 +50,8 @@ export function usePantallaEncendida() {
 }
 
 export function PantallaCocina({ onClose }: { onClose?: () => void }) {
-  const { comandas, caja, marcarListo, volverACocina, refrescar } = useApp()
+  const { comandas, caja, marcarListo, volverACocina, refrescar, catalogo } = useApp()
+  const idArmado = catalogo.productos.find(x => esArmado(x))?.id
   const local = useLocalActivo()
   const amarillo = local?.cocinaAmarillo ?? 7
   const rojo = local?.cocinaRojo ?? 15
@@ -97,7 +99,7 @@ export function PantallaCocina({ onClose }: { onClose?: () => void }) {
   const tarjetas = (lista: Comanda[]) => (
     <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
       {lista.map(c => (
-        <TarjetaCocina key={c.id} c={c} orden={enCocina.indexOf(c) + 1} ahora={ahoraServidor} amarillo={amarillo} rojo={rojo}
+        <TarjetaCocina key={c.id} c={idArmado ? { ...c, items: c.items.filter(i => i.productoId !== idArmado) } : c} orden={enCocina.indexOf(c) + 1} ahora={ahoraServidor} amarillo={amarillo} rojo={rojo}
           marcando={marcando === c.id} onListo={() => listo(c)} />
       ))}
     </div>

@@ -209,3 +209,17 @@ export function faltaClienteMostrador(p: Pick<PedidoState, 'tipo' | 'editandoId'
   if (p.clienteTel.replace(/\D/g, '').length < 6) falta.push('el teléfono')
   return falta.length ? `Falta ${falta.join(' y ')} del cliente` : null
 }
+
+// ---------------------------------------------------------------------
+// Pizzas mitad y mitad: cada 2 mitades sueltas se suma 1 "Armado mitad y mitad"
+// (producto del menú con código ARMADO-MITAD; su precio se edita en el menú)
+// ---------------------------------------------------------------------
+export const CODIGO_ARMADO = 'ARMADO-MITAD'
+export const esArmado = (p?: Pick<Producto, 'codigo'>) => p?.codigo?.trim().toUpperCase() === CODIGO_ARMADO
+
+/** Mitades cargadas sueltas (las de las promos no cuentan) */
+export const mitadesSueltas = (items: ItemComanda[]) =>
+  items.filter(i => i.variante === 'mitad').reduce((s, i) => s + i.cantidad, 0)
+
+/** Hay una mitad sin su pareja: no se puede cobrar así */
+export const faltaOtraMitad = (items: ItemComanda[]) => mitadesSueltas(items) % 2 === 1

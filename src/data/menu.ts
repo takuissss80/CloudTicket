@@ -100,7 +100,7 @@ export const productos: MenuProducto[] = [
   extra('ad-crudo', 'Adicional Jamón Crudo', 1500, [['crudo', 2]]),
   extra('ad-panceta', 'Adicional Panceta', 1200, [['panceta', 3]]),
   extra('ad-calabresa', 'Adicional Calabresa', 1000, [['calabresa', 6]]),
-  extra('armado-mitad', 'Armado mitad', 1500),
+  { ...extra('armado-mitad', 'Armado mitad y mitad', 1500), codigo: 'ARMADO-MITAD', descripcion: 'Se suma solo por cada pizza armada con dos mitades' },
 
   // ---- Pizzas grandes (entera / mitad)
   grande('g-muzza', 'Muzzarella', 18800, 9400, [['aceitunas', 20]]),

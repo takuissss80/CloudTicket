@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Categoria, Producto } from '../types'
 import { useLocalActivo, useApp } from '../store/app'
-import { itemProducto, itemPromo, totales, usePedido } from '../store/pedido'
+import { itemProducto, itemPromo, totales, usePedido, esArmado, faltaOtraMitad, mitadesSueltas } from '../store/pedido'
 import { coccionLabel, money, normalizar, varianteLabel } from '../lib/format'
 import { Btn, Confirmar, Stepper, inputCls } from './ui'
 import { CategoriaModal } from './CategoriaModal'
@@ -31,7 +31,7 @@ export function TomarPedido() {
 
   const localActivo = useLocalActivo()
   const { subtotal, envio, descuento, total } = totales(p, catalogo.zonas, catalogo.productos, localActivo)
-  const unidades = p.items.reduce((s, i) => s + i.cantidad, 0)
+  const unidades = p.items.filter(i => !esArmado(catalogo.productos.find(x => x.id === i.productoId))).reduce((s, i) => s + i.cantidad, 0)
 
   // Delivery nuevo: arranca pidiendo el cliente
   useEffect(() => {
@@ -44,11 +44,24 @@ export function TomarPedido() {
     const k = (e: KeyboardEvent) => {
       const enCampo = (e.target as HTMLElement)?.closest('input, textarea, select')
       if (e.key === '/' && !enCampo) { e.preventDefault(); buscador.current?.focus() }
-      if (e.key === 'F2' && p.items.length) { e.preventDefault(); setVerCobro(true) }
+      if (e.key === 'F2' && p.items.length && !faltaOtraMitad(p.items)) { e.preventDefault(); setVerCobro(true) }
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [p.items.length])
+  }, [p.items])
+
+  // Mitad y mitad: 1 armado por cada 2 mitades (se agrega y se saca solo)
+  const armado = catalogo.productos.find(x => esArmado(x))
+  useEffect(() => {
+    if (!armado) return
+    const actual = p.items.find(i => i.productoId === armado.id)
+    const quiero = Math.floor(mitadesSueltas(p.items) / 2)
+    if (quiero === (actual?.cantidad ?? 0)) return
+    if (!quiero) p.quitar(actual!.id)
+    else if (actual) p.setCantidad(actual.id, quiero)
+    else p.agregar({ productoId: armado.id, descripcion: armado.nombre, cantidad: quiero, precioUnit: armado.precio, componentes: [] })
+  }, [p, armado])
+  const sinPareja = faltaOtraMitad(p.items)
 
   const enCarrito = useMemo(() => {
     const m: Record<string, number> = {}
@@ -62,7 +75,7 @@ export function TomarPedido() {
   const resultados = useMemo(() => {
     const q = normalizar(busqueda.trim())
     if (!q) return []
-    return catalogo.productos.filter(x => !x.agotado).filter(x =>
+    return catalogo.productos.filter(x => !x.agotado && !esArmado(x)).filter(x =>
       normalizar(`${x.nombre} ${x.codigo ?? ''} ${x.descripcion ?? ''}`).includes(q)
       || (x.codigo && normalizar(x.codigo) === q),
     ).slice(0, 12)
@@ -201,6 +214,15 @@ export function TomarPedido() {
             <ul className="space-y-2">
               {p.items.map(it => {
                 const extra = [varianteLabel(it.variante), coccionLabel(it.coccion)].filter(Boolean).join(', ')
+                if (armado && it.productoId === armado.id) return (
+                  <li key={it.id} className="flex items-start justify-between gap-2 rounded-lg border border-dashed border-linea bg-harina px-2.5 py-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold leading-tight">{it.cantidad > 1 ? `${it.cantidad} x ` : ''}{it.descripcion}</div>
+                      <div className="text-sm text-gris">Se suma solo por cada pizza de dos mitades</div>
+                    </div>
+                    <div className="text-right font-semibold tabular-nums">{money(it.precioUnit * it.cantidad)}</div>
+                  </li>
+                )
                 return (
                   <li key={it.id} className="rounded-lg border border-linea bg-superficie p-2.5">
                     <div className="flex items-start gap-2">
@@ -243,7 +265,12 @@ export function TomarPedido() {
               <span className="font-cond text-2xl font-bold">Total</span>
               <span className="font-cond text-4xl font-extrabold tabular-nums">{money(total)}</span>
             </div>
-            <Btn tono="albahaca" grande className="mt-3 w-full" disabled={!p.items.length} onClick={() => setVerCobro(true)}>
+            {sinPareja && (
+              <p role="alert" className="mt-2 rounded-lg bg-tomate-claro px-3 py-2 text-sm font-semibold text-tinta">
+                Hay una media pizza sin su otra mitad: elegí la otra mitad (o cambiala por entera) para poder cobrar.
+              </p>
+            )}
+            <Btn tono="albahaca" grande className="mt-3 w-full" disabled={!p.items.length || sinPareja} onClick={() => setVerCobro(true)}>
               Revisar y cobrar <span className="text-sm font-normal opacity-80">F2</span>
             </Btn>
           </div>
