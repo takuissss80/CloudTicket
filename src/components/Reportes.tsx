@@ -4,7 +4,7 @@ import { FORMAS_PAGO } from '../types'
 import { repo } from '../data'
 import { mensajeError, useApp } from '../store/app'
 import { fecha, hora, money } from '../lib/format'
-import { factorCompra, formatCantidad, unidadCompra, valorStock } from '../lib/stock'
+import { formatCantidad, unidadCantidad, unidadCompra, valorStock } from '../lib/stock'
 import {
   PERIODOS_RAPIDOS, descargarCSV, isoDia, rangoISO, reporteConsumo, reporteDinero, reporteGastos,
   reporteIngresosMercaderia, reporteProductos, reporteVentas, resumenMovimientosStock, type Periodo,
@@ -305,7 +305,7 @@ function RepProductos({ d, archivo }: { d: Datos; archivo: string }) {
       {consumo.length > 0 && (
         <Seccion titulo="Ingredientes consumidos" csv={() => descargarCSV(`${archivo}-ingredientes`, [
           ['Ingrediente', 'Cantidad', 'Unidad', 'Costo'],
-          ...consumo.map(x => [x.ingrediente!.nombre, x.cantidad / factorCompra(x.ingrediente!.unidad), unidadCompra(x.ingrediente!.unidad), x.costo]),
+          ...consumo.map(x => [x.ingrediente!.nombre, x.cantidad, unidadCantidad(x.ingrediente!.unidad), x.costo]),
         ])}>
           <Tabla cabecera={['Ingrediente', ['Cantidad', 'right'], ['Costo', 'right']]} ancho="min-w-[420px]">
             {consumo.map(x => (
@@ -416,7 +416,7 @@ function RepMercaderia({ d, archivo, nombreLocal, varios }: { d: Datos; archivo:
         ...ingresos.flatMap(i => i.items.map(it => {
           const ing = nombreIng(it.ingredienteId)
           return [fecha(i.createdAt), hora(i.createdAt), ...(varios ? [nombreLocal(i.sucursalId)] : []), i.proveedor ?? '', i.comprobante ?? '',
-            ing?.nombre ?? '', ing ? it.cantidad / factorCompra(ing.unidad) : it.cantidad, ing ? unidadCompra(ing.unidad) : '', it.costo, i.creadoPor ?? '']
+            ing?.nombre ?? '', it.cantidad, ing ? unidadCantidad(ing.unidad) : '', it.costo, i.creadoPor ?? '']
         })),
       ])}>
         <Tabla cabecera={['Fecha', ...(varios ? ['Local'] : []), 'Proveedor', 'Comprobante', ['Ítems', 'right'], ['Total', 'right'], '']}>
@@ -490,8 +490,8 @@ function RepStock({ d, archivo, locales, nombreLocal }: { d: Datos; archivo: str
       <Seccion titulo="Stock actual y movimientos del período" csv={() => descargarCSV(archivo, [
         ['Ingrediente', 'Unidad', ...(varios ? locales.map(nombreLocal) : []), 'Stock', 'Mínimo', 'Ingresó', 'Vendido', 'Ajustes', 'Decomisos', 'Valor'],
         ...filas.map(f => {
-          const fc = factorCompra(f.i.unidad)
-          return [f.i.nombre, unidadCompra(f.i.unidad), ...(varios ? f.porLocal.map(x => x / fc) : []), f.total / fc, f.minimo / fc,
+          const fc = 1
+          return [f.i.nombre, unidadCantidad(f.i.unidad), ...(varios ? f.porLocal.map(x => x / fc) : []), f.total / fc, f.minimo / fc,
             (f.m?.ingreso ?? 0) / fc, -(f.m?.venta ?? 0) / fc, (f.m?.ajuste ?? 0) / fc, -(f.m?.decomiso ?? 0) / fc, f.valor]
         }),
       ])}>

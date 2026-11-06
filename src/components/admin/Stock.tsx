@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Ingrediente, StockItem } from '../../types'
 import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
-import { factorCompra, formatCantidad, unidadCompra, valorStock } from '../../lib/stock'
+import { formatCantidad, unidadCantidad, valorStock } from '../../lib/stock'
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 
@@ -43,7 +43,7 @@ export function Stock() {
 
   const guardarMinimo = async (ing: Ingrediente, v: string) => {
     if (!local) return
-    try { await repo.setStockMinimo(local, ing.id, numero(v) * factorCompra(ing.unidad)); await cargar() }
+    try { await repo.setStockMinimo(local, ing.id, numero(v)); await cargar() }
     catch (e) { avisar(mensajeError(e), 'error') }
   }
 
@@ -95,7 +95,7 @@ export function Stock() {
                   <td className="px-3 py-2 font-semibold">{f.i.nombre}</td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${f.bajo || f.cantidad < 0 ? 'text-tomate' : f.cantidad === 0 ? 'text-gris' : ''}`}>{formatCantidad(f.cantidad, f.i.unidad)}</td>
                   <td className="px-3 py-2 text-right">
-                    <MinimoInput valor={f.minimo / factorCompra(f.i.unidad)} unidad={unidadCompra(f.i.unidad)} etiqueta={`Mínimo de ${f.i.nombre}`} onGuardar={v => guardarMinimo(f.i, v)} />
+                    <MinimoInput valor={f.minimo} unidad={unidadCantidad(f.i.unidad)} etiqueta={`Mínimo de ${f.i.nombre}`} onGuardar={v => guardarMinimo(f.i, v)} />
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-gris">{money(f.valor)}</td>
                   <td className="px-3 py-2 text-right"><Btn onClick={() => setAjustar(f.i)}>Ajustar</Btn></td>
@@ -158,10 +158,7 @@ function IngresoModal({ sucursalId, ingredientes, onClose, onListo }: { sucursal
     setEnviando(true)
     try {
       await repo.registrarIngreso(sucursalId, {
-        items: validas.map(f => {
-          const ing = ingredientes.find(x => x.id === f.ingredienteId)!
-          return { ingredienteId: f.ingredienteId, cantidad: numero(f.cantidad) * factorCompra(ing.unidad), costo: numero(f.costo) }
-        }),
+        items: validas.map(f => ({ ingredienteId: f.ingredienteId, cantidad: numero(f.cantidad), costo: numero(f.costo) })),
         proveedor, comprobante, observaciones: obs, actualizarCosto, pagarConCaja: hayCaja && pagarConCaja,
       })
       onListo()
@@ -199,7 +196,7 @@ function IngresoModal({ sucursalId, ingredientes, onClose, onListo }: { sucursal
                   <span className="relative">
                     <input aria-label={`Cantidad ${i + 1}`} inputMode="decimal" value={f.cantidad} disabled={!ing} onChange={e => set(i, { cantidad: e.target.value })}
                       className={`${inputBase} w-full pr-9 text-right`} />
-                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gris">{ing ? unidadCompra(ing.unidad) : ''}</span>
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gris">{ing ? unidadCantidad(ing.unidad) : ''}</span>
                   </span>
                   <input aria-label={`Costo ${i + 1}`} inputMode="decimal" value={f.costo} disabled={!ing} onChange={e => set(i, { costo: e.target.value })} className={`${inputBase} w-full text-right`} />
                   {ing ? <button aria-label="Quitar" onClick={() => setFilas(fs => fs.filter((_, j) => j !== i))} className="size-8 rounded-full text-xl text-gris hover:bg-tomate-claro hover:text-tomate">×</button> : <span />}
@@ -207,7 +204,7 @@ function IngresoModal({ sucursalId, ingredientes, onClose, onListo }: { sucursal
               )
             })}
           </div>
-          <p className="mt-2 text-sm text-gris">La cantidad va en kilos o litros para lo que se mide en gramos o mililitros.</p>
+          <p className="mt-2 text-sm text-gris">La cantidad va en la unidad de cada ingrediente: gramos, mililitros o unidades (25 kg de muzzarella = 25000).</p>
         </div>
         <label className="flex items-center gap-2"><input type="checkbox" className="size-5 accent-pizarra" checked={actualizarCosto} onChange={e => setActualizarCosto(e.target.checked)} /> Actualizar el costo de los ingredientes con estos precios</label>
         <label className={`flex items-center gap-2 ${hayCaja ? '' : 'text-gris'}`}>
@@ -226,8 +223,7 @@ function AjusteModal({ sucursalId, ingrediente, actual, onClose, onListo }: { su
   const [cant, setCant] = useState('')
   const [motivo, setMotivo] = useState('')
   const [enviando, setEnviando] = useState(false)
-  const f = factorCompra(ingrediente.unidad)
-  const base = numero(cant) * f
+  const base = numero(cant)
   const resultado = tipo === 'ajuste' ? base : actual - base
 
   const guardar = async () => {
@@ -250,7 +246,7 @@ function AjusteModal({ sucursalId, ingrediente, actual, onClose, onListo }: { su
             </button>
           ))}
         </div>
-        <Campo label={tipo === 'ajuste' ? `Cantidad real contada (${unidadCompra(ingrediente.unidad)})` : `Cantidad que se tiró (${unidadCompra(ingrediente.unidad)})`}>
+        <Campo label={tipo === 'ajuste' ? `Cantidad real contada (${unidadCantidad(ingrediente.unidad)})` : `Cantidad que se tiró (${unidadCantidad(ingrediente.unidad)})`}>
           <input id="ajuste-cant" autoFocus inputMode="decimal" value={cant} onChange={e => setCant(e.target.value)} className={`${inputCls} text-right font-semibold`} />
         </Campo>
         <Campo label="Motivo (opcional)">

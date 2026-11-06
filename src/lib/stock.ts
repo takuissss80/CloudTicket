@@ -24,18 +24,21 @@ export function consumoComanda(c: Pick<Comanda, 'items'>, productos: Producto[])
 }
 
 // ---------------------------------------------------------------------
-// Unidades: se guarda en un / g / ml; se compra y se muestra en un / kg / L
+// Unidades: las cantidades se guardan, se cargan y se muestran en la unidad
+// del ingrediente (u. / g / ml). El COSTO es por unidad / kilo / litro.
 // ---------------------------------------------------------------------
+/** Divisor del costo: el costo se carga por kilo o litro */
 export const factorCompra = (u: UnidadIngrediente) => (u === 'un' ? 1 : 1000)
+/** Unidad del costo: "$ por kg" */
 export const unidadCompra = (u: UnidadIngrediente) => (u === 'un' ? 'u.' : u === 'g' ? 'kg' : 'L')
+/** Unidad de las cantidades de stock: la misma del ingrediente */
+export const unidadCantidad = (u: UnidadIngrediente) => (u === 'un' ? 'u.' : u)
 
 const nf = (max: number) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: max })
 
-/** 12500 g -> "12,5 kg"; 350 g -> "350 g"; 3 un -> "3 u." */
+/** 12500 g -> "12.500 g"; 3 un -> "3 u." (siempre en la unidad del ingrediente) */
 export function formatCantidad(cant: number, u: UnidadIngrediente) {
-  if (u === 'un') return `${nf(2).format(cant)} u.`
-  if (Math.abs(cant) >= 1000) return `${nf(2).format(cant / 1000)} ${u === 'g' ? 'kg' : 'L'}`
-  return `${nf(1).format(cant)} ${u}`
+  return `${nf(u === 'un' ? 2 : 1).format(cant)} ${unidadCantidad(u)}`
 }
 
 /** Valor del stock: cantidad base * costo (por un / kg / L) */
