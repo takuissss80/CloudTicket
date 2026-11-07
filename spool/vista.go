@@ -205,7 +205,7 @@ func RenderizarVista(data []byte) ([]LineaVista, bool) {
 					i += 3 + k
 					bytesImagen += k
 				}
-			case '2', '<', '=':
+			case '2', '<', '=', 'i', 'm':
 			default:
 				arg()
 			}
@@ -267,8 +267,15 @@ func RenderizarVista(data []byte) ([]LineaVista, bool) {
 			default:
 				i++
 			}
-		case c == 0x1C && i+1 < n:
-			i += 2
+		case c == 0x1C && i+1 < n: // FS: igual que ExtraerTexto (FS . y FS & no llevan parámetro)
+			cmd := data[i+1]
+			i++
+			switch cmd {
+			case 'p':
+				i += 2
+			case '!', 'C', '-', 'W':
+				i++
+			}
 		case c == 0x10 && i+1 < n:
 			i += 2
 		case c == '\n':

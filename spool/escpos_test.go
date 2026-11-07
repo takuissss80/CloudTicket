@@ -184,3 +184,18 @@ func TestCapturaRepetidaYVirtual(t *testing.T) {
 		t.Fatal("no se tiene que poder imprimir en la impresora virtual")
 	}
 }
+
+func TestVistaNoComeLetras(t *testing.T) {
+	// GoWin manda FS . (sin parámetro) antes del texto
+	datos := []byte("\x1b@\x1c.Medio de pago: VISA\n\x1c&Total: $1\n\x1bi")
+	lineas, _ := RenderizarVista(datos)
+	var todo string
+	for _, l := range lineas {
+		for _, s := range l.Segmentos {
+			todo += s.Texto + "\n"
+		}
+	}
+	if !strings.Contains(todo, "Medio de pago") || !strings.Contains(todo, "Total:") {
+		t.Fatalf("la vista se comió letras: %q", todo)
+	}
+}

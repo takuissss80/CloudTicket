@@ -62,7 +62,14 @@ function montoDeLinea(l: string) {
 }
 
 export function parsearTicket(texto: string): TicketLeido {
-  const lineas = texto.replace(/\r/g, '').split('\n').map(l => l.replace(/\s+$/, ''))
+  const crudas = texto.replace(/\r/g, '').split('\n').map(l => l.replace(/\s+$/, ''))
+  // GoWin corta los precios largos: "29.640," y en la línea de abajo "00"
+  const lineas: string[] = []
+  for (const l of crudas) {
+    const prev = lineas[lineas.length - 1]
+    if (prev !== undefined && /\d[.,]$/.test(prev) && /^\s*\d{1,2}\s*$/.test(l)) lineas[lineas.length - 1] = prev + l.trim()
+    else lineas.push(l)
+  }
   const todo = lineas.join('\n')
   const t: TicketLeido = { items: [], retiro: false }
 
@@ -115,21 +122,38 @@ export function parsearTicket(texto: string): TicketLeido {
 const reSeparador = /^[\s\-=_*.·~]{5,}$/
 const reTelLinea = /^\s*(?:tel[eé]fono|tel\.?|cel(?:ular)?|whats?app)\s*[:.\-]?\s*[+\d]/i
 function leerBloqueCliente(lineas: string[], t: TicketLeido) {
+  let antes: string[], despues: string[] = []
   const iTel = lineas.findIndex(l => reTelLinea.test(l))
-  if (iTel < 0) return
-  let ini = iTel, fin = iTel
-  while (ini > 0 && !reSeparador.test(lineas[ini - 1])) ini--
-  while (fin < lineas.length - 1 && !reSeparador.test(lineas[fin + 1])) fin++
-  const antes = lineas.slice(ini, iTel).map(l => l.trim()).filter(Boolean)
-  const despues = lineas.slice(iTel + 1, fin + 1).map(l => l.trim()).filter(Boolean)
-  // Si el bloque arranca con fecha u hora (no hubo separador), se saltean
-  while (antes.length && /^(\w{2,4},?\s*)?\d{1,2}[\/:.-]\d{1,2}([\/.-]\d{2,4})?$|^(entrega|retiro|delivery|pedidos ?ya)\b/i.test(antes[0])) antes.shift()
+  if (iTel >= 0) {
+    let ini = iTel, fin = iTel
+    while (ini > 0 && !reSeparador.test(lineas[ini - 1])) ini--
+    while (fin < lineas.length - 1 && !reSeparador.test(lineas[fin + 1])) fin++
+    antes = lineas.slice(ini, iTel).map(l => l.trim()).filter(Boolean)
+    despues = lineas.slice(iTel + 1, fin + 1).map(l => l.trim()).filter(Boolean)
+  } else {
+    // Sin teléfono (pedidos que reparte PedidosYa): el bloque justo antes de "Medio de pago"
+    const iPago = lineas.findIndex(l => /^\s*(medio|forma|m[eé]todo) de pago\b/i.test(l))
+    if (iPago < 0) return
+    let fin = iPago - 1
+    while (fin >= 0 && !reSeparador.test(lineas[fin])) fin--
+    if (fin < 0) return
+    let ini = fin - 1
+    while (ini >= 0 && !reSeparador.test(lineas[ini])) ini--
+    antes = lineas.slice(ini + 1, fin).map(l => l.trim()).filter(Boolean)
+  }
+  // Fechas, horas, números sueltos y palabras de encabezado no son el cliente
+  while (antes.length && /^(\w{2,4},?\s*)?\d{1,2}[\/:.-]\d{1,2}([\/.-]\d{2,4})?$|^[#\d\s]+$|^(entrega|retiro|delivery|pedidos ?ya|hurrier|rider|repartidor)\b/i.test(antes[0])) antes.shift()
   if (!antes.length || antes.length > 6) return
-  if (antes.some(l => reMontoFinal.test(' ' + l) && /\$/.test(l))) return
+  if (antes.some(l => /\$/.test(l) && reMontoFinal.test(' ' + l))) return
+  if (!/\p{L}{2,}/u.test(antes[0]) || antes[0].length > 60) return
   // "ALAN BARTKUS" -> "Alan Bartkus"
   t.cliente = antes[0] === antes[0].toUpperCase() ? antes[0].toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : antes[0]
-  if (!t.direccion && antes.length > 1) t.direccion = antes.slice(1).join(', ')
-  if (!t.notas && despues.length) t.notas = despues.join(' ')
+  // "Entre General Paz y Lavalle" son indicaciones, el resto es la dirección
+  const resto = antes.slice(1)
+  const indicaciones = [...resto.filter(l => /^entre\b/i.test(l)), ...despues]
+  const direccion = resto.filter(l => !/^entre\b/i.test(l))
+  if (!t.direccion && direccion.length) t.direccion = direccion.join(', ')
+  if (!t.notas && indicaciones.length) t.notas = indicaciones.join(' ')
 }
 
 function leerItem(linea: string): ItemTicket | null {
