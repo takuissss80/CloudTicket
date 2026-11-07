@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +23,7 @@ var (
 		Recibidos  int    `json:"recibidos"`
 		Enviados   int    `json:"enviados"`
 		Duplicados int    `json:"duplicados"`
+		Ignorados  int    `json:"ignorados"`
 		Imagenes   int    `json:"imagenes"`
 		Ultimo     string `json:"ultimo,omitempty"`
 	}{}
@@ -86,8 +88,39 @@ func atenderCaptura(conn net.Conn) {
 	procesarCaptura(buf.Bytes())
 }
 
+// Windows reintenta un trabajo si cree que falló: el mismo ticket puede llegar
+// varias veces seguidas. Lo idéntico dentro de 20 s se ignora.
+var (
+	vistosMu sync.Mutex
+	vistos   = map[[32]byte]time.Time{}
+)
+
+func repetidoReciente(datos []byte) bool {
+	h := sha256.Sum256(datos)
+	vistosMu.Lock()
+	defer vistosMu.Unlock()
+	ahora := time.Now()
+	for k, t := range vistos {
+		if ahora.Sub(t) > 20*time.Second {
+			delete(vistos, k)
+		}
+	}
+	if t, ok := vistos[h]; ok && ahora.Sub(t) <= 20*time.Second {
+		vistos[h] = ahora
+		return true
+	}
+	vistos[h] = ahora
+	return false
+}
+
 func procesarCaptura(datos []byte) {
 	c := copiaConfig().Captura
+	if repetidoReciente(datos) {
+		capMu.Lock()
+		capEstado.Ignorados++
+		capMu.Unlock()
+		return
+	}
 	capMu.Lock()
 	capEstado.Recibidos++
 	capEstado.Ultimo = time.Now().Format("15:04:05")
@@ -96,7 +129,7 @@ func procesarCaptura(datos []byte) {
 	texto, imagen, cortes := ExtraerTexto(datos)
 
 	// 1) Que se imprima igual (lo primero: la cocina no puede quedarse sin el ticket)
-	if c.Reenviar != "" {
+	if c.Reenviar != "" && !EsImpresoraVirtual(c.Reenviar) {
 		salida := datos
 		if c.AgregarCorte && cortes == 0 {
 			salida = append(append([]byte{}, datos...), 0x1B, 'd', 4, 0x1D, 'V', 66, 0)

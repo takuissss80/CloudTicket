@@ -81,7 +81,20 @@ func EsImpresoraDeArchivos(nombre string) bool {
 
 // ImprimirRAW: a la impresora de Windows (o solo a la pantalla si es la vista previa o
 // una impresora de archivos). Siempre queda una copia para ver en el panel.
+// La impresora virtual manda todo al puerto de captura: imprimir ahí arma un círculo
+// (el ticket vuelve a entrar como pedido, se reenvía, vuelve a entrar...)
+const nombreImpresoraVirtual = "PedidosYa (CloudTicket)"
+
+func EsImpresoraVirtual(nombre string) bool {
+	return strings.Contains(strings.ToLower(nombre), "(cloudticket)")
+}
+
+var errImpresoraVirtual = errorServidor{"Esa es la impresora virtual para GoWin (PedidosYa). Elegí la impresora real (por ejemplo la TP85K)."}
+
 func ImprimirRAW(impresora, documento string, datos []byte) error {
+	if EsImpresoraVirtual(impresora) {
+		return errImpresoraVirtual
+	}
 	if impresora == nombreVistaPrevia || EsImpresoraDeArchivos(impresora) {
 		guardarVista(impresora, documento, datos, nil)
 		return nil

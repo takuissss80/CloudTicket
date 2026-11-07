@@ -144,6 +144,9 @@ func iniciarPanel() (net.Listener, error) {
 		if p.Impresora == "" {
 			return nil, errorServidor{"Elegí la impresora de esta PC."}
 		}
+		if EsImpresoraVirtual(p.Impresora) {
+			return nil, errImpresoraVirtual
+		}
 		if p.CodePage == 0 {
 			p.CodePage = 2
 		}
@@ -199,6 +202,10 @@ func iniciarPanel() (net.Listener, error) {
 				}
 			}
 		case "guardar":
+			if EsImpresoraVirtual(p.Impresora) {
+				cfgMu.Unlock()
+				return nil, errImpresoraVirtual
+			}
 			if p.Impresora != "" {
 				cfg.Vinculos[p.Indice].Impresora = p.Impresora
 			}
@@ -237,6 +244,9 @@ func iniciarPanel() (net.Listener, error) {
 		}
 		if p.Puerto <= 0 || p.Puerto > 65535 || p.Puerto == puertoPanel {
 			return nil, errorServidor{"Puerto inválido"}
+		}
+		if EsImpresoraVirtual(p.Reenviar) {
+			return nil, errorServidor{"En \"Imprimir igual en\" elegí la impresora real (por ejemplo la TP85K), no la virtual: si no, el ticket da vueltas sin parar."}
 		}
 		cfgMu.Lock()
 		cfg.Captura.Activa, cfg.Captura.Puerto, cfg.Captura.DesdeLaRed = p.Activa, p.Puerto, p.DesdeLaRed

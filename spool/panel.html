@@ -212,7 +212,7 @@ function pintar() {
   const ce = estado.capturaEstado;
   $('cap-estado').innerHTML = estado.captura.activa
     ? (ce.escuchando ? `<span class="chip ok">Escuchando en el puerto ${estado.captura.puerto}</span>` : `<span class="chip err">${esc(ce.error || 'Detenida')}</span>`)
-      + `<span>Recibidos <b>${ce.recibidos}</b></span><span>Pedidos nuevos <b>${ce.enviados}</b></span><span>Repetidos <b>${ce.duplicados}</b></span>${ce.imagenes ? `<span style="color:var(--rojo)">Como imagen <b>${ce.imagenes}</b></span>` : ''}${ce.ultimo ? `<span>Último <b>${esc(ce.ultimo)}</b></span>` : ''}`
+      + `<span>Recibidos <b>${ce.recibidos}</b></span><span>Pedidos nuevos <b>${ce.enviados}</b></span><span>Repetidos <b>${ce.duplicados}</b></span>${ce.ignorados ? `<span title="El mismo ticket llegó otra vez enseguida (reintento de Windows): no se procesa de nuevo">Reintentos ignorados <b>${ce.ignorados}</b></span>` : ''}${ce.imagenes ? `<span style="color:var(--rojo)">Como imagen <b>${ce.imagenes}</b></span>` : ''}${ce.ultimo ? `<span>Último <b>${esc(ce.ultimo)}</b></span>` : ''}`
     : '<span class="chip gris">Desactivada</span>';
   if (estado.ultimoTexto) $('ultimo').textContent = estado.ultimoTexto;
   $('eventos').innerHTML = (estado.eventos || []).map(e => `<div class="t-${e.tipo}">${esc(e.hora)} · ${esc(e.texto)}</div>`).join('') || '<div>Sin actividad todavía.</div>';

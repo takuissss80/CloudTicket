@@ -1,11 +1,11 @@
 package main
 
 import (
-	"time"
 	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTablas(t *testing.T) {
@@ -166,5 +166,21 @@ func TestEsperaTokenInvalido(t *testing.T) {
 	}
 	if !esTokenInvalido(errorServidor{"Token inválido o comandera desactivada"}) || esTokenInvalido(errorServidor{"otra cosa"}) {
 		t.Fatal("detección de token inválido")
+	}
+}
+
+func TestCapturaRepetidaYVirtual(t *testing.T) {
+	d := []byte("ticket de prueba 123")
+	if repetidoReciente(d) {
+		t.Fatal("la primera vez no es repetido")
+	}
+	if !repetidoReciente(d) {
+		t.Fatal("el mismo ticket enseguida tiene que ignorarse")
+	}
+	if !EsImpresoraVirtual("PedidosYa (CloudTicket)") || EsImpresoraVirtual("TP85K") {
+		t.Fatal("detección de impresora virtual")
+	}
+	if ImprimirRAW("PedidosYa (CloudTicket)", "x", d) == nil {
+		t.Fatal("no se tiene que poder imprimir en la impresora virtual")
 	}
 }
