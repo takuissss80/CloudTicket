@@ -5,6 +5,7 @@ import { mensajeError, useApp } from '../../store/app'
 import { formatCantidad, unidadCantidad, valorStock } from '../../lib/stock'
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
+import { HistorialIngresos } from './HistorialIngresos'
 
 const numero = (v: string) => (v.trim() === '' ? 0 : Math.max(0, Number(v.replace(',', '.')) || 0))
 
@@ -19,11 +20,15 @@ export function Stock() {
   const [soloBajos, setSoloBajos] = useState(false)
   const [verIngreso, setVerIngreso] = useState(false)
   const [ajustar, setAjustar] = useState<Ingrediente | null>(null)
+  const [verHistorial, setVerHistorial] = useState(false)
+  // Todos, también los desactivados: para mostrar nombres en el historial
+  const [todos, setTodos] = useState<Ingrediente[]>([])
 
   const cargar = useCallback(async () => {
     if (!local) return
     try {
       const [m, s] = await Promise.all([repo.getMenu(null), repo.getStock(local)])
+      setTodos(m.ingredientes)
       setIngredientes(m.ingredientes.filter(i => i.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)))
       setStock(s)
     } catch (e) { avisar(mensajeError(e), 'error') }
@@ -59,6 +64,7 @@ export function Stock() {
             {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         )}
+        <Btn onClick={() => setVerHistorial(true)} disabled={!local}>Historial de ingresos</Btn>
         <Btn tono="albahaca" onClick={() => setVerIngreso(true)} disabled={!ingredientes.length}>Ingresar mercadería</Btn>
       </div>
 
@@ -107,6 +113,9 @@ export function Stock() {
         </div>
       )}
 
+      {verHistorial && local && (
+        <HistorialIngresos sucursalId={local} nombreLocal={sucursales.find(s => s.id === local)?.nombre ?? ''} ingredientes={todos} onClose={() => setVerHistorial(false)} />
+      )}
       {verIngreso && local && (
         <IngresoModal sucursalId={local} ingredientes={ingredientes} onClose={() => setVerIngreso(false)}
           onListo={async () => { setVerIngreso(false); avisar('Mercadería ingresada'); await cargar(); await refrescarMenu() }} />
