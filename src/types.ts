@@ -477,6 +477,8 @@ export type EstadoPedidoFabrica = 'pendiente' | 'recibido' | 'anulado'
 export interface PedidoFabricaItem {
   id: string
   ingredienteId?: string
+  /** Producto del menú (no suma al stock al recibirlo) */
+  productoId?: string
   nombre: string
   unidad: UnidadIngrediente
   cantidad: number

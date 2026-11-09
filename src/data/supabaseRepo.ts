@@ -4,6 +4,7 @@ import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } fro
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
   Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica } from '../types'
+import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
@@ -494,12 +495,16 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     // ---- Pedido a fábrica
     async getPlanillaFabrica() {
-      return (ok(await sb.from('fabrica_planilla').select('ingrediente_id').order('orden')) as Row[]).map(r => r.ingrediente_id as string)
+      return (ok(await sb.from('fabrica_planilla').select('ingrediente_id, producto_id').order('orden')) as Row[])
+        .map(r => (r.producto_id ? `${PREFIJO_PRODUCTO}${r.producto_id}` : r.ingrediente_id as string))
     },
     async guardarPlanillaFabrica(ids) {
       const cuenta = (await perfil())?.cuenta_id as string
-      ok(await sb.from('fabrica_planilla').delete().eq('cuenta_id', cuenta).select('ingrediente_id'))
-      if (ids.length) ok(await sb.from('fabrica_planilla').insert(ids.map((id, i) => ({ cuenta_id: cuenta, ingrediente_id: id, orden: i }))).select('ingrediente_id'))
+      ok(await sb.from('fabrica_planilla').delete().eq('cuenta_id', cuenta).select('cuenta_id'))
+      if (ids.length) ok(await sb.from('fabrica_planilla').insert(ids.map((id, i) => {
+        const prod = productoDePlanilla(id)
+        return { cuenta_id: cuenta, ingrediente_id: prod ? null : id, producto_id: prod ?? null, orden: i }
+      })).select('cuenta_id'))
     },
     async listPedidosFabrica(sucursalIds, limite = 100) {
       let q = sb.from('pedidos_fabrica').select('*, pedidos_fabrica_items(*)').order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(limite)
@@ -508,7 +513,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         id: p.id, sucursalId: p.sucursal_id, numero: p.numero, fecha: p.fecha, notas: opt(p.notas), estado: p.estado,
         creadoPor: opt(p.creado_por), createdAt: p.created_at, recibidoAt: opt(p.recibido_at), recibidoPor: opt(p.recibido_por),
         items: ((p.pedidos_fabrica_items ?? []) as Row[]).sort((a, b) => a.orden - b.orden).map(i => ({
-          id: i.id, ingredienteId: opt(i.ingrediente_id), nombre: i.nombre, unidad: i.unidad, cantidad: num(i.cantidad),
+          id: i.id, ingredienteId: opt(i.ingrediente_id), productoId: opt(i.producto_id), nombre: i.nombre, unidad: i.unidad, cantidad: num(i.cantidad),
           recibido: i.recibido == null ? undefined : num(i.recibido),
         })),
       }))
@@ -516,7 +521,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async crearPedidoFabrica(sucursalId, d) {
       ok(await sb.rpc('crear_pedido_fabrica', {
         p_sucursal: sucursalId, p_fecha: d.fecha, p_notas: d.notas ?? null,
-        p_items: d.items.map(i => ({ ingrediente_id: i.ingredienteId, cantidad: i.cantidad })),
+        p_items: d.items.map(i => (i.productoId ? { producto_id: i.productoId, cantidad: i.cantidad } : { ingrediente_id: i.ingredienteId, cantidad: i.cantidad })),
       }))
     },
     async recibirPedidoFabrica(pedidoId, items) {

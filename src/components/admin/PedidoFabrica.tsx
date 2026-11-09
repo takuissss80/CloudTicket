@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Ingrediente, PedidoFabrica as Pedido, StockItem } from '../../types'
+import type { Categoria, Ingrediente, PedidoFabrica as Pedido, Producto, StockItem, UnidadIngrediente } from '../../types'
+import { PREFIJO_PRODUCTO, productoDePlanilla } from '../../data/repo'
 import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
 import { formatCantidad, unidadCantidad } from '../../lib/stock'
-import { fecha, hora } from '../../lib/format'
+import { fecha, hora, normalizar } from '../../lib/format'
 import { Btn, Campo, Confirmar, Modal, inputBase, inputCls } from '../ui'
 
 const numero = (v: string) => (v.trim() === '' ? 0 : Math.max(0, Number(v.replace(',', '.')) || 0))
@@ -16,13 +17,27 @@ export const ESTADO_PEDIDO: Record<Pedido['estado'], { label: string; cls: strin
   anulado: { label: 'Anulado', cls: 'bg-linea text-gris' },
 }
 
+/** Lo que se puede pedir a fábrica: un ingrediente o un producto del menú madre */
+interface Pedible { clave: string; nombre: string; unidad: UnidadIngrediente; ingrediente?: Ingrediente; producto?: Producto; categoria?: string }
+interface Catalogo { ingredientes: Ingrediente[]; productos: Producto[]; categorias: Categoria[] }
+
+function resolver(clave: string, c: Catalogo): Pedible | undefined {
+  const prodId = productoDePlanilla(clave)
+  if (prodId) {
+    const p = c.productos.find(x => x.id === prodId)
+    return p && p.activo ? { clave, nombre: p.nombre, unidad: 'un', producto: p, categoria: c.categorias.find(x => x.id === p.categoriaId)?.nombre } : undefined
+  }
+  const i = c.ingredientes.find(x => x.id === clave)
+  return i && i.activo ? { clave, nombre: i.nombre, unidad: i.unidad, ingrediente: i } : undefined
+}
+
 /** Pedido a la fábrica: armar el pedido con la planilla, historial y recepción (suma al stock) */
 export function PedidoFabrica() {
   const { sesion, sucursales, sucursalId, avisar } = useApp()
   const esAdmin = sesion?.rol === 'admin'
   const [local, setLocal] = useState(esAdmin ? sucursalId : sesion?.sucursalId ?? null)
   const [vista, setVista] = useState<'nuevo' | 'historial'>('nuevo')
-  const [ingredientes, setIngredientes] = useState<Ingrediente[]>([])
+  const [catalogo, setCatalogo] = useState<Catalogo>({ ingredientes: [], productos: [], categorias: [] })
   const [planilla, setPlanilla] = useState<string[] | null>(null)
   const [stock, setStock] = useState<StockItem[]>([])
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null)
@@ -32,7 +47,7 @@ export function PedidoFabrica() {
     if (!local) return
     try {
       const [m, p, s, ped] = await Promise.all([repo.getMenu(null), repo.getPlanillaFabrica(), repo.getStock(local), repo.listPedidosFabrica([local])])
-      setIngredientes(m.ingredientes)
+      setCatalogo({ ingredientes: m.ingredientes, productos: m.productos.filter(x => !x.sucursalId && x.tipo !== 'promo'), categorias: m.categorias.filter(x => !x.sucursalId) })
       setPlanilla(p)
       setStock(s)
       setPedidos(ped)
@@ -67,7 +82,7 @@ export function PedidoFabrica() {
 
       {!planilla || !pedidos ? <p className="p-8 text-center text-gris">Cargando…</p>
         : vista === 'nuevo' ? (
-          <NuevoPedido local={local!} nombreLocal={nombreLocal} ingredientes={ingredientes} planilla={planilla} stock={stock} esAdmin={esAdmin}
+          <NuevoPedido local={local!} nombreLocal={nombreLocal} catalogo={catalogo} planilla={planilla} stock={stock} esAdmin={esAdmin}
             onPersonalizar={() => setEditarPlanilla(true)}
             onGuardado={async () => { await cargar(); setVista('historial') }} />
         ) : (
@@ -75,15 +90,15 @@ export function PedidoFabrica() {
         )}
 
       {editarPlanilla && (
-        <EditorPlanilla ingredientes={ingredientes} planilla={planilla ?? []} onClose={() => setEditarPlanilla(false)}
+        <EditorPlanilla catalogo={catalogo} planilla={planilla ?? []} onClose={() => setEditarPlanilla(false)}
           onGuardada={async () => { setEditarPlanilla(false); await cargar() }} />
       )}
     </div>
   )
 }
 
-function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmin, onPersonalizar, onGuardado }: {
-  local: string; nombreLocal: string; ingredientes: Ingrediente[]; planilla: string[]; stock: StockItem[]; esAdmin: boolean
+function NuevoPedido({ local, nombreLocal, catalogo, planilla, stock, esAdmin, onPersonalizar, onGuardado }: {
+  local: string; nombreLocal: string; catalogo: Catalogo; planilla: string[]; stock: StockItem[]; esAdmin: boolean
   onPersonalizar: () => void; onGuardado: () => void
 }) {
   const avisar = useApp(s => s.avisar)
@@ -93,18 +108,18 @@ function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmi
   const [guardando, setGuardando] = useState(false)
   const [confirmar, setConfirmar] = useState(false)
 
-  const filas = useMemo(() => planilla.map(id => ingredientes.find(i => i.id === id)).filter((i): i is Ingrediente => !!i && i.activo).map(i => {
-    const s = stock.find(x => x.ingredienteId === i.id)
+  const filas = useMemo(() => planilla.map(k => resolver(k, catalogo)).filter((i): i is Pedible => !!i).map(i => {
+    const s = i.ingrediente ? stock.find(x => x.ingredienteId === i.clave) : undefined
     const cantidad = s?.cantidad ?? 0, minimo = s?.minimo ?? 0
     return { i, cantidad, minimo, sugerido: minimo > 0 ? Math.max(0, Math.ceil(minimo - cantidad)) : 0 }
-  }), [planilla, ingredientes, stock])
-  const cargados = filas.filter(f => numero(cant[f.i.id] ?? '') > 0)
+  }), [planilla, catalogo, stock])
+  const cargados = filas.filter(f => numero(cant[f.i.clave] ?? '') > 0)
   const haySugeridos = filas.some(f => f.sugerido > 0)
 
   const guardar = async () => {
     setGuardando(true)
     try {
-      await repo.crearPedidoFabrica(local, { fecha: fechaP, notas, items: cargados.map(f => ({ ingredienteId: f.i.id, cantidad: numero(cant[f.i.id]) })) })
+      await repo.crearPedidoFabrica(local, { fecha: fechaP, notas, items: cargados.map(f => ({ ...(f.i.producto ? { productoId: f.i.producto.id } : { ingredienteId: f.i.clave }), cantidad: numero(cant[f.i.clave]) })) })
       avisar('Pedido a fábrica guardado')
       setCant({}); setNotas(''); setConfirmar(false)
       onGuardado()
@@ -114,7 +129,7 @@ function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmi
   if (!filas.length) return (
     <div className="rounded-xl bg-superficie p-8 text-center ring-1 ring-linea">
       <p className="text-lg font-semibold">La planilla de pedido está vacía</p>
-      <p className="mt-1 text-gris">{esAdmin ? 'Elegí qué ingredientes se le piden a la fábrica.' : 'El administrador tiene que armar la planilla con los ingredientes que se piden a la fábrica.'}</p>
+      <p className="mt-1 text-gris">{esAdmin ? 'Elegí qué ingredientes y productos se le piden a la fábrica.' : 'El administrador tiene que armar la planilla con lo que se pide a la fábrica.'}</p>
       {esAdmin && <Btn tono="albahaca" className="mt-4" onClick={onPersonalizar}>Armar la planilla</Btn>}
     </div>
   )
@@ -134,7 +149,7 @@ function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmi
         <table className="w-full min-w-[620px] text-left text-[15px]">
           <thead className="border-b border-linea text-sm text-gris">
             <tr>
-              <th className="px-3 py-2 font-medium">Ingrediente</th>
+              <th className="px-3 py-2 font-medium">Ingrediente / producto</th>
               <th className="px-3 py-2 text-right font-medium">Stock ahora</th>
               <th className="px-3 py-2 text-right font-medium">Mínimo</th>
               <th className="px-3 py-2 text-right font-medium">Pedir</th>
@@ -142,14 +157,19 @@ function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmi
           </thead>
           <tbody className="divide-y divide-linea">
             {filas.map(f => (
-              <tr key={f.i.id} className={numero(cant[f.i.id] ?? '') > 0 ? 'bg-albahaca-claro/40' : ''}>
-                <td className="px-3 py-2 font-semibold">{f.i.nombre}</td>
-                <td className={`px-3 py-2 text-right tabular-nums ${f.minimo > 0 && f.cantidad <= f.minimo ? 'font-semibold text-tomate' : 'text-gris'}`}>{formatCantidad(f.cantidad, f.i.unidad)}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-gris">{f.minimo ? formatCantidad(f.minimo, f.i.unidad) : '—'}</td>
+              <tr key={f.i.clave} className={numero(cant[f.i.clave] ?? '') > 0 ? 'bg-albahaca-claro/40' : ''}>
+                <td className="px-3 py-2 font-semibold">
+                  {f.i.nombre}
+                  {f.i.producto && <span className="ml-2 rounded bg-pizarra-claro px-1.5 py-0.5 text-xs font-semibold text-tinta">Producto{f.i.categoria ? ` · ${f.i.categoria}` : ''}</span>}
+                </td>
+                {f.i.producto ? <><td className="px-3 py-2 text-right text-gris">—</td><td className="px-3 py-2 text-right text-gris">—</td></> : <>
+                  <td className={`px-3 py-2 text-right tabular-nums ${f.minimo > 0 && f.cantidad <= f.minimo ? 'font-semibold text-tomate' : 'text-gris'}`}>{formatCantidad(f.cantidad, f.i.unidad)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-gris">{f.minimo ? formatCantidad(f.minimo, f.i.unidad) : '—'}</td>
+                </>}
                 <td className="px-3 py-2 text-right">
                   <span className="inline-flex items-center gap-1.5">
-                    <input inputMode="decimal" aria-label={`Cantidad de ${f.i.nombre}`} value={cant[f.i.id] ?? ''} placeholder={f.sugerido ? String(f.sugerido) : '0'}
-                      onChange={e => setCant(c => ({ ...c, [f.i.id]: e.target.value }))}
+                    <input inputMode="decimal" aria-label={`Cantidad de ${f.i.nombre}`} value={cant[f.i.clave] ?? ''} placeholder={f.sugerido ? String(f.sugerido) : '0'}
+                      onChange={e => setCant(c => ({ ...c, [f.i.clave]: e.target.value }))}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const t = [...document.querySelectorAll<HTMLInputElement>('input[aria-label^="Cantidad de "]')]; t[t.indexOf(e.currentTarget) + 1]?.focus() } }}
                       className={`${inputBase} h-9 w-28 text-right tabular-nums`} />
                     <span className="w-6 text-left text-sm text-gris">{unidadCantidad(f.i.unidad)}</span>
@@ -163,11 +183,11 @@ function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmi
 
       <div className="flex flex-wrap items-center gap-2">
         {haySugeridos && (
-          <Btn onClick={() => setCant(c => { const n = { ...c }; filas.forEach(f => { if (f.sugerido > 0 && !numero(n[f.i.id] ?? '')) n[f.i.id] = String(f.sugerido) }); return n })}>
+          <Btn onClick={() => setCant(c => { const n = { ...c }; filas.forEach(f => { if (f.sugerido > 0 && !numero(n[f.i.clave] ?? '')) n[f.i.clave] = String(f.sugerido) }); return n })}>
             Completar hasta el mínimo
           </Btn>
         )}
-        <span className="ml-auto text-gris">{cargados.length} de {filas.length} ingredientes con cantidad</span>
+        <span className="ml-auto text-gris">{cargados.length} de {filas.length} con cantidad</span>
         <Btn tono="albahaca" disabled={!cargados.length || !fechaP || guardando} onClick={() => setConfirmar(true)}>Guardar pedido</Btn>
       </div>
 
@@ -178,7 +198,7 @@ function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmi
             <p><b>{nombreLocal}</b> · {fechaPedido(fechaP)}{notas.trim() ? ` · ${notas.trim()}` : ''}</p>
             <ul className="divide-y divide-linea rounded-xl bg-harina ring-1 ring-linea">
               {cargados.map(f => (
-                <li key={f.i.id} className="flex justify-between px-4 py-2"><span>{f.i.nombre}</span><b className="tabular-nums">{formatCantidad(numero(cant[f.i.id]), f.i.unidad)}</b></li>
+                <li key={f.i.clave} className="flex justify-between px-4 py-2"><span>{f.i.nombre}</span><b className="tabular-nums">{formatCantidad(numero(cant[f.i.clave]), f.i.unidad)}</b></li>
               ))}
             </ul>
           </div>
@@ -211,7 +231,7 @@ export function ListaPedidosFabrica({ pedidos, onCambio, puedeOperar, mostrarLoc
                 className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-harina">
                 <span className="font-cond text-2xl font-bold tabular-nums">#{p.numero}</span>
                 {mostrarLocal && <span className="font-semibold">{sucursales.find(s => s.id === p.sucursalId)?.nombre ?? ''}</span>}
-                <span className="text-gris">{fechaPedido(p.fecha)} · {p.items.length} {p.items.length === 1 ? 'ingrediente' : 'ingredientes'}{p.creadoPor ? ` · ${p.creadoPor}` : ''}</span>
+                <span className="text-gris">{fechaPedido(p.fecha)} · {p.items.length} {p.items.length === 1 ? 'ítem' : 'ítems'}{p.creadoPor ? ` · ${p.creadoPor}` : ''}</span>
                 <span className={`ml-auto rounded-full px-3 py-1 text-sm font-bold ${e.cls}`}>{e.label}</span>
                 {faltantes > 0 && <span className="rounded-full bg-tomate-claro px-3 py-1 text-sm font-bold ring-1 ring-tomate">{faltantes} con faltante</span>}
               </button>
@@ -220,7 +240,7 @@ export function ListaPedidosFabrica({ pedidos, onCambio, puedeOperar, mostrarLoc
                   {p.notas && <p className="mb-2 rounded-lg bg-muzza-claro px-3 py-2"><b>Notas:</b> {p.notas}</p>}
                   <table className="w-full text-[15px]">
                     <thead className="text-sm text-gris">
-                      <tr><th className="py-1 text-left font-medium">Ingrediente</th><th className="py-1 text-right font-medium">Pedido</th>{p.estado === 'recibido' && <th className="py-1 text-right font-medium">Llegó</th>}</tr>
+                      <tr><th className="py-1 text-left font-medium">Ingrediente / producto</th><th className="py-1 text-right font-medium">Pedido</th>{p.estado === 'recibido' && <th className="py-1 text-right font-medium">Llegó</th>}</tr>
                     </thead>
                     <tbody className="divide-y divide-linea">
                       {p.items.map(i => {
@@ -323,7 +343,7 @@ function RecibirPedido({ pedido, onClose, onListo }: { pedido: Pedido; onClose: 
       {confirmar && (
         <Confirmar tono="albahaca" texto={`¿Guardar la recepción del pedido #${pedido.numero}?`}
           detalle={[
-            'Lo que llegó se suma al stock y el pedido queda como recibido.',
+            filas.some(f => f.productoId) ? 'Los ingredientes que llegaron se suman al stock (los productos no llevan stock) y el pedido queda como recibido.' : 'Lo que llegó se suma al stock y el pedido queda como recibido.',
             sinCheck ? `${sinCheck} sin tildar: se toman como que no llegaron.` : '',
             distintos ? `${distintos} llegaron con otra cantidad.` : '',
           ].filter(Boolean).join(' ')}
@@ -333,16 +353,26 @@ function RecibirPedido({ pedido, onClose, onListo }: { pedido: Pedido; onClose: 
   )
 }
 
-/** Qué ingredientes aparecen en la planilla de pedido y en qué orden (para toda la cuenta) */
-function EditorPlanilla({ ingredientes, planilla, onClose, onGuardada }: {
-  ingredientes: Ingrediente[]; planilla: string[]; onClose: () => void; onGuardada: () => void
+/** Qué ingredientes y productos aparecen en la planilla de pedido y en qué orden (para toda la cuenta) */
+function EditorPlanilla({ catalogo, planilla, onClose, onGuardada }: {
+  catalogo: Catalogo; planilla: string[]; onClose: () => void; onGuardada: () => void
 }) {
   const avisar = useApp(s => s.avisar)
-  const activos = ingredientes.filter(i => i.activo)
-  const [orden, setOrden] = useState<string[]>(() => planilla.filter(id => activos.some(i => i.id === id)))
+  const [orden, setOrden] = useState<string[]>(() => planilla.filter(k => resolver(k, catalogo)))
   const [guardando, setGuardando] = useState(false)
-  const fuera = activos.filter(i => !orden.includes(i.id)).sort((a, b) => a.nombre.localeCompare(b.nombre))
-  const nombre = (id: string) => activos.find(i => i.id === id)?.nombre ?? ''
+  const [lista, setLista] = useState<'ingredientes' | 'productos'>('ingredientes')
+  const [filtro, setFiltro] = useState('')
+  const q = normalizar(filtro.trim())
+  const coincide = (n: string) => !q || normalizar(n).includes(q)
+  const enPlanilla = new Set(orden)
+  const ingFuera = catalogo.ingredientes.filter(i => i.activo && !enPlanilla.has(i.id) && coincide(i.nombre)).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  const nombreCat = (id: string) => catalogo.categorias.find(c => c.id === id)?.nombre ?? ''
+  const prodFuera = catalogo.productos.filter(p => p.activo && !enPlanilla.has(PREFIJO_PRODUCTO + p.id) && coincide(`${p.nombre} ${nombreCat(p.categoriaId)}`))
+  const grupos = [...catalogo.categorias].sort((a, b) => a.orden - b.orden)
+    .map(c => ({ c, productos: prodFuera.filter(p => p.categoriaId === c.id).sort((a, b) => a.orden - b.orden) }))
+    .filter(g => g.productos.length)
+  const item = (k: string) => resolver(k, catalogo)
+  const agregar = (claves: string[]) => setOrden(o => [...o, ...claves.filter(k => !o.includes(k))])
   const mover = (k: number, d: -1 | 1) => setOrden(o => { const n = [...o]; const j = k + d; if (j < 0 || j >= n.length) return o; [n[k], n[j]] = [n[j], n[k]]; return n })
 
   const guardar = async () => {
@@ -350,6 +380,14 @@ function EditorPlanilla({ ingredientes, planilla, onClose, onGuardada }: {
     try { await repo.guardarPlanillaFabrica(orden); avisar('Planilla guardada'); onGuardada() }
     catch (e) { avisar(mensajeError(e), 'error') } finally { setGuardando(false) }
   }
+
+  const boton = (clave: string, nombre: string, detalle: string) => (
+    <li key={clave}>
+      <button onClick={() => agregar([clave])} className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left ring-1 ring-linea hover:bg-albahaca-claro">
+        <span className="font-bold text-albahaca">+</span><span className="flex-1">{nombre}</span><span className="text-sm text-gris">{detalle}</span>
+      </button>
+    </li>
+  )
 
   return (
     <Modal titulo="Planilla de pedido a fábrica" onClose={onClose} ancho="max-w-4xl"
@@ -359,33 +397,53 @@ function EditorPlanilla({ ingredientes, planilla, onClose, onGuardada }: {
           <h3 className="mb-1 font-semibold">En la planilla ({orden.length})</h3>
           <p className="mb-2 text-sm text-gris">Es la misma planilla para todos los locales. Ordenala como la lee la fábrica.</p>
           <ul className="space-y-1">
-            {orden.map((id, k) => (
-              <li key={id} className="flex items-center gap-2 rounded-lg bg-harina px-3 py-1.5 ring-1 ring-linea">
-                <span className="w-6 text-right text-sm text-gris tabular-nums">{k + 1}</span>
-                <span className="min-w-0 flex-1 truncate font-semibold">{nombre(id)}</span>
-                <button aria-label={`Subir ${nombre(id)}`} disabled={k === 0} onClick={() => mover(k, -1)} className="grid size-8 place-items-center rounded-md hover:bg-superficie disabled:opacity-30">↑</button>
-                <button aria-label={`Bajar ${nombre(id)}`} disabled={k === orden.length - 1} onClick={() => mover(k, 1)} className="grid size-8 place-items-center rounded-md hover:bg-superficie disabled:opacity-30">↓</button>
-                <button aria-label={`Sacar ${nombre(id)}`} onClick={() => setOrden(o => o.filter(x => x !== id))} className="grid size-8 place-items-center rounded-md text-tomate hover:bg-tomate-claro">✕</button>
-              </li>
-            ))}
-            {!orden.length && <li className="rounded-lg border-2 border-dashed border-linea p-4 text-center text-gris">Agregá ingredientes de la lista</li>}
+            {orden.map((k, n) => {
+              const it = item(k)
+              const nombre = it?.nombre ?? ''
+              return (
+                <li key={k} className="flex items-center gap-2 rounded-lg bg-harina px-3 py-1.5 ring-1 ring-linea">
+                  <span className="w-6 text-right text-sm text-gris tabular-nums">{n + 1}</span>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{nombre}{it?.producto && <span className="ml-1.5 text-xs font-normal text-gris">producto</span>}</span>
+                  <button aria-label={`Subir ${nombre}`} disabled={n === 0} onClick={() => mover(n, -1)} className="grid size-8 place-items-center rounded-md hover:bg-superficie disabled:opacity-30">↑</button>
+                  <button aria-label={`Bajar ${nombre}`} disabled={n === orden.length - 1} onClick={() => mover(n, 1)} className="grid size-8 place-items-center rounded-md hover:bg-superficie disabled:opacity-30">↓</button>
+                  <button aria-label={`Sacar ${nombre}`} onClick={() => setOrden(o => o.filter(x => x !== k))} className="grid size-8 place-items-center rounded-md text-tomate hover:bg-tomate-claro">✕</button>
+                </li>
+              )
+            })}
+            {!orden.length && <li className="rounded-lg border-2 border-dashed border-linea p-4 text-center text-gris">Agregá ingredientes o productos de la lista</li>}
           </ul>
         </section>
         <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="font-semibold">Ingredientes ({fuera.length})</h3>
-            {fuera.length > 0 && <button className="text-sm font-semibold text-pizarra hover:underline" onClick={() => setOrden(o => [...o, ...fuera.map(i => i.id)])}>Agregar todos</button>}
-          </div>
-          <ul className="space-y-1">
-            {fuera.map(i => (
-              <li key={i.id}>
-                <button onClick={() => setOrden(o => [...o, i.id])} className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left ring-1 ring-linea hover:bg-albahaca-claro">
-                  <span className="font-bold text-albahaca">+</span><span className="flex-1">{i.nombre}</span><span className="text-sm text-gris">{unidadCantidad(i.unidad)}</span>
-                </button>
-              </li>
+          <div className="mb-2 flex gap-1 rounded-lg bg-harina p-1 ring-1 ring-linea" role="tablist">
+            {([['ingredientes', 'Ingredientes'], ['productos', 'Productos del menú']] as const).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={lista === k} onClick={() => setLista(k)}
+                className={`h-9 flex-1 rounded-md text-sm font-semibold ${lista === k ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'text-gris hover:text-tinta'}`}>{l}</button>
             ))}
-            {!fuera.length && <li className="text-sm text-gris">Están todos en la planilla.</li>}
-          </ul>
+          </div>
+          <input aria-label="Buscar para agregar" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder={lista === 'ingredientes' ? 'Buscar ingrediente' : 'Buscar producto'} className={`${inputBase} mb-2 h-10 w-full`} />
+          {lista === 'ingredientes' ? (
+            <>
+              {ingFuera.length > 0 && <button className="mb-1 text-sm font-semibold text-pizarra hover:underline" onClick={() => agregar(ingFuera.map(i => i.id))}>Agregar todos{q ? ' los de la búsqueda' : ''}</button>}
+              <ul className="space-y-1">
+                {ingFuera.map(i => boton(i.id, i.nombre, unidadCantidad(i.unidad)))}
+                {!ingFuera.length && <li className="text-sm text-gris">{q ? 'Nada coincide.' : 'Están todos en la planilla.'}</li>}
+              </ul>
+            </>
+          ) : (
+            <div className="space-y-3">
+              {grupos.map(g => (
+                <div key={g.c.id}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <h4 className="text-sm font-bold uppercase text-gris">{g.c.nombre}</h4>
+                    <button className="text-sm font-semibold text-pizarra hover:underline" onClick={() => agregar(g.productos.map(p => PREFIJO_PRODUCTO + p.id))}>Agregar los {g.productos.length}</button>
+                  </div>
+                  <ul className="space-y-1">{g.productos.map(p => boton(PREFIJO_PRODUCTO + p.id, p.nombre, 'u.'))}</ul>
+                </div>
+              ))}
+              {!grupos.length && <p className="text-sm text-gris">{q ? 'Nada coincide.' : 'Están todos en la planilla.'}</p>}
+              <p className="text-xs text-gris">Los productos se piden por unidad. Al recibirlos no suman al stock, porque el stock se lleva por ingrediente.</p>
+            </div>
+          )}
         </section>
       </div>
     </Modal>

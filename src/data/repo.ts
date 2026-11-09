@@ -41,6 +41,10 @@ export type EstadoSesion =
 
 export interface CambioProducto { id: string; precio: number; precioMitad?: number; activo: boolean }
 
+/** En la planilla de fábrica: ingrediente = su id; producto = "p:" + su id */
+export const PREFIJO_PRODUCTO = 'p:'
+export const productoDePlanilla = (clave: string) => (clave.startsWith(PREFIJO_PRODUCTO) ? clave.slice(PREFIJO_PRODUCTO.length) : undefined)
+
 export type ProductoEdicion = Omit<Producto, 'id' | 'agotado'> & { id?: string }
 export type CategoriaEdicion = Omit<Categoria, 'id'> & { id?: string }
 export type IngredienteEdicion = Omit<Ingrediente, 'id'> & { id?: string }
@@ -173,7 +177,7 @@ export interface Repo {
   guardarPlanillaFabrica(ingredienteIds: string[]): Promise<void>
   /** sucursalIds null: todos los que el usuario puede ver */
   listPedidosFabrica(sucursalIds: string[] | null, limite?: number): Promise<PedidoFabrica[]>
-  crearPedidoFabrica(sucursalId: string, d: { fecha: string; notas?: string; items: { ingredienteId: string; cantidad: number }[] }): Promise<void>
+  crearPedidoFabrica(sucursalId: string, d: { fecha: string; notas?: string; items: { ingredienteId?: string; productoId?: string; cantidad: number }[] }): Promise<void>
   /** Lo que llegó de cada ítem (0 = no llegó); suma al stock */
   recibirPedidoFabrica(pedidoId: string, items: { id: string; recibido: number }[]): Promise<void>
   anularPedidoFabrica(pedidoId: string): Promise<void>

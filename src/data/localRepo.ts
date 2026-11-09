@@ -743,6 +743,11 @@ export const localRepo: Repo = {
     if (!d.fecha) throw new Error('Poné la fecha del pedido')
     const db0 = db()
     const items = d.items.filter(i => i.cantidad > 0).map(i => {
+      if (i.productoId) {
+        const prod = db0.productos.find(x => x.id === i.productoId)
+        if (!prod) throw new Error('Producto inválido')
+        return { id: uid(), productoId: prod.id, nombre: prod.nombre, unidad: 'un' as const, cantidad: i.cantidad }
+      }
       const ing = db0.ingredientes.find(x => x.id === i.ingredienteId)
       if (!ing) throw new Error('Ingrediente inválido')
       return { id: uid(), ingredienteId: ing.id, nombre: ing.nombre, unidad: ing.unidad, cantidad: i.cantidad }

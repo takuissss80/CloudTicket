@@ -71,7 +71,7 @@ function PorPreparar({ pedidos, sucursales }: { pedidos: PedidoFabrica[]; sucurs
   const total = useMemo(() => {
     const m = new Map<string, { nombre: string; unidad: PedidoFabrica['items'][number]['unidad']; cantidad: number; locales: number }>()
     for (const p of pedidos) for (const i of p.items) {
-      const k = i.ingredienteId ?? `${i.nombre}|${i.unidad}`
+      const k = i.ingredienteId ?? (i.productoId ? `p:${i.productoId}` : `${i.nombre}|${i.unidad}`)
       const x = m.get(k) ?? { nombre: i.nombre, unidad: i.unidad, cantidad: 0, locales: 0 }
       x.cantidad += i.cantidad; x.locales += 1
       m.set(k, x)
