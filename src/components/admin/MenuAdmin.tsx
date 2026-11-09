@@ -7,6 +7,7 @@ import { costoProducto, importarMenuEjemplo, margen, precioEnLocal } from '../..
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 import { ProductoEditor } from './ProductoEditor'
+import { CODIGO_ARMADO } from '../../store/pedido'
 
 const COLORES: { key: ColorCategoria; label: string; cls: string }[] = [
   { key: 'blue', label: 'Pizarra', cls: 'bg-pizarra' },
@@ -31,6 +32,7 @@ export function MenuAdmin() {
   const [busqueda, setBusqueda] = useState('')
   const [editando, setEditando] = useState<Producto | null | 'nuevo'>(null)
   const [catEdit, setCatEdit] = useState<Categoria | 'nueva' | null>(null)
+  const [copiando, setCopiando] = useState<Categoria | null>(null)
   const [verAumento, setVerAumento] = useState(false)
   const [importando, setImportando] = useState('')
   // Edición de varios precios a la vez: cambios pendientes por producto (sobreviven al cambiar de categoría)
@@ -171,6 +173,7 @@ export function MenuAdmin() {
               <h2 className="mr-auto font-cond text-3xl font-bold">{busqueda ? 'Resultados' : cat?.nombre}</h2>
               <input id="menu-buscar" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar en todo el menú" className={`${inputBase} h-10 w-56`} />
               {cat && !busqueda && puedeEditar(cat) && <Btn onClick={() => setCatEdit(cat)}>Editar categoría</Btn>}
+              {cat && !busqueda && !masivo && <Btn onClick={() => setCopiando(cat)}>Copiar categoría</Btn>}
               {cat && !busqueda && !masivo && <Btn onClick={() => setVerAumento(true)}>Aumentar precios</Btn>}
               {!masivo && productos.some(puedeEditar) && <Btn onClick={() => setMasivo(true)}>Editar precios</Btn>}
               <Btn tono="albahaca" onClick={() => setEditando('nuevo')}>+ Nuevo producto{enLocal ? ' propio' : ''}</Btn>
@@ -325,6 +328,17 @@ export function MenuAdmin() {
           onGuardado={async c => { setCatEdit(null); setCatSel(c.id); await despuesDeGuardar() }}
         />
       )}
+      {copiando && (
+        <CopiarCategoriaModal categoria={copiando} menu={menu} vista={vista} esAdmin={esAdmin} sucursales={sucursales}
+          onClose={() => setCopiando(null)}
+          onListo={async (c, n) => {
+            setCopiando(null)
+            avisar(`Categoría copiada: ${c.nombre} (${n} producto${n === 1 ? '' : 's'})`)
+            setCatSel(c.id); setBusqueda('')
+            const destino = c.sucursalId ?? null
+            if (destino !== vista) { await refrescarMenu(); setVista(destino) } else await despuesDeGuardar()
+          }} />
+      )}
       {verAumento && cat && (
         <AumentoModal categoria={cat} sucursalId={vista} localNombre={local?.nombre}
           onClose={() => setVerAumento(false)}
@@ -398,6 +412,74 @@ function CategoriaEditor({ categoria, sucursalId, orden, onClose, onGuardado }: 
         {categoria && (
           <label className="flex items-center gap-2"><input type="checkbox" className="size-5 accent-albahaca" checked={activa} onChange={e => setActiva(e.target.checked)} /> Visible en la pantalla de pedidos</label>
         )}
+      </div>
+    </Modal>
+  )
+}
+
+/** Duplica una categoría con todos sus productos (precios, recetas, armado de promos) en el menú madre o en un local */
+function CopiarCategoriaModal({ categoria, menu, vista, esAdmin, sucursales, onClose, onListo }: {
+  categoria: Categoria; menu: MenuData; vista: string | null; esAdmin: boolean; sucursales: { id: string; nombre: string }[]
+  onClose: () => void; onListo: (c: Categoria, productos: number) => void
+}) {
+  const avisar = useApp(s => s.avisar)
+  const [nombre, setNombre] = useState(`${categoria.nombre} (COPIA)`)
+  // '' = menú madre
+  const [destino, setDestino] = useState(vista ?? '')
+  const [copiando, setCopiando] = useState('')
+  const productos = menu.productos.filter(p => p.categoriaId === categoria.id).sort((a, b) => a.orden - b.orden)
+  const ajustes = new Map((menu.ajustes ?? []).map(a => [a.productoId, a]))
+  const opciones = esAdmin ? [{ id: '', nombre: 'Menú madre (todos los locales)' }, ...sucursales] : sucursales.filter(s => s.id === vista)
+
+  const copiar = async () => {
+    if (!nombre.trim()) return
+    setCopiando('Creando categoría…')
+    try {
+      const sucursalId = destino || undefined
+      const orden = Math.max(-1, ...menu.categorias.map(c => c.orden)) + 1
+      const nueva = await repo.guardarCategoria({ nombre: nombre.trim().toUpperCase(), color: categoria.color, orden, activa: categoria.activa, sucursalId })
+      let n = 0
+      for (const p of productos) {
+        setCopiando(`Copiando productos… ${n + 1} de ${productos.length}`)
+        // Visto desde un local: se copia con el precio que tiene en ese local
+        const a = vista ? ajustes.get(p.id) : undefined
+        const ef = precioEnLocal(p, a)
+        await repo.guardarProducto({
+          categoriaId: nueva.id, tipo: p.tipo,
+          codigo: p.codigo === CODIGO_ARMADO ? undefined : p.codigo,
+          nombre: p.nombre, descripcion: p.descripcion, precio: ef.precio, precioMitad: ef.precioMitad,
+          admiteCoccion: p.admiteCoccion, incluyeEnvio: p.incluyeEnvio, orden: p.orden,
+          activo: p.activo && !a?.oculto, sucursalId,
+          receta: p.receta.map(r => ({ ...r })),
+          fijos: p.fijos.map(f => ({ ...f })),
+          // Si la promo elige productos de la misma categoría, la copia elige de la categoría nueva
+          slots: p.slots.map(s => ({ ...s, categoriaId: s.categoriaId === categoria.id ? nueva.id : s.categoriaId })),
+        })
+        n++
+      }
+      onListo(nueva, n)
+    } catch (e) { avisar(mensajeError(e), 'error'); setCopiando('') }
+  }
+
+  return (
+    <Modal titulo={`Copiar ${categoria.nombre}`} onClose={copiando ? () => {} : onClose} ancho="max-w-md"
+      pie={<div className="flex justify-end gap-2"><Btn disabled={!!copiando} onClick={onClose}>Cancelar</Btn><Btn tono="albahaca" disabled={!nombre.trim() || !!copiando} onClick={copiar}>{copiando || 'Copiar'}</Btn></div>}>
+      <div className="space-y-4 p-5">
+        <p className="text-gris">
+          Se crea una categoría nueva con {productos.length === 1 ? 'el producto' : `los ${productos.length} productos`} de {categoria.nombre}: precios, recetas y armado de promos.
+          Después podés cambiarle lo que quieras sin tocar la original.
+        </p>
+        <Campo label="Nombre de la categoría nueva">
+          <input id="copiar-nombre" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} className={inputCls}
+            onKeyDown={e => { if (e.key === 'Enter') copiar() }} />
+        </Campo>
+        {opciones.length > 1 ? (
+          <Campo label="Copiar a">
+            <select id="copiar-destino" value={destino} onChange={e => setDestino(e.target.value)} className={inputCls}>
+              {opciones.map(o => <option key={o.id} value={o.id}>{o.id ? `${o.nombre} (categoría propia del local)` : o.nombre}</option>)}
+            </select>
+          </Campo>
+        ) : opciones[0] && <p className="text-[15px]">Se copia como categoría propia de <b>{opciones[0].nombre}</b>.</p>}
       </div>
     </Modal>
   )
