@@ -5,7 +5,7 @@ import { mensajeError, useApp } from '../store/app'
 import { formatCantidad } from '../lib/stock'
 import { normalizar } from '../lib/format'
 import { BotonTema, inputBase } from './ui'
-import { ESTADO_PEDIDO, ListaPedidosFabrica, fechaPedido } from './admin/PedidoFabrica'
+import { ESTADO_PEDIDO, ListaPedidosFabrica, cantidadFabrica, fechaPedido } from './admin/PedidoFabrica'
 
 /**
  * Pantalla del usuario Producción (fábrica): solo lectura.
@@ -69,10 +69,12 @@ export function Produccion({ usuario, cuenta, onSalir }: { usuario: string; cuen
 function PorPreparar({ pedidos, sucursales }: { pedidos: PedidoFabrica[]; sucursales: Sucursal[] }) {
   // Total a preparar: suma de todos los pedidos pendientes, por ingrediente
   const total = useMemo(() => {
-    const m = new Map<string, { nombre: string; unidad: PedidoFabrica['items'][number]['unidad']; cantidad: number; locales: number }>()
+    type Item = PedidoFabrica['items'][number]
+    const m = new Map<string, { nombre: string; unidad: Item['unidad']; presentacion?: string; factor: number; cantidad: number; locales: number }>()
     for (const p of pedidos) for (const i of p.items) {
-      const k = i.ingredienteId ?? (i.productoId ? `p:${i.productoId}` : `${i.nombre}|${i.unidad}`)
-      const x = m.get(k) ?? { nombre: i.nombre, unidad: i.unidad, cantidad: 0, locales: 0 }
+      // Se suma junto solo lo que se pidió con la misma presentación
+      const k = `${i.ingredienteId ?? (i.productoId ? `p:${i.productoId}` : `${i.nombre}|${i.unidad}`)}|${i.presentacion ?? ''}|${i.factor}`
+      const x = m.get(k) ?? { nombre: i.nombre, unidad: i.unidad, presentacion: i.presentacion, factor: i.factor, cantidad: 0, locales: 0 }
       x.cantidad += i.cantidad; x.locales += 1
       m.set(k, x)
     }
@@ -90,9 +92,9 @@ function PorPreparar({ pedidos, sucursales }: { pedidos: PedidoFabrica[]; sucurs
         <p className="mb-2 text-sm text-gris">Suma de los {pedidos.length} pedidos pendientes</p>
         <ul className="divide-y divide-linea">
           {total.map(t => (
-            <li key={t.nombre + t.unidad} className="flex items-baseline justify-between gap-3 py-1.5">
+            <li key={t.nombre + t.unidad + t.factor} className="flex items-baseline justify-between gap-3 py-1.5">
               <span>{t.nombre}{t.locales > 1 && <span className="text-sm text-gris"> · {t.locales} locales</span>}</span>
-              <b className="tabular-nums">{formatCantidad(t.cantidad, t.unidad)}</b>
+              <b className="tabular-nums">{cantidadFabrica(t.cantidad, t)}</b>
             </li>
           ))}
         </ul>
@@ -108,7 +110,7 @@ function PorPreparar({ pedidos, sucursales }: { pedidos: PedidoFabrica[]; sucurs
             {p.notas && <p className="mt-2 rounded-lg bg-muzza-claro px-3 py-1.5 text-sm font-semibold">{p.notas}</p>}
             <ul className="mt-2 divide-y divide-linea text-[15px]">
               {p.items.map(i => (
-                <li key={i.id} className="flex justify-between gap-2 py-1"><span>{i.nombre}</span><b className="tabular-nums">{formatCantidad(i.cantidad, i.unidad)}</b></li>
+                <li key={i.id} className="flex justify-between gap-2 py-1"><span>{i.nombre}</span><b className="tabular-nums">{cantidadFabrica(i.cantidad, i)}</b></li>
               ))}
             </ul>
           </article>

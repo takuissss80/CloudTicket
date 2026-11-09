@@ -336,6 +336,12 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       return mapCategoria(r as Row)
     },
 
+    async eliminarCategoria(id) {
+      ok(await sb.from('productos').delete().eq('categoria_id', id).select('id'))
+      const r = ok(await sb.from('categorias').delete().eq('id', id).select('id')) as Row[]
+      if (!r.length) throw new Error('No tenés permiso para borrar esta categoría')
+    },
+
     async guardarProducto(prod) {
       const p = await perfil()
       const row = {
@@ -495,15 +501,20 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     // ---- Pedido a fábrica
     async getPlanillaFabrica() {
-      return (ok(await sb.from('fabrica_planilla').select('ingrediente_id, producto_id').order('orden')) as Row[])
-        .map(r => (r.producto_id ? `${PREFIJO_PRODUCTO}${r.producto_id}` : r.ingrediente_id as string))
+      return (ok(await sb.from('fabrica_planilla').select('*').order('orden')) as Row[]).map(r => ({
+        clave: r.producto_id ? `${PREFIJO_PRODUCTO}${r.producto_id}` : r.ingrediente_id as string,
+        presentacion: opt(r.presentacion), factor: r.factor == null ? 1 : num(r.factor),
+      }))
     },
     async guardarPlanillaFabrica(ids) {
       const cuenta = (await perfil())?.cuenta_id as string
       ok(await sb.from('fabrica_planilla').delete().eq('cuenta_id', cuenta).select('cuenta_id'))
-      if (ids.length) ok(await sb.from('fabrica_planilla').insert(ids.map((id, i) => {
-        const prod = productoDePlanilla(id)
-        return { cuenta_id: cuenta, ingrediente_id: prod ? null : id, producto_id: prod ?? null, orden: i }
+      if (ids.length) ok(await sb.from('fabrica_planilla').insert(ids.map((x, i) => {
+        const prod = productoDePlanilla(x.clave)
+        return {
+          cuenta_id: cuenta, ingrediente_id: prod ? null : x.clave, producto_id: prod ?? null, orden: i,
+          presentacion: x.presentacion?.trim() || null, factor: x.factor > 0 ? x.factor : 1,
+        }
       })).select('cuenta_id'))
     },
     async listPedidosFabrica(sucursalIds, limite = 100) {
@@ -514,6 +525,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         creadoPor: opt(p.creado_por), createdAt: p.created_at, recibidoAt: opt(p.recibido_at), recibidoPor: opt(p.recibido_por),
         items: ((p.pedidos_fabrica_items ?? []) as Row[]).sort((a, b) => a.orden - b.orden).map(i => ({
           id: i.id, ingredienteId: opt(i.ingrediente_id), productoId: opt(i.producto_id), nombre: i.nombre, unidad: i.unidad, cantidad: num(i.cantidad),
+          presentacion: opt(i.presentacion), factor: i.factor == null ? 1 : num(i.factor),
           recibido: i.recibido == null ? undefined : num(i.recibido),
         })),
       }))

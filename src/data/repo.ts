@@ -1,6 +1,6 @@
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, TipoUsuario,
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, TipoUsuario,
 } from '../types'
 
 /** Catálogo listo para vender en un local (precios del local, sin ocultos) */
@@ -173,8 +173,10 @@ export interface Repo {
 
   // ---- Pedido a fábrica
   /** Ingredientes de la planilla, en orden */
-  getPlanillaFabrica(): Promise<string[]>
-  guardarPlanillaFabrica(ingredienteIds: string[]): Promise<void>
+  getPlanillaFabrica(): Promise<PlanillaFabricaItem[]>
+  guardarPlanillaFabrica(items: PlanillaFabricaItem[]): Promise<void>
+  /** Borra la categoría con todos sus productos (el historial de ventas queda) */
+  eliminarCategoria(id: string): Promise<void>
   /** sucursalIds null: todos los que el usuario puede ver */
   listPedidosFabrica(sucursalIds: string[] | null, limite?: number): Promise<PedidoFabrica[]>
   crearPedidoFabrica(sucursalId: string, d: { fecha: string; notas?: string; items: { ingredienteId?: string; productoId?: string; cantidad: number }[] }): Promise<void>

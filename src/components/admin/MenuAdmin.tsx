@@ -7,7 +7,7 @@ import { costoProducto, importarMenuEjemplo, margen, precioEnLocal } from '../..
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 import { ProductoEditor } from './ProductoEditor'
-import { CODIGO_ARMADO } from '../../store/pedido'
+import { CODIGO_ARMADO, esArmado } from '../../store/pedido'
 
 const COLORES: { key: ColorCategoria; label: string; cls: string }[] = [
   { key: 'blue', label: 'Pizarra', cls: 'bg-pizarra' },
@@ -324,8 +324,14 @@ export function MenuAdmin() {
           categoria={catEdit === 'nueva' ? null : catEdit}
           sucursalId={enLocal ? vista! : undefined}
           orden={categorias.length}
+          menu={menu}
           onClose={() => setCatEdit(null)}
           onGuardado={async c => { setCatEdit(null); setCatSel(c.id); await despuesDeGuardar() }}
+          onEliminada={async (c, n) => {
+            setCatEdit(null); setCatSel(null)
+            avisar(`Categoría ${c.nombre} eliminada${n ? ` con sus ${n} producto${n === 1 ? '' : 's'}` : ''}`)
+            await despuesDeGuardar()
+          }}
         />
       )}
       {copiando && (
@@ -369,10 +375,12 @@ function PrecioLocal({ valor, base, etiqueta, mitad, onGuardar }: {
   )
 }
 
-function CategoriaEditor({ categoria, sucursalId, orden, onClose, onGuardado }: {
-  categoria: Categoria | null; sucursalId?: string; orden: number; onClose: () => void; onGuardado: (c: Categoria) => void
+function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuardado, onEliminada }: {
+  categoria: Categoria | null; sucursalId?: string; orden: number; menu: MenuData; onClose: () => void
+  onGuardado: (c: Categoria) => void; onEliminada: (c: Categoria, productos: number) => void
 }) {
   const avisar = useApp(s => s.avisar)
+  const [borrar, setBorrar] = useState(false)
   const [nombre, setNombre] = useState(categoria?.nombre ?? '')
   const [color, setColor] = useState<ColorCategoria>(categoria?.color ?? 'blue')
   const [pos, setPos] = useState(categoria?.orden ?? orden)
@@ -389,7 +397,10 @@ function CategoriaEditor({ categoria, sucursalId, orden, onClose, onGuardado }: 
   }
   return (
     <Modal titulo={categoria ? 'Editar categoría' : 'Nueva categoría'} onClose={onClose} ancho="max-w-md"
-      pie={<div className="flex justify-end gap-2"><Btn onClick={onClose}>Cancelar</Btn><Btn tono="albahaca" disabled={!nombre.trim()} onClick={guardar}>Guardar</Btn></div>}>
+      pie={<div className="flex justify-end gap-2">
+        {categoria && <Btn tono="fantasma" className="mr-auto text-tomate" onClick={() => setBorrar(true)}>Eliminar categoría</Btn>}
+        <Btn onClick={onClose}>Cancelar</Btn><Btn tono="albahaca" disabled={!nombre.trim()} onClick={guardar}>Guardar</Btn>
+      </div>}>
       <div className="space-y-4 p-5">
         <Campo label="Nombre">
           <input id="cat-nombre" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} className={inputCls} placeholder="PIZZAS GRANDES"
@@ -412,6 +423,49 @@ function CategoriaEditor({ categoria, sucursalId, orden, onClose, onGuardado }: 
         {categoria && (
           <label className="flex items-center gap-2"><input type="checkbox" className="size-5 accent-albahaca" checked={activa} onChange={e => setActiva(e.target.checked)} /> Visible en la pantalla de pedidos</label>
         )}
+      </div>
+      {borrar && categoria && <EliminarCategoria categoria={categoria} menu={menu} onNo={() => setBorrar(false)} onListo={n => onEliminada(categoria, n)} />}
+    </Modal>
+  )
+}
+
+/** Confirmación para borrar una categoría con todos sus productos */
+function EliminarCategoria({ categoria, menu, onNo, onListo }: { categoria: Categoria; menu: MenuData; onNo: () => void; onListo: (n: number) => void }) {
+  const avisar = useApp(s => s.avisar)
+  const [borrando, setBorrando] = useState(false)
+  const productos = menu.productos.filter(p => p.categoriaId === categoria.id)
+  const ids = new Set(productos.map(p => p.id))
+  const armado = productos.find(p => esArmado(p))
+  // Promos de otras categorías que usan algo de esta: pierden esa parte
+  const promos = menu.productos.filter(p => !ids.has(p.id) && p.tipo === 'promo'
+    && (p.fijos.some(f => ids.has(f.productoId)) || p.slots.some(s => s.categoriaId === categoria.id)))
+  const eliminar = async () => {
+    setBorrando(true)
+    try { await repo.eliminarCategoria(categoria.id); onListo(productos.length) }
+    catch (e) { avisar(mensajeError(e), 'error'); setBorrando(false) }
+  }
+  return (
+    <Modal titulo={`¿Eliminar ${categoria.nombre}?`} onClose={onNo} ancho="max-w-md"
+      pie={<div className="flex justify-end gap-2"><Btn onClick={onNo}>Volver</Btn>{!armado && <Btn tono="tomate" disabled={borrando} onClick={eliminar}>{borrando ? 'Eliminando…' : `Eliminar${productos.length ? ` con ${productos.length} producto${productos.length === 1 ? '' : 's'}` : ''}`}</Btn>}</div>}>
+      <div className="space-y-3 px-5 py-4">
+        {armado ? (
+          <p className="font-semibold text-tomate">Esta categoría tiene el producto <b>{armado.nombre}</b>, que se usa para cobrar las pizzas mitad y mitad. Pasalo a otra categoría (editándolo) antes de borrarla.</p>
+        ) : <>
+          <p>{productos.length
+            ? <>Se borran la categoría y sus <b>{productos.length} producto{productos.length === 1 ? '' : 's'}</b>, con sus recetas y los precios propios de cada local. No se puede deshacer.</>
+            : 'La categoría está vacía. No se puede deshacer.'}</p>
+          {productos.length > 0 && (
+            <ul className="max-h-48 overflow-y-auto rounded-lg bg-harina px-3 py-2 text-[15px] ring-1 ring-linea">
+              {productos.map(p => <li key={p.id}>{p.nombre}</li>)}
+            </ul>
+          )}
+          {promos.length > 0 && (
+            <p className="rounded-lg bg-muzza-claro px-3 py-2 text-[15px] ring-1 ring-muzza">
+              Ojo: {promos.length === 1 ? 'esta promo usa' : 'estas promos usan'} productos de la categoría y {promos.length === 1 ? 'se queda' : 'se quedan'} sin esa parte: <b>{promos.map(p => p.nombre).join(', ')}</b>. Revisalas después.
+            </p>
+          )}
+          <p className="text-sm text-gris">Las comandas y reportes viejos no cambian: el historial de ventas queda igual.</p>
+        </>}
       </div>
     </Modal>
   )

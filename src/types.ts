@@ -481,10 +481,21 @@ export interface PedidoFabricaItem {
   productoId?: string
   nombre: string
   unidad: UnidadIngrediente
+  /** Se pidió por presentación (ej.: "Paquete"): cantidad y recibido van en presentaciones */
+  presentacion?: string
+  /** Unidades (de la unidad del ingrediente) que trae cada presentación; 1 = sin presentación */
+  factor: number
   cantidad: number
   /** Lo que llegó (al recibir). 0 = no llegó */
   recibido?: number
 }
+/** Fila de la planilla de fábrica. clave: id del ingrediente, o "p:" + id del producto */
+export interface PlanillaFabricaItem {
+  clave: string
+  presentacion?: string
+  factor: number
+}
+
 export interface PedidoFabrica {
   id: string
   sucursalId: string

@@ -1,7 +1,8 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, ItemComanda, Pago, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica } from '../types'
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem } from '../types'
+import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
 import { descuentoCupon, normalizarCodigo, problemaCupon } from '../lib/descuentos'
@@ -48,7 +49,7 @@ interface DB {
   cupones?: Cupon[]
   pedidosExternos?: ConLocal<PedidoExterno>[]
   mapeos?: MapeoExterno[]
-  planillaFabrica?: string[]
+  planillaFabrica?: (string | PlanillaFabricaItem)[]
   pedidosFabrica?: PedidoFabrica[]
 }
 
@@ -57,6 +58,8 @@ const uid = () =>
     ? globalThis.crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36)
 const ahora = () => new Date().toISOString()
+/** Planilla de fábrica (los demos viejos la guardaban como lista de ids) */
+const planilla = (): PlanillaFabricaItem[] => (db().planillaFabrica ?? []).map(x => (typeof x === 'string' ? { clave: x, factor: 1 } : { ...x }))
 const pausa = <T,>(v: T) => new Promise<T>(r => setTimeout(() => r(v), 40))
 const clon = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
 
@@ -526,6 +529,24 @@ export const localRepo: Repo = {
     return n
   },
 
+  async eliminarCategoria(id) {
+    const d = db()
+    const c = d.categorias.find(x => x.id === id)
+    if (!c) throw new Error('Categoría no encontrada')
+    puedeEditarProducto(c.sucursalId)
+    const borrados = new Set(d.productos.filter(p => p.categoriaId === id).map(p => p.id))
+    d.productos = d.productos.filter(p => !borrados.has(p.id))
+    for (const p of d.productos) {
+      p.fijos = p.fijos.filter(f => !borrados.has(f.productoId))
+      p.slots = p.slots.filter(s => s.categoriaId !== id)
+    }
+    d.ajustes = d.ajustes.filter(a => !borrados.has(a.productoId))
+    if (d.mapeos) d.mapeos = d.mapeos.filter(m => !m.productoId || !borrados.has(m.productoId))
+    if (d.planillaFabrica) d.planillaFabrica = d.planillaFabrica.filter(x => !borrados.has(productoDePlanilla(typeof x === 'string' ? x : x.clave) ?? ''))
+    d.categorias = d.categorias.filter(x => x.id !== id)
+    guardar('menu')
+  },
+
   async eliminarIngrediente(id) {
     soloAdmin()
     const d = db()
@@ -723,10 +744,10 @@ export const localRepo: Repo = {
   },
 
   // ---- Pedido a fábrica
-  async getPlanillaFabrica() { return pausa([...(db().planillaFabrica ?? [])]) },
-  async guardarPlanillaFabrica(ids) {
+  async getPlanillaFabrica() { return pausa(planilla()) },
+  async guardarPlanillaFabrica(items) {
     soloAdmin()
-    db().planillaFabrica = [...ids]
+    db().planillaFabrica = items.map(x => ({ clave: x.clave, presentacion: x.presentacion?.trim() || undefined, factor: x.factor > 0 ? x.factor : 1 }))
     guardar('menu')
   },
   async listPedidosFabrica(sucursalIds, limite = 100) {
@@ -735,7 +756,8 @@ export const localRepo: Repo = {
     return pausa(clon((db().pedidosFabrica ?? [])
       .filter(p => visibles(p) && (!sucursalIds || sucursalIds.includes(p.sucursalId)))
       .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limite)))
+      .slice(0, limite)
+      .map(p => ({ ...p, items: p.items.map(it => ({ ...it, factor: it.factor ?? 1 })) }))))
   },
   async crearPedidoFabrica(sucursalId, d) {
     if (ses().esProduccion) throw new Error('Sin acceso a ese local')
@@ -743,14 +765,16 @@ export const localRepo: Repo = {
     if (!d.fecha) throw new Error('Poné la fecha del pedido')
     const db0 = db()
     const items = d.items.filter(i => i.cantidad > 0).map(i => {
+      const pl = planilla().find(x => x.clave === (i.productoId ? PREFIJO_PRODUCTO + i.productoId : i.ingredienteId))
+      const pres = { presentacion: pl?.presentacion, factor: pl?.factor ?? 1 }
       if (i.productoId) {
         const prod = db0.productos.find(x => x.id === i.productoId)
         if (!prod) throw new Error('Producto inválido')
-        return { id: uid(), productoId: prod.id, nombre: prod.nombre, unidad: 'un' as const, cantidad: i.cantidad }
+        return { id: uid(), productoId: prod.id, nombre: prod.nombre, unidad: 'un' as const, cantidad: i.cantidad, ...pres }
       }
       const ing = db0.ingredientes.find(x => x.id === i.ingredienteId)
       if (!ing) throw new Error('Ingrediente inválido')
-      return { id: uid(), ingredienteId: ing.id, nombre: ing.nombre, unidad: ing.unidad, cantidad: i.cantidad }
+      return { id: uid(), ingredienteId: ing.id, nombre: ing.nombre, unidad: ing.unidad, cantidad: i.cantidad, ...pres }
     })
     if (!items.length) throw new Error('El pedido está vacío: poné al menos una cantidad')
     db0.pedidosFabrica ??= []
@@ -769,8 +793,9 @@ export const localRepo: Repo = {
       const rec = Math.max(0, items.find(x => x.id === it.id)?.recibido ?? 0)
       it.recibido = rec
       if (rec > 0 && it.ingredienteId) {
-        d.stockMovs.push({ id: uid(), sucursalId: p.sucursalId, ingredienteId: it.ingredienteId, tipo: 'ingreso', cantidad: rec, motivo: `Pedido fábrica #${p.numero}`, creadoPor: ses().usuario, createdAt: ahora() })
-        moverStock(p.sucursalId, it.ingredienteId, rec)
+        const base = rec * (it.factor ?? 1)
+        d.stockMovs.push({ id: uid(), sucursalId: p.sucursalId, ingredienteId: it.ingredienteId, tipo: 'ingreso', cantidad: base, motivo: `Pedido fábrica #${p.numero}`, creadoPor: ses().usuario, createdAt: ahora() })
+        moverStock(p.sucursalId, it.ingredienteId, base)
       }
     }
     Object.assign(p, { estado: 'recibido', recibidoAt: ahora(), recibidoPor: ses().usuario })
