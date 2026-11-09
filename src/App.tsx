@@ -14,6 +14,7 @@ import { Reportes } from './components/Reportes'
 import { PedidosYa } from './components/PedidosYa'
 import { PantallaCocina } from './components/PantallaCocina'
 import { PantallaMostrador } from './components/PantallaMostrador'
+import { Produccion } from './components/Produccion'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir }: { onSalir: () => void }) {
@@ -165,7 +166,8 @@ export default function App() {
   const revisar = useCallback(async () => {
     const e = await repo.estadoSesion().catch(() => ({ estado: 'sin_login' as const }))
     setEstado(e)
-    if (e.estado === 'ok') iniciar(e.sesion)
+    // Producción no opera un local: no carga caja, pedidos ni PedidosYa
+    if (e.estado === 'ok' && !e.sesion.esProduccion) iniciar(e.sesion)
   }, [iniciar])
 
   useEffect(() => { revisar() }, [revisar])
@@ -175,6 +177,7 @@ export default function App() {
       {!estado ? <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>
         : estado.estado === 'sin_login' ? <Login onListo={revisar} />
         : estado.estado === 'sin_cuenta' ? <CrearCuenta email={estado.email} onListo={revisar} />
+        : estado.sesion.esProduccion ? <Produccion usuario={estado.sesion.usuario} cuenta={estado.sesion.cuentaNombre} onSalir={revisar} />
         : <Principal onSalir={revisar} />}
       <Toasts />
     </>

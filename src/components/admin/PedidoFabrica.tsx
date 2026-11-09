@@ -1,0 +1,393 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { Ingrediente, PedidoFabrica as Pedido, StockItem } from '../../types'
+import { repo } from '../../data'
+import { mensajeError, useApp } from '../../store/app'
+import { formatCantidad, unidadCantidad } from '../../lib/stock'
+import { fecha, hora } from '../../lib/format'
+import { Btn, Campo, Confirmar, Modal, inputBase, inputCls } from '../ui'
+
+const numero = (v: string) => (v.trim() === '' ? 0 : Math.max(0, Number(v.replace(',', '.')) || 0))
+const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+export const fechaPedido = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
+
+export const ESTADO_PEDIDO: Record<Pedido['estado'], { label: string; cls: string }> = {
+  pendiente: { label: 'Pendiente de recibir', cls: 'bg-muzza-claro text-tinta ring-1 ring-muzza' },
+  recibido: { label: 'Recibido', cls: 'bg-albahaca-claro text-tinta ring-1 ring-albahaca' },
+  anulado: { label: 'Anulado', cls: 'bg-linea text-gris' },
+}
+
+/** Pedido a la fábrica: armar el pedido con la planilla, historial y recepción (suma al stock) */
+export function PedidoFabrica() {
+  const { sesion, sucursales, sucursalId, avisar } = useApp()
+  const esAdmin = sesion?.rol === 'admin'
+  const [local, setLocal] = useState(esAdmin ? sucursalId : sesion?.sucursalId ?? null)
+  const [vista, setVista] = useState<'nuevo' | 'historial'>('nuevo')
+  const [ingredientes, setIngredientes] = useState<Ingrediente[]>([])
+  const [planilla, setPlanilla] = useState<string[] | null>(null)
+  const [stock, setStock] = useState<StockItem[]>([])
+  const [pedidos, setPedidos] = useState<Pedido[] | null>(null)
+  const [editarPlanilla, setEditarPlanilla] = useState(false)
+
+  const cargar = useCallback(async () => {
+    if (!local) return
+    try {
+      const [m, p, s, ped] = await Promise.all([repo.getMenu(null), repo.getPlanillaFabrica(), repo.getStock(local), repo.listPedidosFabrica([local])])
+      setIngredientes(m.ingredientes)
+      setPlanilla(p)
+      setStock(s)
+      setPedidos(ped)
+    } catch (e) { avisar(mensajeError(e), 'error') }
+  }, [local, avisar])
+  useEffect(() => { setPedidos(null); cargar() }, [cargar])
+
+  const pendientes = (pedidos ?? []).filter(p => p.estado === 'pendiente').length
+  const nombreLocal = sucursales.find(s => s.id === local)?.nombre ?? ''
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-4 p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="mr-auto">
+          <h2 className="font-cond text-3xl font-bold">Pedido a fábrica</h2>
+          <p className="text-gris">Armá el pedido con la planilla, y cuando llega controlalo: lo que llegó se suma solo al stock.</p>
+        </div>
+        {esAdmin && sucursales.length > 1 && (
+          <select aria-label="Local" value={local ?? ''} onChange={e => setLocal(e.target.value)} className={`${inputBase} h-10 w-auto`}>
+            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+        )}
+        {esAdmin && <Btn onClick={() => setEditarPlanilla(true)}>Personalizar planilla</Btn>}
+      </div>
+
+      <div className="flex gap-1 rounded-xl bg-superficie p-1 ring-1 ring-linea" role="tablist">
+        {([['nuevo', 'Nuevo pedido'], ['historial', `Pedidos realizados${pendientes ? ` (${pendientes} por recibir)` : ''}`]] as const).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={vista === k} onClick={() => setVista(k)}
+            className={`h-10 flex-1 rounded-lg font-semibold ${vista === k ? 'bg-primario text-sobre-primario' : 'hover:bg-harina'}`}>{l}</button>
+        ))}
+      </div>
+
+      {!planilla || !pedidos ? <p className="p-8 text-center text-gris">Cargando…</p>
+        : vista === 'nuevo' ? (
+          <NuevoPedido local={local!} nombreLocal={nombreLocal} ingredientes={ingredientes} planilla={planilla} stock={stock} esAdmin={esAdmin}
+            onPersonalizar={() => setEditarPlanilla(true)}
+            onGuardado={async () => { await cargar(); setVista('historial') }} />
+        ) : (
+          <ListaPedidosFabrica pedidos={pedidos} onCambio={cargar} puedeOperar />
+        )}
+
+      {editarPlanilla && (
+        <EditorPlanilla ingredientes={ingredientes} planilla={planilla ?? []} onClose={() => setEditarPlanilla(false)}
+          onGuardada={async () => { setEditarPlanilla(false); await cargar() }} />
+      )}
+    </div>
+  )
+}
+
+function NuevoPedido({ local, nombreLocal, ingredientes, planilla, stock, esAdmin, onPersonalizar, onGuardado }: {
+  local: string; nombreLocal: string; ingredientes: Ingrediente[]; planilla: string[]; stock: StockItem[]; esAdmin: boolean
+  onPersonalizar: () => void; onGuardado: () => void
+}) {
+  const avisar = useApp(s => s.avisar)
+  const [fechaP, setFechaP] = useState(hoyISO)
+  const [notas, setNotas] = useState('')
+  const [cant, setCant] = useState<Record<string, string>>({})
+  const [guardando, setGuardando] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+
+  const filas = useMemo(() => planilla.map(id => ingredientes.find(i => i.id === id)).filter((i): i is Ingrediente => !!i && i.activo).map(i => {
+    const s = stock.find(x => x.ingredienteId === i.id)
+    const cantidad = s?.cantidad ?? 0, minimo = s?.minimo ?? 0
+    return { i, cantidad, minimo, sugerido: minimo > 0 ? Math.max(0, Math.ceil(minimo - cantidad)) : 0 }
+  }), [planilla, ingredientes, stock])
+  const cargados = filas.filter(f => numero(cant[f.i.id] ?? '') > 0)
+  const haySugeridos = filas.some(f => f.sugerido > 0)
+
+  const guardar = async () => {
+    setGuardando(true)
+    try {
+      await repo.crearPedidoFabrica(local, { fecha: fechaP, notas, items: cargados.map(f => ({ ingredienteId: f.i.id, cantidad: numero(cant[f.i.id]) })) })
+      avisar('Pedido a fábrica guardado')
+      setCant({}); setNotas(''); setConfirmar(false)
+      onGuardado()
+    } catch (e) { avisar(mensajeError(e), 'error') } finally { setGuardando(false) }
+  }
+
+  if (!filas.length) return (
+    <div className="rounded-xl bg-superficie p-8 text-center ring-1 ring-linea">
+      <p className="text-lg font-semibold">La planilla de pedido está vacía</p>
+      <p className="mt-1 text-gris">{esAdmin ? 'Elegí qué ingredientes se le piden a la fábrica.' : 'El administrador tiene que armar la planilla con los ingredientes que se piden a la fábrica.'}</p>
+      {esAdmin && <Btn tono="albahaca" className="mt-4" onClick={onPersonalizar}>Armar la planilla</Btn>}
+    </div>
+  )
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 rounded-xl bg-superficie p-4 ring-1 ring-linea sm:grid-cols-[12rem_1fr]">
+        <Campo label="Fecha del pedido">
+          <input type="date" value={fechaP} onChange={e => setFechaP(e.target.value)} className={inputCls} />
+        </Campo>
+        <Campo label="Notas para la fábrica (opcional)">
+          <input value={notas} onChange={e => setNotas(e.target.value)} className={inputCls} placeholder="Ej: entregar antes de las 18" />
+        </Campo>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
+        <table className="w-full min-w-[620px] text-left text-[15px]">
+          <thead className="border-b border-linea text-sm text-gris">
+            <tr>
+              <th className="px-3 py-2 font-medium">Ingrediente</th>
+              <th className="px-3 py-2 text-right font-medium">Stock ahora</th>
+              <th className="px-3 py-2 text-right font-medium">Mínimo</th>
+              <th className="px-3 py-2 text-right font-medium">Pedir</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-linea">
+            {filas.map(f => (
+              <tr key={f.i.id} className={numero(cant[f.i.id] ?? '') > 0 ? 'bg-albahaca-claro/40' : ''}>
+                <td className="px-3 py-2 font-semibold">{f.i.nombre}</td>
+                <td className={`px-3 py-2 text-right tabular-nums ${f.minimo > 0 && f.cantidad <= f.minimo ? 'font-semibold text-tomate' : 'text-gris'}`}>{formatCantidad(f.cantidad, f.i.unidad)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gris">{f.minimo ? formatCantidad(f.minimo, f.i.unidad) : '—'}</td>
+                <td className="px-3 py-2 text-right">
+                  <span className="inline-flex items-center gap-1.5">
+                    <input inputMode="decimal" aria-label={`Cantidad de ${f.i.nombre}`} value={cant[f.i.id] ?? ''} placeholder={f.sugerido ? String(f.sugerido) : '0'}
+                      onChange={e => setCant(c => ({ ...c, [f.i.id]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const t = [...document.querySelectorAll<HTMLInputElement>('input[aria-label^="Cantidad de "]')]; t[t.indexOf(e.currentTarget) + 1]?.focus() } }}
+                      className={`${inputBase} h-9 w-28 text-right tabular-nums`} />
+                    <span className="w-6 text-left text-sm text-gris">{unidadCantidad(f.i.unidad)}</span>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {haySugeridos && (
+          <Btn onClick={() => setCant(c => { const n = { ...c }; filas.forEach(f => { if (f.sugerido > 0 && !numero(n[f.i.id] ?? '')) n[f.i.id] = String(f.sugerido) }); return n })}>
+            Completar hasta el mínimo
+          </Btn>
+        )}
+        <span className="ml-auto text-gris">{cargados.length} de {filas.length} ingredientes con cantidad</span>
+        <Btn tono="albahaca" disabled={!cargados.length || !fechaP || guardando} onClick={() => setConfirmar(true)}>Guardar pedido</Btn>
+      </div>
+
+      {confirmar && (
+        <Modal titulo="Confirmar pedido a fábrica" onClose={() => setConfirmar(false)}
+          pie={<div className="flex gap-2"><Btn onClick={() => setConfirmar(false)}>Volver</Btn><Btn tono="albahaca" disabled={guardando} onClick={guardar}>{guardando ? 'Guardando…' : 'Confirmar pedido'}</Btn></div>}>
+          <div className="space-y-2 p-5">
+            <p><b>{nombreLocal}</b> · {fechaPedido(fechaP)}{notas.trim() ? ` · ${notas.trim()}` : ''}</p>
+            <ul className="divide-y divide-linea rounded-xl bg-harina ring-1 ring-linea">
+              {cargados.map(f => (
+                <li key={f.i.id} className="flex justify-between px-4 py-2"><span>{f.i.nombre}</span><b className="tabular-nums">{formatCantidad(numero(cant[f.i.id]), f.i.unidad)}</b></li>
+              ))}
+            </ul>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+/** Historial de pedidos (lo usan el local y la pantalla de Producción) */
+export function ListaPedidosFabrica({ pedidos, onCambio, puedeOperar, mostrarLocal }: {
+  pedidos: Pedido[]; onCambio: () => void; puedeOperar?: boolean; mostrarLocal?: boolean
+}) {
+  const { sucursales, avisar } = useApp()
+  const [abierto, setAbierto] = useState<string | null>(null)
+  const [recibir, setRecibir] = useState<Pedido | null>(null)
+  const [anular, setAnular] = useState<Pedido | null>(null)
+
+  if (!pedidos.length) return <p className="rounded-xl bg-superficie p-8 text-center text-gris ring-1 ring-linea">Todavía no hay pedidos a fábrica.</p>
+
+  return (
+    <>
+      <ul className="space-y-2">
+        {pedidos.map(p => {
+          const e = ESTADO_PEDIDO[p.estado]
+          const faltantes = p.estado === 'recibido' ? p.items.filter(i => (i.recibido ?? 0) < i.cantidad).length : 0
+          return (
+            <li key={p.id} className="rounded-xl bg-superficie ring-1 ring-linea">
+              <button onClick={() => setAbierto(a => (a === p.id ? null : p.id))} aria-expanded={abierto === p.id}
+                className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-harina">
+                <span className="font-cond text-2xl font-bold tabular-nums">#{p.numero}</span>
+                {mostrarLocal && <span className="font-semibold">{sucursales.find(s => s.id === p.sucursalId)?.nombre ?? ''}</span>}
+                <span className="text-gris">{fechaPedido(p.fecha)} · {p.items.length} {p.items.length === 1 ? 'ingrediente' : 'ingredientes'}{p.creadoPor ? ` · ${p.creadoPor}` : ''}</span>
+                <span className={`ml-auto rounded-full px-3 py-1 text-sm font-bold ${e.cls}`}>{e.label}</span>
+                {faltantes > 0 && <span className="rounded-full bg-tomate-claro px-3 py-1 text-sm font-bold ring-1 ring-tomate">{faltantes} con faltante</span>}
+              </button>
+              {abierto === p.id && (
+                <div className="border-t border-linea px-4 py-3">
+                  {p.notas && <p className="mb-2 rounded-lg bg-muzza-claro px-3 py-2"><b>Notas:</b> {p.notas}</p>}
+                  <table className="w-full text-[15px]">
+                    <thead className="text-sm text-gris">
+                      <tr><th className="py-1 text-left font-medium">Ingrediente</th><th className="py-1 text-right font-medium">Pedido</th>{p.estado === 'recibido' && <th className="py-1 text-right font-medium">Llegó</th>}</tr>
+                    </thead>
+                    <tbody className="divide-y divide-linea">
+                      {p.items.map(i => {
+                        const falta = p.estado === 'recibido' && (i.recibido ?? 0) !== i.cantidad
+                        return (
+                          <tr key={i.id}>
+                            <td className="py-1.5">{i.nombre}</td>
+                            <td className="py-1.5 text-right tabular-nums">{formatCantidad(i.cantidad, i.unidad)}</td>
+                            {p.estado === 'recibido' && (
+                              <td className={`py-1.5 text-right font-semibold tabular-nums ${falta ? 'text-tomate' : 'text-albahaca'}`}>
+                                {(i.recibido ?? 0) === 0 ? 'No llegó' : formatCantidad(i.recibido ?? 0, i.unidad)}
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  {p.recibidoAt && <p className="mt-2 text-sm text-gris">Recibido el {fecha(p.recibidoAt)} a las {hora(p.recibidoAt)}{p.recibidoPor ? ` por ${p.recibidoPor}` : ''}.</p>}
+                  {puedeOperar && p.estado === 'pendiente' && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Btn tono="albahaca" onClick={() => setRecibir(p)}>Recibir pedido</Btn>
+                      <Btn tono="fantasma" className="text-tomate" onClick={() => setAnular(p)}>Anular</Btn>
+                    </div>
+                  )}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+
+      {recibir && <RecibirPedido pedido={recibir} onClose={() => setRecibir(null)} onListo={() => { setRecibir(null); onCambio() }} />}
+      {anular && (
+        <Confirmar texto={`¿Anular el pedido #${anular.numero}?`} detalle="Queda en el historial como anulado y no suma nada al stock." accion="Anular pedido"
+          onNo={() => setAnular(null)}
+          onSi={async () => { const p = anular; setAnular(null); try { await repo.anularPedidoFabrica(p.id); avisar(`Pedido #${p.numero} anulado`); onCambio() } catch (e) { avisar(mensajeError(e), 'error') } }} />
+      )}
+    </>
+  )
+}
+
+/** Control de lo que llegó: check en cada ítem y la cantidad real */
+function RecibirPedido({ pedido, onClose, onListo }: { pedido: Pedido; onClose: () => void; onListo: () => void }) {
+  const avisar = useApp(s => s.avisar)
+  const [filas, setFilas] = useState(() => pedido.items.map(i => ({ ...i, ok: false, valor: String(i.cantidad) })))
+  const [guardando, setGuardando] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const cambiar = (id: string, c: Partial<{ ok: boolean; valor: string }>) => setFilas(fs => fs.map(f => (f.id === id ? { ...f, ...c } : f)))
+  const recibido = (f: typeof filas[number]) => (f.ok ? numero(f.valor) : 0)
+  const sinCheck = filas.filter(f => !f.ok).length
+  const distintos = filas.filter(f => f.ok && numero(f.valor) !== f.cantidad).length
+
+  const guardar = async () => {
+    setGuardando(true)
+    try {
+      await repo.recibirPedidoFabrica(pedido.id, filas.map(f => ({ id: f.id, recibido: recibido(f) })))
+      avisar(`Pedido #${pedido.numero} recibido: lo que llegó ya está en el stock`)
+      onListo()
+    } catch (e) { avisar(mensajeError(e), 'error'); setConfirmar(false) } finally { setGuardando(false) }
+  }
+
+  return (
+    <Modal titulo={`Recibir pedido #${pedido.numero}`} onClose={onClose} ancho="max-w-3xl"
+      pie={
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-auto text-sm text-gris">{filas.length - sinCheck} de {filas.length} controlados</span>
+          <Btn onClick={onClose}>Cancelar</Btn>
+          <Btn tono="albahaca" disabled={guardando} onClick={() => setConfirmar(true)}>Guardar</Btn>
+        </div>
+      }>
+      <div className="space-y-3 p-5">
+        <p className="text-gris">Tildá cada cosa que llegó. Si llegó otra cantidad, cambiala. Lo que quede <b>sin tildar</b> se toma como que <b>no llegó</b>.</p>
+        <Btn onClick={() => setFilas(fs => fs.map(f => ({ ...f, ok: true })))}>Llegó todo</Btn>
+        <ul className="divide-y divide-linea rounded-xl bg-superficie ring-1 ring-linea">
+          {filas.map(f => {
+            const distinto = f.ok && numero(f.valor) !== f.cantidad
+            return (
+              <li key={f.id} className={`flex flex-wrap items-center gap-3 px-4 py-2.5 ${f.ok ? '' : 'bg-harina'}`}>
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                  <input type="checkbox" className="size-6 shrink-0 accent-albahaca" checked={f.ok} onChange={e => cambiar(f.id, { ok: e.target.checked })} />
+                  <span className="min-w-0">
+                    <span className={`block font-semibold ${f.ok ? '' : 'text-gris'}`}>{f.nombre}</span>
+                    <span className="text-sm text-gris">Pedido: {formatCantidad(f.cantidad, f.unidad)}</span>
+                  </span>
+                </label>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-sm text-gris">Llegó</span>
+                  <input inputMode="decimal" aria-label={`Cantidad recibida de ${f.nombre}`} value={f.valor}
+                    onChange={e => cambiar(f.id, { valor: e.target.value, ok: true })}
+                    className={`${inputBase} h-9 w-28 text-right tabular-nums ${distinto ? 'border-muzza bg-muzza-claro font-semibold' : ''} ${f.ok ? '' : 'opacity-50'}`} />
+                  <span className="w-6 text-sm text-gris">{unidadCantidad(f.unidad)}</span>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+
+      {confirmar && (
+        <Confirmar tono="albahaca" texto={`¿Guardar la recepción del pedido #${pedido.numero}?`}
+          detalle={[
+            'Lo que llegó se suma al stock y el pedido queda como recibido.',
+            sinCheck ? `${sinCheck} sin tildar: se toman como que no llegaron.` : '',
+            distintos ? `${distintos} llegaron con otra cantidad.` : '',
+          ].filter(Boolean).join(' ')}
+          accion={guardando ? 'Guardando…' : 'Guardar y sumar al stock'} onNo={() => setConfirmar(false)} onSi={guardar} />
+      )}
+    </Modal>
+  )
+}
+
+/** Qué ingredientes aparecen en la planilla de pedido y en qué orden (para toda la cuenta) */
+function EditorPlanilla({ ingredientes, planilla, onClose, onGuardada }: {
+  ingredientes: Ingrediente[]; planilla: string[]; onClose: () => void; onGuardada: () => void
+}) {
+  const avisar = useApp(s => s.avisar)
+  const activos = ingredientes.filter(i => i.activo)
+  const [orden, setOrden] = useState<string[]>(() => planilla.filter(id => activos.some(i => i.id === id)))
+  const [guardando, setGuardando] = useState(false)
+  const fuera = activos.filter(i => !orden.includes(i.id)).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  const nombre = (id: string) => activos.find(i => i.id === id)?.nombre ?? ''
+  const mover = (k: number, d: -1 | 1) => setOrden(o => { const n = [...o]; const j = k + d; if (j < 0 || j >= n.length) return o; [n[k], n[j]] = [n[j], n[k]]; return n })
+
+  const guardar = async () => {
+    setGuardando(true)
+    try { await repo.guardarPlanillaFabrica(orden); avisar('Planilla guardada'); onGuardada() }
+    catch (e) { avisar(mensajeError(e), 'error') } finally { setGuardando(false) }
+  }
+
+  return (
+    <Modal titulo="Planilla de pedido a fábrica" onClose={onClose} ancho="max-w-4xl"
+      pie={<div className="flex gap-2"><Btn onClick={onClose}>Cancelar</Btn><Btn tono="albahaca" disabled={guardando} onClick={guardar}>{guardando ? 'Guardando…' : 'Guardar planilla'}</Btn></div>}>
+      <div className="grid gap-4 p-5 md:grid-cols-2">
+        <section>
+          <h3 className="mb-1 font-semibold">En la planilla ({orden.length})</h3>
+          <p className="mb-2 text-sm text-gris">Es la misma planilla para todos los locales. Ordenala como la lee la fábrica.</p>
+          <ul className="space-y-1">
+            {orden.map((id, k) => (
+              <li key={id} className="flex items-center gap-2 rounded-lg bg-harina px-3 py-1.5 ring-1 ring-linea">
+                <span className="w-6 text-right text-sm text-gris tabular-nums">{k + 1}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">{nombre(id)}</span>
+                <button aria-label={`Subir ${nombre(id)}`} disabled={k === 0} onClick={() => mover(k, -1)} className="grid size-8 place-items-center rounded-md hover:bg-superficie disabled:opacity-30">↑</button>
+                <button aria-label={`Bajar ${nombre(id)}`} disabled={k === orden.length - 1} onClick={() => mover(k, 1)} className="grid size-8 place-items-center rounded-md hover:bg-superficie disabled:opacity-30">↓</button>
+                <button aria-label={`Sacar ${nombre(id)}`} onClick={() => setOrden(o => o.filter(x => x !== id))} className="grid size-8 place-items-center rounded-md text-tomate hover:bg-tomate-claro">✕</button>
+              </li>
+            ))}
+            {!orden.length && <li className="rounded-lg border-2 border-dashed border-linea p-4 text-center text-gris">Agregá ingredientes de la lista</li>}
+          </ul>
+        </section>
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="font-semibold">Ingredientes ({fuera.length})</h3>
+            {fuera.length > 0 && <button className="text-sm font-semibold text-pizarra hover:underline" onClick={() => setOrden(o => [...o, ...fuera.map(i => i.id)])}>Agregar todos</button>}
+          </div>
+          <ul className="space-y-1">
+            {fuera.map(i => (
+              <li key={i.id}>
+                <button onClick={() => setOrden(o => [...o, i.id])} className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left ring-1 ring-linea hover:bg-albahaca-claro">
+                  <span className="font-bold text-albahaca">+</span><span className="flex-1">{i.nombre}</span><span className="text-sm text-gris">{unidadCantidad(i.unidad)}</span>
+                </button>
+              </li>
+            ))}
+            {!fuera.length && <li className="text-sm text-gris">Están todos en la planilla.</li>}
+          </ul>
+        </section>
+      </div>
+    </Modal>
+  )
+}

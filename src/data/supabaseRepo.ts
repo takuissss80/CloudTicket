@@ -3,8 +3,7 @@ import { unirReceta, errorIngredienteEnUso } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona,
-} from '../types'
+  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
@@ -187,6 +186,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
           userId: p.user_id, usuario: p.usuario, rol: p.rol, cuentaId: p.cuenta_id,
           cuentaNombre: p.cuentas?.nombre ?? '', sucursalId: opt(p.sucursal_id),
           puedeDescontar: p.rol === 'admin' || !!p.puede_descontar,
+          esProduccion: p.rol !== 'admin' && !!p.es_produccion,
         },
       }
     },
@@ -290,15 +290,19 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async listUsuarios() {
       return (ok(await sb.from('perfiles').select('*').order('created_at')) as Row[]).map((p): Usuario => ({
         userId: p.user_id, usuario: p.usuario, rol: p.rol, sucursalId: opt(p.sucursal_id), nombre: opt(p.nombre),
-        puedeDescontar: !!p.puede_descontar,
+        puedeDescontar: !!p.puede_descontar, esProduccion: !!p.es_produccion,
       }))
     },
     async crearUsuario(d) {
       const r = await invocarUsuarios({ accion: 'crear', usuario: d.usuario, password: d.password, sucursal_id: d.sucursalId, nombre: d.nombre })
-      if (d.puedeDescontar && r?.user_id) ok(await sb.rpc('set_puede_descontar', { p_user: r.user_id, p_valor: true }))
+      const tipo = d.tipo ?? (d.puedeDescontar ? 'encargado' : 'comun')
+      if (tipo !== 'comun' && r?.user_id) ok(await sb.rpc('set_tipo_usuario', { p_user: r.user_id, p_tipo: tipo }))
     },
     async setPuedeDescontar(userId, valor) {
       ok(await sb.rpc('set_puede_descontar', { p_user: userId, p_valor: valor }))
+    },
+    async setTipoUsuario(userId, tipo) {
+      ok(await sb.rpc('set_tipo_usuario', { p_user: userId, p_tipo: tipo }))
     },
     async cambiarPassword(userId, password) { await invocarUsuarios({ accion: 'password', user_id: userId, password }) },
     async eliminarUsuario(userId) { await invocarUsuarios({ accion: 'eliminar', user_id: userId }) },
@@ -488,6 +492,40 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         ingredienteId: x.ingrediente_id, cantidad: num(x.cantidad), minimo: num(x.minimo),
       }))
     },
+    // ---- Pedido a fábrica
+    async getPlanillaFabrica() {
+      return (ok(await sb.from('fabrica_planilla').select('ingrediente_id').order('orden')) as Row[]).map(r => r.ingrediente_id as string)
+    },
+    async guardarPlanillaFabrica(ids) {
+      const cuenta = (await perfil())?.cuenta_id as string
+      ok(await sb.from('fabrica_planilla').delete().eq('cuenta_id', cuenta).select('ingrediente_id'))
+      if (ids.length) ok(await sb.from('fabrica_planilla').insert(ids.map((id, i) => ({ cuenta_id: cuenta, ingrediente_id: id, orden: i }))).select('ingrediente_id'))
+    },
+    async listPedidosFabrica(sucursalIds, limite = 100) {
+      let q = sb.from('pedidos_fabrica').select('*, pedidos_fabrica_items(*)').order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(limite)
+      if (sucursalIds) q = q.in('sucursal_id', sucursalIds)
+      return (ok(await q) as Row[]).map((p): PedidoFabrica => ({
+        id: p.id, sucursalId: p.sucursal_id, numero: p.numero, fecha: p.fecha, notas: opt(p.notas), estado: p.estado,
+        creadoPor: opt(p.creado_por), createdAt: p.created_at, recibidoAt: opt(p.recibido_at), recibidoPor: opt(p.recibido_por),
+        items: ((p.pedidos_fabrica_items ?? []) as Row[]).sort((a, b) => a.orden - b.orden).map(i => ({
+          id: i.id, ingredienteId: opt(i.ingrediente_id), nombre: i.nombre, unidad: i.unidad, cantidad: num(i.cantidad),
+          recibido: i.recibido == null ? undefined : num(i.recibido),
+        })),
+      }))
+    },
+    async crearPedidoFabrica(sucursalId, d) {
+      ok(await sb.rpc('crear_pedido_fabrica', {
+        p_sucursal: sucursalId, p_fecha: d.fecha, p_notas: d.notas ?? null,
+        p_items: d.items.map(i => ({ ingrediente_id: i.ingredienteId, cantidad: i.cantidad })),
+      }))
+    },
+    async recibirPedidoFabrica(pedidoId, items) {
+      ok(await sb.rpc('recibir_pedido_fabrica', { p_pedido: pedidoId, p_items: items.map(i => ({ id: i.id, recibido: i.recibido })) }))
+    },
+    async anularPedidoFabrica(pedidoId) {
+      ok(await sb.rpc('anular_pedido_fabrica', { p_pedido: pedidoId }))
+    },
+
     async registrarIngreso(sucursalId, d) {
       ok(await sb.rpc('registrar_ingreso', {
         p_sucursal: sucursalId,

@@ -1,8 +1,7 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, ItemComanda, Pago, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona,
-} from '../types'
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica } from '../types'
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
 import { descuentoCupon, normalizarCodigo, problemaCupon } from '../lib/descuentos'
@@ -49,6 +48,8 @@ interface DB {
   cupones?: Cupon[]
   pedidosExternos?: ConLocal<PedidoExterno>[]
   mapeos?: MapeoExterno[]
+  planillaFabrica?: string[]
+  pedidosFabrica?: PedidoFabrica[]
 }
 
 const uid = () =>
@@ -142,7 +143,7 @@ function sesionActual(): Sesion | null {
   const id = sesionMemoria ?? leerStorage(KEY_SESION)
   const u = db().usuarios.find(x => x.userId === id)
   if (!u) return null
-  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar }
+  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar, esProduccion: u.rol !== 'admin' && !!u.esProduccion }
 }
 function ses(): Sesion {
   const s = sesionActual()
@@ -377,6 +378,15 @@ export const localRepo: Repo = {
     return pausa(db().usuarios.map(({ password: _, ...u }) => { void _; return u }))
   },
 
+  async setTipoUsuario(userId, tipo) {
+    soloAdmin()
+    const u = db().usuarios.find(x => x.userId === userId && x.rol === 'local')
+    if (!u) throw new Error('Ese usuario no es de tu cuenta')
+    u.puedeDescontar = tipo === 'encargado'
+    u.esProduccion = tipo === 'produccion'
+    guardar('menu')
+  },
+
   async setPuedeDescontar(userId, valor) {
     soloAdmin()
     const u = db().usuarios.find(x => x.userId === userId && x.rol === 'local')
@@ -385,13 +395,13 @@ export const localRepo: Repo = {
     guardar('menu')
   },
 
-  async crearUsuario({ usuario, password, sucursalId, nombre, puedeDescontar }) {
+  async crearUsuario({ usuario, password, sucursalId, nombre, puedeDescontar, tipo }) {
     soloAdmin()
     const u = usuario.trim().toLowerCase()
     if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(u)) throw new Error('El usuario debe tener entre 3 y 40 caracteres: letras, números, punto, guion o guion bajo.')
     if (password.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.')
     if (db().usuarios.some(x => x.usuario === u)) throw new Error(`El usuario "${u}" ya existe. Probá con otro nombre.`)
-    db().usuarios.push({ userId: uid(), usuario: u, password, rol: 'local', sucursalId, nombre, puedeDescontar: !!puedeDescontar })
+    db().usuarios.push({ userId: uid(), usuario: u, password, rol: 'local', sucursalId, nombre, puedeDescontar: tipo ? tipo === 'encargado' : !!puedeDescontar, esProduccion: tipo === 'produccion' })
     guardar('menu')
   },
 
@@ -708,8 +718,66 @@ export const localRepo: Repo = {
 
   // ---- Stock
   async getStock(sucursalId) {
-    puedeLocal(sucursalId)
+    if (!ses().esProduccion) puedeLocal(sucursalId)
     return pausa(clon((db().stock ?? []).filter(x => x.sucursalId === sucursalId).map(sinLocal)))
+  },
+
+  // ---- Pedido a fábrica
+  async getPlanillaFabrica() { return pausa([...(db().planillaFabrica ?? [])]) },
+  async guardarPlanillaFabrica(ids) {
+    soloAdmin()
+    db().planillaFabrica = [...ids]
+    guardar('menu')
+  },
+  async listPedidosFabrica(sucursalIds, limite = 100) {
+    const s = ses()
+    const visibles = (p: PedidoFabrica) => s.rol === 'admin' || s.esProduccion || p.sucursalId === s.sucursalId
+    return pausa(clon((db().pedidosFabrica ?? [])
+      .filter(p => visibles(p) && (!sucursalIds || sucursalIds.includes(p.sucursalId)))
+      .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limite)))
+  },
+  async crearPedidoFabrica(sucursalId, d) {
+    if (ses().esProduccion) throw new Error('Sin acceso a ese local')
+    puedeLocal(sucursalId)
+    if (!d.fecha) throw new Error('Poné la fecha del pedido')
+    const db0 = db()
+    const items = d.items.filter(i => i.cantidad > 0).map(i => {
+      const ing = db0.ingredientes.find(x => x.id === i.ingredienteId)
+      if (!ing) throw new Error('Ingrediente inválido')
+      return { id: uid(), ingredienteId: ing.id, nombre: ing.nombre, unidad: ing.unidad, cantidad: i.cantidad }
+    })
+    if (!items.length) throw new Error('El pedido está vacío: poné al menos una cantidad')
+    db0.pedidosFabrica ??= []
+    const numero = Math.max(0, ...db0.pedidosFabrica.filter(p => p.sucursalId === sucursalId).map(p => p.numero)) + 1
+    db0.pedidosFabrica.push({ id: uid(), sucursalId, numero, fecha: d.fecha, notas: d.notas?.trim() || undefined, estado: 'pendiente', creadoPor: ses().usuario, createdAt: ahora(), items })
+    guardar('menu')
+  },
+  async recibirPedidoFabrica(pedidoId, items) {
+    const d = db()
+    const p = (d.pedidosFabrica ?? []).find(x => x.id === pedidoId)
+    if (!p || ses().esProduccion) throw new Error('Sin acceso a ese pedido')
+    puedeLocal(p.sucursalId)
+    if (p.estado !== 'pendiente') throw new Error('Este pedido ya fue recibido')
+    d.stockMovs ??= []
+    for (const it of p.items) {
+      const rec = Math.max(0, items.find(x => x.id === it.id)?.recibido ?? 0)
+      it.recibido = rec
+      if (rec > 0 && it.ingredienteId) {
+        d.stockMovs.push({ id: uid(), sucursalId: p.sucursalId, ingredienteId: it.ingredienteId, tipo: 'ingreso', cantidad: rec, motivo: `Pedido fábrica #${p.numero}`, creadoPor: ses().usuario, createdAt: ahora() })
+        moverStock(p.sucursalId, it.ingredienteId, rec)
+      }
+    }
+    Object.assign(p, { estado: 'recibido', recibidoAt: ahora(), recibidoPor: ses().usuario })
+    guardar('menu')
+  },
+  async anularPedidoFabrica(pedidoId) {
+    const p = (db().pedidosFabrica ?? []).find(x => x.id === pedidoId)
+    if (!p || ses().esProduccion) throw new Error('Sin acceso a ese pedido')
+    puedeLocal(p.sucursalId)
+    if (p.estado !== 'pendiente') throw new Error('Solo se puede anular un pedido que todavía no llegó')
+    p.estado = 'anulado'
+    guardar('menu')
   },
 
   async registrarIngreso(sucursalId, data) {

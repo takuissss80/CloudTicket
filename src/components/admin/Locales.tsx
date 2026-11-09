@@ -1,3 +1,4 @@
+import type { TipoUsuario as TipoUsuarioT } from '../../types'
 import { useCallback, useEffect, useState } from 'react'
 import type { Sucursal, Usuario } from '../../types'
 import { repo } from '../../data'
@@ -69,7 +70,7 @@ export function Locales() {
 
 function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios: Usuario[]; onCambio: () => Promise<void> }) {
   const avisar = useApp(s => s.avisar)
-  const [nuevoUsuario, setNuevoUsuario] = useState({ usuario: '', password: '', puedeDescontar: false })
+  const [nuevoUsuario, setNuevoUsuario] = useState({ usuario: '', password: '', tipo: 'comun' as TipoUsuarioT })
   const [pass, setPass] = useState<{ userId: string; valor: string } | null>(null)
   const [borrar, setBorrar] = useState<Usuario | null>(null)
 
@@ -103,8 +104,8 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
               <li key={u.userId} className="rounded-lg bg-harina px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto font-semibold">{u.usuario}</span>
-                  <TipoUsuario valor={!!u.puedeDescontar} etiqueta={`Tipo de ${u.usuario}`}
-                    onChange={v => intentar(() => repo.setPuedeDescontar(u.userId, v), `${u.usuario} ahora es ${v ? 'encargado' : 'común'}`)} />
+                  <TipoUsuario valor={u.esProduccion ? 'produccion' : u.puedeDescontar ? 'encargado' : 'comun'} etiqueta={`Tipo de ${u.usuario}`}
+                    onChange={v => intentar(() => repo.setTipoUsuario(u.userId, v), `${u.usuario} ahora es ${NOMBRE_TIPO[v].toLowerCase()}`)} />
                   <button className="text-sm font-semibold text-pizarra hover:underline" onClick={() => setPass({ userId: u.userId, valor: '' })}>Cambiar contraseña</button>
                   <button className="text-sm font-semibold text-tomate hover:underline" onClick={() => setBorrar(u)}>Eliminar</button>
                 </div>
@@ -123,17 +124,17 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
           <form className="mt-3 flex flex-wrap gap-2" onSubmit={e => {
             e.preventDefault()
             intentar(() => repo.crearUsuario({ ...nuevoUsuario, sucursalId: local.id }), `Usuario ${nuevoUsuario.usuario} creado`)
-              .then(() => setNuevoUsuario({ usuario: '', password: '', puedeDescontar: false }))
+              .then(() => setNuevoUsuario({ usuario: '', password: '', tipo: 'comun' }))
           }}>
             <input aria-label="Usuario nuevo" value={nuevoUsuario.usuario} onChange={e => setNuevoUsuario({ ...nuevoUsuario, usuario: e.target.value.toLowerCase().replace(/\s/g, '') })}
               className={`${inputBase} h-10 min-w-0 flex-1`} placeholder={`usuario (ej: ${sugerido})`} autoComplete="off" autoCapitalize="none" />
             <input aria-label="Contraseña del usuario nuevo" type="text" value={nuevoUsuario.password} onChange={e => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
               className={`${inputBase} h-10 min-w-0 flex-1`} placeholder="contraseña (mín. 6)" autoComplete="new-password" />
-            <TipoUsuario valor={nuevoUsuario.puedeDescontar} etiqueta="Tipo del usuario nuevo" onChange={v => setNuevoUsuario({ ...nuevoUsuario, puedeDescontar: v })} />
+            <TipoUsuario valor={nuevoUsuario.tipo} etiqueta="Tipo del usuario nuevo" onChange={v => setNuevoUsuario({ ...nuevoUsuario, tipo: v })} />
             <Btn tono="albahaca" className="h-10" disabled={nuevoUsuario.usuario.length < 3 || nuevoUsuario.password.length < 6}>Crear usuario</Btn>
           </form>
           <p className="mt-2 text-sm text-gris">
-            <b>Común:</b> toma pedidos, cobra, entrega, usa cupones y marca productos agotados. <b>Encargado:</b> además modifica y anula comandas, carga descuentos y adicionales, cambia el envío, ve los reportes (también en la app del celular) y edita el menú y los precios del local.
+            <b>Común:</b> toma pedidos, cobra, entrega, usa cupones y marca productos agotados. <b>Encargado:</b> además modifica y anula comandas, carga descuentos y adicionales, cambia el envío, ve los reportes (también en la app del celular) y edita el menú y los precios del local. <b>Producción:</b> para la fábrica: solo ve los pedidos a fábrica y el stock de todos los locales.
           </p>
         </div>
       </div>
@@ -146,11 +147,13 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
   )
 }
 
-/** Selector Común / Encargado */
-function TipoUsuario({ valor, etiqueta, onChange }: { valor: boolean; etiqueta: string; onChange: (v: boolean) => void }) {
+const NOMBRE_TIPO: Record<TipoUsuarioT, string> = { comun: 'Común', encargado: 'Encargado', produccion: 'Producción' }
+
+/** Selector Común / Encargado / Producción */
+function TipoUsuario({ valor, etiqueta, onChange }: { valor: TipoUsuarioT; etiqueta: string; onChange: (v: TipoUsuarioT) => void }) {
   return (
     <div className="flex overflow-hidden rounded-lg border border-linea text-sm" role="group" aria-label={etiqueta}>
-      {([[false, 'Común'], [true, 'Encargado']] as const).map(([v, l]) => (
+      {(['comun', 'encargado', 'produccion'] as const).map(v => [v, NOMBRE_TIPO[v]] as const).map(([v, l]) => (
         <button key={l} type="button" aria-pressed={valor === v} onClick={() => valor !== v && onChange(v)}
           className={`h-9 px-3 font-semibold ${valor === v ? 'bg-primario text-sobre-primario' : 'bg-superficie hover:bg-harina'}`}>{l}</button>
       ))}

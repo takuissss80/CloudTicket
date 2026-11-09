@@ -19,7 +19,11 @@ export interface Sesion {
   sucursalId?: string
   /** Admin o encargado: puede cargar descuentos y adicionales a mano */
   puedeDescontar: boolean
+  /** Usuario de Producción (fábrica): solo ve pedidos y stock de todos los locales */
+  esProduccion?: boolean
 }
+
+export type TipoUsuario = 'comun' | 'encargado' | 'produccion'
 
 /** Un valor que puede ser un monto fijo o un porcentaje */
 export type TipoValor = 'monto' | 'porc'
@@ -69,6 +73,7 @@ export interface Usuario {
   nombre?: string
   /** Usuario de local encargado (si no, común) */
   puedeDescontar?: boolean
+  esProduccion?: boolean
 }
 
 export type UnidadIngrediente = 'un' | 'g' | 'ml'
@@ -463,4 +468,32 @@ export interface ImportacionPedido {
   cobrada: boolean
   items: { productoId?: string; descripcion: string; variante?: Variante; cantidad: number; precioUnit: number; nota?: string }[]
   pagos: Pago[]
+}
+
+// ---------------------------------------------------------------------
+// Pedido a fábrica
+// ---------------------------------------------------------------------
+export type EstadoPedidoFabrica = 'pendiente' | 'recibido' | 'anulado'
+export interface PedidoFabricaItem {
+  id: string
+  ingredienteId?: string
+  nombre: string
+  unidad: UnidadIngrediente
+  cantidad: number
+  /** Lo que llegó (al recibir). 0 = no llegó */
+  recibido?: number
+}
+export interface PedidoFabrica {
+  id: string
+  sucursalId: string
+  numero: number
+  /** Fecha del pedido (YYYY-MM-DD) */
+  fecha: string
+  notas?: string
+  estado: EstadoPedidoFabrica
+  creadoPor?: string
+  createdAt: string
+  recibidoAt?: string
+  recibidoPor?: string
+  items: PedidoFabricaItem[]
 }

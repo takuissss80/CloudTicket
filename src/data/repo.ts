@@ -1,6 +1,6 @@
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona,
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, TipoUsuario,
 } from '../types'
 
 /** Catálogo listo para vender en un local (precios del local, sin ocultos) */
@@ -85,9 +85,11 @@ export interface Repo {
   /** Valida un código para usarlo hoy; tira error con el motivo si no sirve */
   validarCupon(codigo: string): Promise<CuponAplicado>
   listUsuarios(): Promise<Usuario[]>
-  crearUsuario(data: { usuario: string; password: string; sucursalId: string; nombre?: string; puedeDescontar?: boolean }): Promise<void>
+  crearUsuario(data: { usuario: string; password: string; sucursalId: string; nombre?: string; puedeDescontar?: boolean; tipo?: TipoUsuario }): Promise<void>
   /** Común (false) o encargado (true) */
   setPuedeDescontar(userId: string, valor: boolean): Promise<void>
+  /** Común / Encargado / Producción (solo admin) */
+  setTipoUsuario(userId: string, tipo: TipoUsuario): Promise<void>
   cambiarPassword(userId: string, password: string): Promise<void>
   eliminarUsuario(userId: string): Promise<void>
 
@@ -164,6 +166,17 @@ export interface Repo {
 
   // ---- Stock
   getStock(sucursalId: string): Promise<StockItem[]>
+
+  // ---- Pedido a fábrica
+  /** Ingredientes de la planilla, en orden */
+  getPlanillaFabrica(): Promise<string[]>
+  guardarPlanillaFabrica(ingredienteIds: string[]): Promise<void>
+  /** sucursalIds null: todos los que el usuario puede ver */
+  listPedidosFabrica(sucursalIds: string[] | null, limite?: number): Promise<PedidoFabrica[]>
+  crearPedidoFabrica(sucursalId: string, d: { fecha: string; notas?: string; items: { ingredienteId: string; cantidad: number }[] }): Promise<void>
+  /** Lo que llegó de cada ítem (0 = no llegó); suma al stock */
+  recibirPedidoFabrica(pedidoId: string, items: { id: string; recibido: number }[]): Promise<void>
+  anularPedidoFabrica(pedidoId: string): Promise<void>
   registrarIngreso(sucursalId: string, data: NuevoIngreso): Promise<void>
   ajustarStock(sucursalId: string, ingredienteId: string, tipo: 'ajuste' | 'decomiso', cantidad: number, motivo?: string): Promise<void>
   setStockMinimo(sucursalId: string, ingredienteId: string, minimo: number): Promise<void>
