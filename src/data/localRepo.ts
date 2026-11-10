@@ -90,8 +90,8 @@ function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' = 'coman
 }
 
 function baseVacia(): DB {
-  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15 }
-  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15 }
+  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro' }
+  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro' }
   return {
     cuenta: { id: uid(), nombre: 'Napoles' },
     sucursales: [principal, benavidez],
@@ -274,7 +274,7 @@ export const localRepo: Repo = {
   async listSucursales() {
     const s = ses()
     return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
-      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15 }))))
+      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro' }))))
   },
 
   async listCupones() {
@@ -362,7 +362,7 @@ export const localRepo: Repo = {
 
   async configCocina(sucursalId, c) {
     const s = ses()
-    if (c.activa && s.plan !== 'pro') throw new Error('La pantalla de cocina es del plan PRO')
+    if (c.activa && (db().sucursales.find(x => x.id === sucursalId)?.plan ?? 'pro') !== 'pro') throw new Error('La pantalla de cocina es del plan PRO')
     if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar la cocina')
     if (c.amarillo < 1 || c.rojo <= c.amarillo) throw new Error('Los minutos de rojo tienen que ser más que los de amarillo')
     const suc = db().sucursales.find(x => x.id === sucursalId)
@@ -438,23 +438,23 @@ export const localRepo: Repo = {
     const d = db()
     return pausa(clon([{
       id: d.cuenta.id, nombre: d.cuenta.nombre, plan: d.cuenta.plan ?? 'pro', createdAt: d.cuenta.createdAt ?? '2026-09-01T12:00:00.000Z',
-      locales: d.sucursales.map(s => ({ id: s.id, nombre: s.nombre, vence: s.vence, activa: s.activa, esPrincipal: s.esPrincipal, createdAt: '2026-09-01T12:00:00.000Z' })),
+      locales: d.sucursales.map(s => ({ id: s.id, nombre: s.nombre, vence: s.vence, plan: s.plan ?? 'pro', activa: s.activa, esPrincipal: s.esPrincipal, createdAt: '2026-09-01T12:00:00.000Z' })),
       usuarios: d.usuarios.map(({ password: _, ...u }) => { void _; return u }),
     }]))
   },
   async saCrearCuenta() { soloSuper(); throw new Error('En la demo hay una sola cuenta: probalo con la base real') },
   async saRenombrarCuenta(_id, nombre) { soloSuper(); db().cuenta.nombre = nombre.trim(); guardar('menu') },
-  async saSetPlan(_id, plan) {
+  async saSetPlanLocal(id, plan) {
     soloSuper()
-    db().cuenta.plan = plan
-    if (plan === 'principal') db().sucursales.forEach(s => { s.cocinaActiva = false })
+    const s = db().sucursales.find(x => x.id === id)
+    if (s) { s.plan = plan; if (plan === 'principal') s.cocinaActiva = false }
     guardar('menu')
   },
-  async saCrearLocal(_id, nombre, vence) {
+  async saCrearLocal(_id, nombre, vence, plan) {
     soloSuper()
     if (!nombre.trim()) throw new Error('Poné el nombre del local')
     const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, vence: vence || undefined }
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, vence: vence || undefined }
     d.sucursales.push(suc)
     d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
     guardar('menu')

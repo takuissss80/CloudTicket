@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useApp } from '../../store/app'
+import { useApp, useLocalPro } from '../../store/app'
 import { MenuAdmin } from './MenuAdmin'
 import { Ingredientes } from './Ingredientes'
 import { Locales } from './Locales'
@@ -19,7 +19,7 @@ export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => v
   const sesion = useApp(s => s.sesion)
   const esAdmin = sesion?.rol === 'admin'
   const esEncargado = !!sesion?.puedeDescontar
-  const esPro = sesion?.plan === 'pro'
+  const esPro = useLocalPro()
   const [pestana, setPestana] = useState<Pestana>(inicial === 'menu' && !esEncargado ? 'caja' : inicial)
 
   const pestanas: { key: Pestana; label: string }[] = esAdmin

@@ -79,7 +79,9 @@ const menuVacio: MenuData = { categorias: [], productos: [], ajustes: [], ingred
 export const useLocalActivo = () => useApp(s => s.sucursales.find(x => x.id === s.sucursalId))
 /** El local trabaja con pantalla de cocina */
 /** Pantalla de cocina: solo plan PRO y si el local la activó */
-export const useCocinaActiva = () => useApp(s => s.sesion?.plan === 'pro' && !!s.sucursales.find(x => x.id === s.sucursalId)?.cocinaActiva)
+export const useCocinaActiva = () => useApp(s => { const l = s.sucursales.find(x => x.id === s.sucursalId); return l?.plan === 'pro' && !!l.cocinaActiva })
+/** El local activo es plan PRO (pantalla de cocina y pantalla para clientes) */
+export const useLocalPro = () => useApp(s => s.sucursales.find(x => x.id === s.sucursalId)?.plan === 'pro')
 
 export const mensajeError = (e: unknown) =>
   e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)

@@ -32,7 +32,7 @@ export function Locales() {
       </div>
 
       <p className="rounded-xl bg-superficie px-4 py-3 text-[15px] ring-1 ring-linea">
-        Plan <b>{sesion ? NOMBRE_PLAN[sesion.plan] : ''}</b>{sesion?.plan === 'principal' ? ' (sin pantalla de cocina ni pantalla para clientes)' : ''}.
+        Cada local tiene su plan: <b>PRO</b> incluye la pantalla de cocina y la pantalla para clientes; <b>Principal</b>, todo lo demás.
         {' '}Para sumar un local nuevo o cambiar de plan, pedíselo a CloudTicket.
       </p>
 
@@ -69,6 +69,7 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
         <CampoTexto valor={local.nombre} etiqueta="Nombre del local" className="!w-auto min-w-0 flex-1 font-cond !text-2xl !font-bold"
           onGuardar={v => v && intentar(() => repo.actualizarSucursal(local.id, { nombre: v }), 'Nombre actualizado')} />
         {local.esPrincipal && <span className="rounded bg-pizarra-claro px-2 py-0.5 text-sm font-semibold text-pizarra">Principal</span>}
+        <span className={`rounded px-2 py-0.5 text-sm font-semibold ${local.plan === 'pro' ? 'bg-albahaca-claro text-albahaca' : 'bg-harina text-gris ring-1 ring-linea'}`}>Plan {NOMBRE_PLAN[local.plan]}</span>
         {(() => { const v = estadoVence(local.vence); return v.tono !== 'sin' && <span className={`rounded-full px-2.5 py-0.5 text-sm font-semibold ring-1 ${CLASE_VENCE[v.tono]}`}>{v.texto}</span> })()}
         {!local.esPrincipal && (
           <label className="flex items-center gap-2 text-[15px]">

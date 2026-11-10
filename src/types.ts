@@ -19,6 +19,7 @@ export interface Sesion {
   rol: Rol
   cuentaId: string
   cuentaNombre: string
+  /** Plan de la cuenta (el que toma un local nuevo). Lo que vale es el plan de cada local */
   plan: Plan
   /** Solo usuarios de local */
   sucursalId?: string
@@ -48,6 +49,8 @@ export interface Sucursal {
   cocinaRojo: number
   /** Vencimiento de la suscripción del local (YYYY-MM-DD) */
   vence?: string
+  /** Plan del local: PRO tiene pantalla de cocina y pantalla para clientes */
+  plan: Plan
 }
 
 /** Cupón de descuento (lo crea el administrador) */
@@ -523,6 +526,7 @@ export interface SaLocal {
   id: string
   nombre: string
   vence?: string
+  plan: Plan
   activa: boolean
   esPrincipal: boolean
   createdAt: string

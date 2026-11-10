@@ -32,6 +32,8 @@ const mapSucursal = (r: Row): Sucursal => ({
   recargoDelivery: num(r.recargo_delivery), recargoDeliveryTipo: r.recargo_delivery_tipo ?? 'monto',
   cocinaActiva: !!r.cocina_activa, cocinaAmarillo: r.cocina_amarillo ?? 7, cocinaRojo: r.cocina_rojo ?? 15,
   vence: opt(r.vence),
+  // Sin la migración 0020 no hay plan por local: se toma como PRO
+  plan: r.plan === 'principal' ? 'principal' : 'pro',
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
@@ -304,7 +306,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const r = (ok(await sb.rpc('sa_resumen')) ?? []) as Row[]
       return r.map((c): SaCuenta => ({
         id: c.id, nombre: c.nombre, plan: c.plan, createdAt: c.created_at,
-        locales: (c.locales ?? []).map((s: Row) => ({ id: s.id, nombre: s.nombre, vence: opt(s.vence), activa: s.activa, esPrincipal: s.es_principal, createdAt: s.created_at })),
+        locales: (c.locales ?? []).map((s: Row) => ({ id: s.id, nombre: s.nombre, vence: opt(s.vence), plan: s.plan ?? c.plan, activa: s.activa, esPrincipal: s.es_principal, createdAt: s.created_at })),
         usuarios: (c.usuarios ?? []).map((p: Row): Usuario => ({
           userId: p.user_id, usuario: p.usuario, rol: p.rol, sucursalId: opt(p.sucursal_id), nombre: opt(p.nombre),
           puedeDescontar: !!p.puede_descontar, esProduccion: !!p.es_produccion,
@@ -315,8 +317,8 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       await invocarUsuarios({ accion: 'crear_cuenta', cuenta: d.cuenta, local: d.local, usuario: d.usuario, password: d.password, plan: d.plan, vence: d.vence ?? '' })
     },
     async saRenombrarCuenta(cuentaId, nombre) { ok(await sb.rpc('sa_renombrar_cuenta', { p_cuenta: cuentaId, p_nombre: nombre })) },
-    async saSetPlan(cuentaId, plan) { ok(await sb.rpc('sa_set_plan', { p_cuenta: cuentaId, p_plan: plan })) },
-    async saCrearLocal(cuentaId, nombre, vence) { ok(await sb.rpc('sa_crear_local', { p_cuenta: cuentaId, p_nombre: nombre, p_vence: vence || null })) },
+    async saSetPlanLocal(sucursalId, plan) { ok(await sb.rpc('sa_set_plan_local', { p_sucursal: sucursalId, p_plan: plan })) },
+    async saCrearLocal(cuentaId, nombre, vence, plan) { ok(await sb.rpc('sa_crear_local', { p_cuenta: cuentaId, p_nombre: nombre, p_vence: vence || null, p_plan: plan })) },
     async saEditarLocal(sucursalId, nombre, activa) { ok(await sb.rpc('sa_editar_local', { p_sucursal: sucursalId, p_nombre: nombre, p_activa: activa })) },
     async saSetVence(sucursalId, vence) { ok(await sb.rpc('sa_set_vence', { p_sucursal: sucursalId, p_vence: vence || null })) },
     async saCrearUsuario(d) {

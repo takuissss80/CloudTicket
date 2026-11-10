@@ -10,6 +10,7 @@ import { BotonTema, Btn, Campo, Confirmar, Modal, inputBase, inputCls } from './
 import { NOMBRE_TIPO, TipoUsuario } from './admin/Locales'
 
 type Filtro = '' | 'vencidos' | 'pronto' | 'principal' | 'pro'
+const CLASE_PLAN: Record<Plan, string> = { pro: 'bg-albahaca-claro text-albahaca', principal: 'bg-harina text-gris ring-1 ring-linea' }
 const tipoDe = (u: Usuario): TipoUsuarioT => (u.esProduccion ? 'produccion' : u.puedeDescontar ? 'encargado' : 'comun')
 /** El vencimiento más próximo (o ya pasado) de los locales activos */
 const peorVence = (c: SaCuenta) => c.locales.filter(l => l.activa).map(l => estadoVence(l.vence)).sort((a, b) => a.dias - b.dias)[0]
@@ -51,7 +52,7 @@ export function SuperAdmin({ usuario, onSalir }: { usuario: string; onSalir: () 
       const v = peorVence(c)
       if (filtro === 'vencidos') return v?.tono === 'vencido'
       if (filtro === 'pronto') return v?.tono === 'pronto'
-      if (filtro === 'principal' || filtro === 'pro') return c.plan === filtro
+      if (filtro === 'principal' || filtro === 'pro') return c.locales.some(l => l.activa && l.plan === filtro)
       return true
     })
   }, [todos, busqueda, filtro])
@@ -80,7 +81,7 @@ export function SuperAdmin({ usuario, onSalir }: { usuario: string; onSalir: () 
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-4 p-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {tarjeta('', 'Cuentas', todos.length)}
-          {tarjeta('pro', 'Cuentas PRO', todos.filter(c => c.plan === 'pro').length)}
+          {tarjeta('pro', 'Locales PRO', locales.filter(l => l.plan === 'pro').length)}
           {tarjeta('pronto', `Vencen en ${DIAS_AVISO} días`, pronto, pronto ? 'bg-muzza-claro ring-muzza' : '')}
           {tarjeta('vencidos', 'Locales vencidos', vencidos, vencidos ? 'bg-tomate-claro ring-tomate' : '')}
         </div>
@@ -97,7 +98,7 @@ export function SuperAdmin({ usuario, onSalir }: { usuario: string; onSalir: () 
               <thead className="border-b border-linea text-sm text-gris">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Cuenta</th>
-                  <th className="px-3 py-2.5 font-medium">Plan</th>
+                  <th className="px-3 py-2.5 font-medium">Planes de los locales</th>
                   <th className="px-3 py-2.5 font-medium">Suscripción</th>
                   <th className="px-3 py-2.5 font-medium">Alta</th>
                   <th className="px-4 py-2.5 text-right font-medium">Acciones</th>
@@ -115,11 +116,12 @@ export function SuperAdmin({ usuario, onSalir }: { usuario: string; onSalir: () 
                         <div className="text-sm text-gris">{admins.map(a => a.usuario).join(', ') || 'Sin administrador'} · {c.locales.length} local{c.locales.length === 1 ? '' : 'es'}</div>
                       </td>
                       <td className="px-3 py-3">
-                        <select aria-label={`Plan de ${c.nombre}`} value={c.plan} className={`${inputBase} h-9 w-auto`}
-                          onChange={e => { const p = e.target.value as Plan; intentar(() => repo.saSetPlan(c.id, p), `${c.nombre} ahora es plan ${NOMBRE_PLAN[p]}`) }}>
-                          <option value="principal">Principal</option>
-                          <option value="pro">PRO</option>
-                        </select>
+                        <span className="flex flex-wrap gap-1.5">
+                          {(['pro', 'principal'] as const).map(p => {
+                            const n = c.locales.filter(l => l.activa && l.plan === p).length
+                            return n > 0 && <span key={p} className={`whitespace-nowrap rounded px-2 py-0.5 text-sm font-semibold ${CLASE_PLAN[p]}`}>{n} {NOMBRE_PLAN[p]}</span>
+                          })}
+                        </span>
                       </td>
                       <td className="px-3 py-3">
                         {v ? <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-semibold ring-1 ${CLASE_VENCE[v.tono]}`}>{v.texto}</span> : <span className="text-sm text-gris">Sin locales activos</span>}
@@ -154,7 +156,7 @@ type Intentar = (f: () => Promise<unknown>, ok?: string) => Promise<boolean>
 
 function DetalleCuenta({ cuenta, intentar }: { cuenta: SaCuenta; intentar: Intentar }) {
   const [nombre, setNombre] = useState(cuenta.nombre)
-  const [nuevoLocal, setNuevoLocal] = useState({ nombre: '', vence: '' })
+  const [nuevoLocal, setNuevoLocal] = useState({ nombre: '', vence: '', plan: 'principal' as Plan })
   const [nuevoAdmin, setNuevoAdmin] = useState({ usuario: '', password: '' })
   const admins = cuenta.usuarios.filter(u => u.rol === 'admin')
 
@@ -165,7 +167,7 @@ function DetalleCuenta({ cuenta, intentar }: { cuenta: SaCuenta; intentar: Inten
           <input aria-label="Nombre de la cuenta" value={nombre} onChange={e => setNombre(e.target.value)} className={`${inputBase} h-9 w-64`} /></label>
         {nombre.trim() !== cuenta.nombre && <Btn className="h-9" disabled={!nombre.trim()} onClick={() => intentar(() => repo.saRenombrarCuenta(cuenta.id, nombre), 'Nombre actualizado')}>Guardar nombre</Btn>}
         <p className="ml-auto max-w-md text-sm text-gris">
-          {cuenta.plan === 'pro' ? 'PRO: todas las funciones, con pantalla de cocina y pantalla para clientes.' : 'Principal: todo menos la pantalla de cocina y la pantalla para clientes.'}
+          Cada local tiene su plan. <b>PRO</b>: todo, con pantalla de cocina y pantalla para clientes. <b>Principal</b>: todo menos esas dos pantallas.
         </p>
       </div>
 
@@ -173,10 +175,15 @@ function DetalleCuenta({ cuenta, intentar }: { cuenta: SaCuenta; intentar: Inten
 
       <form className="flex flex-wrap items-end gap-2 rounded-xl bg-superficie p-3 ring-1 ring-linea" onSubmit={async e => {
         e.preventDefault()
-        if (await intentar(() => repo.saCrearLocal(cuenta.id, nuevoLocal.nombre, nuevoLocal.vence || undefined), `Local ${nuevoLocal.nombre} creado`)) setNuevoLocal({ nombre: '', vence: '' })
+        if (await intentar(() => repo.saCrearLocal(cuenta.id, nuevoLocal.nombre, nuevoLocal.vence || undefined, nuevoLocal.plan), `Local ${nuevoLocal.nombre} creado (plan ${NOMBRE_PLAN[nuevoLocal.plan]})`)) setNuevoLocal({ nombre: '', vence: '', plan: 'principal' })
       }}>
         <label className="min-w-48 flex-1 text-sm"><span className="mb-0.5 block text-gris">Nuevo local</span>
           <input aria-label="Nombre del local nuevo" value={nuevoLocal.nombre} onChange={e => setNuevoLocal({ ...nuevoLocal, nombre: e.target.value })} placeholder={`${cuenta.nombre} Centro`} className={`${inputBase} h-10 w-full`} /></label>
+        <label className="text-sm"><span className="mb-0.5 block text-gris">Plan</span>
+          <select aria-label="Plan del local nuevo" value={nuevoLocal.plan} onChange={e => setNuevoLocal({ ...nuevoLocal, plan: e.target.value as Plan })} className={`${inputBase} h-10 w-auto`}>
+            <option value="principal">Principal</option>
+            <option value="pro">PRO</option>
+          </select></label>
         <label className="text-sm"><span className="mb-0.5 block text-gris">Vence</span>
           <input type="date" aria-label="Vencimiento del local nuevo" value={nuevoLocal.vence} onChange={e => setNuevoLocal({ ...nuevoLocal, vence: e.target.value })} className={`${inputBase} h-10`} /></label>
         <Btn tono="albahaca" className="h-10" disabled={!nuevoLocal.nombre.trim()}>Agregar local</Btn>
@@ -213,7 +220,12 @@ function LocalSa({ local, cuenta, usuarios, intentar }: { local: SaLocal; cuenta
         <input aria-label={`Nombre de ${local.nombre}`} value={nombre} onChange={e => setNombre(e.target.value)}
           className={`${inputBase} h-9 w-56 font-cond text-xl font-bold`} />
         {nombre.trim() && nombre.trim() !== local.nombre && <Btn className="h-9" onClick={() => intentar(() => repo.saEditarLocal(local.id, nombre, local.activa), 'Nombre actualizado')}>Guardar</Btn>}
-        {local.esPrincipal && <span className="rounded bg-pizarra-claro px-2 py-0.5 text-sm font-semibold text-pizarra">Principal</span>}
+        {local.esPrincipal && <span className="rounded bg-pizarra-claro px-2 py-0.5 text-sm font-semibold text-pizarra">Local principal</span>}
+        <select aria-label={`Plan de ${local.nombre}`} value={local.plan} className={`${inputBase} h-9 w-auto font-semibold`}
+          onChange={e => { const p = e.target.value as Plan; intentar(() => repo.saSetPlanLocal(local.id, p), `${local.nombre} ahora es plan ${NOMBRE_PLAN[p]}`) }}>
+          <option value="principal">Plan Principal</option>
+          <option value="pro">Plan PRO</option>
+        </select>
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" className="size-4 accent-albahaca" checked={local.activa}
             onChange={e => intentar(() => repo.saEditarLocal(local.id, local.nombre, e.target.checked), e.target.checked ? 'Local activado' : 'Local desactivado')} />
@@ -293,7 +305,7 @@ function NuevaCuenta({ onClose, onLista }: { onClose: () => void; onLista: (nomb
         <Campo label="Primer local"><input id="sa-local" value={d.local} onChange={e => setD({ ...d, local: e.target.value })} placeholder={d.cuenta ? `${d.cuenta} Principal` : 'Napoles Principal'} className={inputCls} /></Campo>
         <Campo label="Usuario administrador"><input id="sa-usuario" value={d.usuario} onChange={e => setD({ ...d, usuario: e.target.value.toLowerCase().replace(/\s/g, '') })} autoComplete="off" autoCapitalize="none" placeholder="napoles" className={inputCls} /></Campo>
         <Campo label="Contraseña"><input id="sa-password" value={d.password} onChange={e => setD({ ...d, password: e.target.value })} autoComplete="new-password" placeholder="mín. 6" className={inputCls} /></Campo>
-        <Campo label="Plan">
+        <Campo label="Plan del primer local">
           <select id="sa-plan" value={d.plan} onChange={e => setD({ ...d, plan: e.target.value as Plan })} className={inputCls}>
             <option value="principal">Principal</option>
             <option value="pro">PRO</option>

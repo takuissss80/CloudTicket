@@ -97,8 +97,8 @@ export interface Repo {
   saResumen(): Promise<SaCuenta[]>
   saCrearCuenta(d: { cuenta: string; local: string; usuario: string; password: string; plan: Plan; vence?: string }): Promise<void>
   saRenombrarCuenta(cuentaId: string, nombre: string): Promise<void>
-  saSetPlan(cuentaId: string, plan: Plan): Promise<void>
-  saCrearLocal(cuentaId: string, nombre: string, vence?: string): Promise<void>
+  saSetPlanLocal(sucursalId: string, plan: Plan): Promise<void>
+  saCrearLocal(cuentaId: string, nombre: string, vence: string | undefined, plan: Plan): Promise<void>
   saEditarLocal(sucursalId: string, nombre: string, activa: boolean): Promise<void>
   saSetVence(sucursalId: string, vence: string | null): Promise<void>
   /** tipo 'admin' = administrador de la cuenta (sin local) */

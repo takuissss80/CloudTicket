@@ -71,13 +71,13 @@ function Principal({ onSalir }: { onSalir: () => void }) {
     </div>
   )
 
-  const esPro = sesion?.plan === 'pro'
+  const esPro = sucursales.find(s => s.id === sucursalId)?.plan === 'pro'
   const cocinaActiva = esPro && !!sucursales.find(s => s.id === sucursalId)?.cocinaActiva
   const salirPantalla = () => { history.replaceState(null, '', location.pathname); setEnCocina(false); setEnPantallaMostrador(false) }
   if ((enPantallaMostrador || enCocina) && !esPro) return (
     <div className="mx-auto mt-[20vh] max-w-lg px-4 text-center">
       <h1 className="font-cond text-4xl font-bold">Función del plan PRO</h1>
-      <p className="mt-2 text-gris">La pantalla de cocina y la pantalla para clientes vienen con el plan PRO. Para pasarte, pedíselo a CloudTicket.</p>
+      <p className="mt-2 text-gris">Este local tiene el plan Principal: la pantalla de cocina y la pantalla para clientes vienen con el plan PRO. Para pasarlo, pedíselo a CloudTicket.</p>
       <Btn className="mt-6" onClick={salirPantalla}>Ir a los pedidos</Btn>
     </div>
   )
