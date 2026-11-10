@@ -165,7 +165,8 @@ function NuevoPedido({ local, nombreLocal, catalogo, planilla, stock, esAdmin, o
               <th className="px-3 py-2 font-medium">Ingrediente / producto</th>
               <th className="px-3 py-2 text-right font-medium">Stock ahora</th>
               <th className="px-3 py-2 text-right font-medium">Mínimo</th>
-              <th className="px-3 py-2 text-right font-medium">Pedir</th>
+              <th className="px-3 py-2 text-right font-medium">Se pide por</th>
+              <th className="px-3 py-2 font-medium">Pedir</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-linea">
@@ -180,17 +181,15 @@ function NuevoPedido({ local, nombreLocal, catalogo, planilla, stock, esAdmin, o
                   <td className={`px-3 py-2 text-right tabular-nums ${f.minimo > 0 && f.cantidad <= f.minimo ? 'font-semibold text-tomate' : 'text-gris'}`}>{formatCantidad(f.cantidad, f.i.unidad)}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-gris">{f.minimo ? formatCantidad(f.minimo, f.i.unidad) : '—'}</td>
                 </>}
-                <td className="px-3 py-2 text-right">
-                  <span className="inline-flex items-center gap-1.5">
-                    <input inputMode="decimal" aria-label={`Cantidad de ${f.i.nombre}`} value={cant[f.i.clave] ?? ''} placeholder={f.sugerido ? String(f.sugerido) : '0'}
-                      onChange={e => setCant(c => ({ ...c, [f.i.clave]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const t = [...document.querySelectorAll<HTMLInputElement>('input[aria-label^="Cantidad de "]')]; t[t.indexOf(e.currentTarget) + 1]?.focus() } }}
-                      className={`${inputBase} h-9 w-28 text-right tabular-nums`} />
-                    <span className="min-w-6 text-left text-sm text-gris">
-                      {conPresentacion(f.i) ? (f.i.presentacion || 'pack').toLowerCase() : unidadCantidad(f.i.unidad)}
-                      {conPresentacion(f.i) && numero(cant[f.i.clave] ?? '') > 0 && <span className="block text-xs">= {formatCantidad(numero(cant[f.i.clave]) * f.i.factor, f.i.unidad)}</span>}
-                    </span>
-                  </span>
+                <td className="px-3 py-2 text-right text-sm text-gris">
+                  {conPresentacion(f.i) ? (f.i.presentacion || 'pack').toLowerCase() : unidadCantidad(f.i.unidad)}
+                  {conPresentacion(f.i) && numero(cant[f.i.clave] ?? '') > 0 && <span className="block text-xs">= {formatCantidad(numero(cant[f.i.clave]) * f.i.factor, f.i.unidad)}</span>}
+                </td>
+                <td className="w-32 px-3 py-2">
+                  <input inputMode="decimal" aria-label={`Cantidad de ${f.i.nombre}`} value={cant[f.i.clave] ?? ''} placeholder={f.sugerido ? String(f.sugerido) : '0'}
+                    onChange={e => setCant(c => ({ ...c, [f.i.clave]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const t = [...document.querySelectorAll<HTMLInputElement>('input[aria-label^="Cantidad de "]')]; t[t.indexOf(e.currentTarget) + 1]?.focus() } }}
+                    className={`${inputBase} h-9 w-28 text-right tabular-nums`} />
                 </td>
               </tr>
             ))}

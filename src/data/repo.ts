@@ -1,6 +1,6 @@
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, TipoUsuario,
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, TipoUsuario, Plan, SaCuenta,
 } from '../types'
 
 /** Catálogo listo para vender en un local (precios del local, sin ocultos) */
@@ -38,6 +38,7 @@ export type EstadoSesion =
   | { estado: 'sin_login' }
   | { estado: 'sin_cuenta'; email: string }   // logueado, pero todavía no creó su cuenta
   | { estado: 'ok'; sesion: Sesion }
+  | { estado: 'superadmin'; usuario: string }  // administrador general de CloudTicket
 
 export interface CambioProducto { id: string; precio: number; precioMitad?: number; activo: boolean }
 
@@ -62,14 +63,10 @@ export interface Repo {
   /** usuario de local, o email del admin */
   login(usuario: string, password: string): Promise<void>
   logout(): Promise<void>
-  /** Alta de un admin nuevo (después llama a crearCuenta) */
-  registrar?(email: string, password: string): Promise<{ requiereConfirmacion: boolean }>
-  crearCuenta(nombreCuenta: string, nombreLocal: string): Promise<void>
   onAuthChange(cb: () => void): () => void
 
   // ---- Locales y usuarios (admin)
   listSucursales(): Promise<Sucursal[]>
-  crearSucursal(nombre: string): Promise<Sucursal>
   /** Pantalla de cocina del local (admin o encargado del local) */
   configCocina(sucursalId: string, c: { activa: boolean; amarillo: number; rojo: number }): Promise<void>
   /** Hora de la base, para corregir el reloj de la PC */
@@ -95,6 +92,17 @@ export interface Repo {
   /** Común / Encargado / Producción (solo admin) */
   setTipoUsuario(userId: string, tipo: TipoUsuario): Promise<void>
   cambiarPassword(userId: string, password: string): Promise<void>
+
+  // ---- Administrador general (todas las cuentas)
+  saResumen(): Promise<SaCuenta[]>
+  saCrearCuenta(d: { cuenta: string; local: string; usuario: string; password: string; plan: Plan; vence?: string }): Promise<void>
+  saRenombrarCuenta(cuentaId: string, nombre: string): Promise<void>
+  saSetPlan(cuentaId: string, plan: Plan): Promise<void>
+  saCrearLocal(cuentaId: string, nombre: string, vence?: string): Promise<void>
+  saEditarLocal(sucursalId: string, nombre: string, activa: boolean): Promise<void>
+  saSetVence(sucursalId: string, vence: string | null): Promise<void>
+  /** tipo 'admin' = administrador de la cuenta (sin local) */
+  saCrearUsuario(d: { cuentaId: string; sucursalId?: string; usuario: string; password: string; tipo: TipoUsuario | 'admin' }): Promise<void>
   eliminarUsuario(userId: string): Promise<void>
 
   // ---- Menú

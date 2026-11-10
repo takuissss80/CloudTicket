@@ -5,14 +5,14 @@ import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
 import { Btn, Confirmar, inputBase, inputCls } from '../ui'
 import { CampoTexto } from './Ingredientes'
+import { NOMBRE_PLAN } from '../../types'
+import { CLASE_VENCE, estadoVence } from '../../lib/suscripcion'
 
 /** Locales de la cuenta y sus usuarios (solo admin). El delivery está en su propia pestaña. */
 export function Locales() {
   const { avisar, sesion } = useApp()
   const [locales, setLocales] = useState<Sucursal[] | null>(null)
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
-  const [nuevoLocal, setNuevoLocal] = useState('')
-  const [creando, setCreando] = useState(false)
 
   const cargar = useCallback(async () => {
     const [l, u] = await Promise.all([repo.listSucursales(), repo.listUsuarios()])
@@ -21,20 +21,6 @@ export function Locales() {
   }, [])
   useEffect(() => { cargar().catch(e => avisar(mensajeError(e), 'error')) }, [cargar, avisar])
 
-  const crearLocal = async () => {
-    if (!nuevoLocal.trim()) return
-    setCreando(true)
-    try {
-      const s = await repo.crearSucursal(nuevoLocal.trim())
-      setNuevoLocal('')
-      avisar(`${s.nombre} creado. Ya tiene el menú madre; creale un usuario para que pueda entrar.`)
-      await cargar()
-      // el selector de local del encabezado tiene que mostrar el nuevo
-      useApp.setState({ sucursales: (await repo.listSucursales()).filter(x => x.activa) })
-    } catch (e) { avisar(mensajeError(e), 'error') }
-    setCreando(false)
-  }
-
   if (!locales) return <p className="p-8 text-center text-gris">Cargando locales…</p>
   const admins = usuarios.filter(u => u.rol === 'admin')
 
@@ -42,16 +28,13 @@ export function Locales() {
     <div className="mx-auto max-w-4xl space-y-6 p-4">
       <div>
         <h2 className="font-cond text-3xl font-bold">Locales de {sesion?.cuentaNombre}</h2>
-        <p className="text-[15px] text-gris">Cada local nuevo arranca con el menú madre. Cada uno entra con su propio usuario y solo ve sus pedidos, su caja y su menú.</p>
+        <p className="text-[15px] text-gris">Cada local entra con su propio usuario y solo ve sus pedidos, su caja y su menú.</p>
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); crearLocal() }} className="flex flex-wrap items-end gap-2 rounded-xl bg-superficie p-3 ring-1 ring-linea">
-        <label className="min-w-56 flex-1">
-          <span className="mb-1 block text-sm font-medium text-gris">Nuevo local</span>
-          <input id="local-nuevo" value={nuevoLocal} onChange={e => setNuevoLocal(e.target.value)} className={inputCls} placeholder={`${sesion?.cuentaNombre ?? ''} Benavidez`.trim()} />
-        </label>
-        <Btn tono="albahaca" className="h-11" disabled={!nuevoLocal.trim() || creando}>{creando ? 'Creando…' : 'Agregar local'}</Btn>
-      </form>
+      <p className="rounded-xl bg-superficie px-4 py-3 text-[15px] ring-1 ring-linea">
+        Plan <b>{sesion ? NOMBRE_PLAN[sesion.plan] : ''}</b>{sesion?.plan === 'principal' ? ' (sin pantalla de cocina ni pantalla para clientes)' : ''}.
+        {' '}Para sumar un local nuevo o cambiar de plan, pedíselo a CloudTicket.
+      </p>
 
       {locales.map(l => (
         <TarjetaLocal key={l.id} local={l} usuarios={usuarios.filter(u => u.sucursalId === l.id)} onCambio={cargar} />
@@ -86,6 +69,7 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
         <CampoTexto valor={local.nombre} etiqueta="Nombre del local" className="!w-auto min-w-0 flex-1 font-cond !text-2xl !font-bold"
           onGuardar={v => v && intentar(() => repo.actualizarSucursal(local.id, { nombre: v }), 'Nombre actualizado')} />
         {local.esPrincipal && <span className="rounded bg-pizarra-claro px-2 py-0.5 text-sm font-semibold text-pizarra">Principal</span>}
+        {(() => { const v = estadoVence(local.vence); return v.tono !== 'sin' && <span className={`rounded-full px-2.5 py-0.5 text-sm font-semibold ring-1 ${CLASE_VENCE[v.tono]}`}>{v.texto}</span> })()}
         {!local.esPrincipal && (
           <label className="flex items-center gap-2 text-[15px]">
             <input type="checkbox" className="size-5 accent-albahaca" checked={local.activa}
@@ -147,10 +131,10 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
   )
 }
 
-const NOMBRE_TIPO: Record<TipoUsuarioT, string> = { comun: 'Común', encargado: 'Encargado', produccion: 'Producción' }
+export const NOMBRE_TIPO: Record<TipoUsuarioT, string> = { comun: 'Común', encargado: 'Encargado', produccion: 'Producción' }
 
 /** Selector Común / Encargado / Producción */
-function TipoUsuario({ valor, etiqueta, onChange }: { valor: TipoUsuarioT; etiqueta: string; onChange: (v: TipoUsuarioT) => void }) {
+export function TipoUsuario({ valor, etiqueta, onChange }: { valor: TipoUsuarioT; etiqueta: string; onChange: (v: TipoUsuarioT) => void }) {
   return (
     <div className="flex overflow-hidden rounded-lg border border-linea text-sm" role="group" aria-label={etiqueta}>
       {(['comun', 'encargado', 'produccion'] as const).map(v => [v, NOMBRE_TIPO[v]] as const).map(([v, l]) => (

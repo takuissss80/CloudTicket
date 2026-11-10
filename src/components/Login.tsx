@@ -4,31 +4,17 @@ import { USUARIOS_DEMO } from '../data/localRepo'
 import { mensajeError } from '../store/app'
 import { Btn, Campo, inputCls, BotonTema } from './ui'
 
-/** Ingreso: usuario de local o email de administrador */
+/** Ingreso: usuario o email */
 export function Login({ onListo }: { onListo: () => void }) {
-  const [modo, setModo] = useState<'entrar' | 'registro'>('entrar')
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [aviso, setAviso] = useState('')
   const [enviando, setEnviando] = useState(false)
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault()
-    setEnviando(true); setError(''); setAviso('')
-    try {
-      if (modo === 'entrar') {
-        await repo.login(usuario, password)
-        onListo()
-      } else {
-        if (password.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.')
-        const r = await repo.registrar!(usuario, password)
-        if (r.requiereConfirmacion) {
-          setAviso('Te mandamos un email para confirmar la cuenta. Confirmalo y después entrá con tu email y contraseña.')
-          setModo('entrar')
-        } else onListo()
-      }
-    } catch (err) { setError(mensajeError(err)) }
+    setEnviando(true); setError('')
+    try { await repo.login(usuario, password); onListo() } catch (err) { setError(mensajeError(err)) }
     setEnviando(false)
   }
 
@@ -42,31 +28,23 @@ export function Login({ onListo }: { onListo: () => void }) {
     <div className="mx-auto mt-[10vh] max-w-sm px-4 pb-10">
       <BotonTema className="fixed right-4 top-4" />
       <h1 className="font-cond text-5xl font-bold">Comandas</h1>
-      <p className="mt-1 text-gris">{modo === 'entrar' ? 'Entrá con el usuario de tu local o con tu email de administrador.' : 'Creá la cuenta de tu marca. Vas a ser el administrador.'}</p>
+      <p className="mt-1 text-gris">Entrá con tu usuario y contraseña.</p>
 
       <form onSubmit={enviar} className="mt-6 space-y-4">
-        <Campo label={modo === 'entrar' ? 'Usuario o email' : 'Email'}>
+        <Campo label="Usuario">
           <input id="login-usuario" autoComplete="username" required autoCapitalize="none" value={usuario}
-            type={modo === 'registro' ? 'email' : 'text'} onChange={e => setUsuario(e.target.value)} className={inputCls} />
+            onChange={e => setUsuario(e.target.value)} className={inputCls} />
         </Campo>
         <Campo label="Contraseña">
-          <input id="login-password" type="password" autoComplete={modo === 'entrar' ? 'current-password' : 'new-password'} required
+          <input id="login-password" type="password" autoComplete="current-password" required
             value={password} onChange={e => setPassword(e.target.value)} className={inputCls} />
         </Campo>
         {error && <p className="text-tomate">{error}</p>}
-        {aviso && <p className="rounded-lg bg-albahaca-claro p-3 text-albahaca">{aviso}</p>}
-        <Btn tono="tinta" grande className="w-full" disabled={enviando}>
-          {enviando ? 'Un momento…' : modo === 'entrar' ? 'Entrar' : 'Crear cuenta'}
-        </Btn>
+        <Btn tono="tinta" grande className="w-full" disabled={enviando}>{enviando ? 'Un momento…' : 'Entrar'}</Btn>
       </form>
 
       {repo.modo === 'supabase' && (
-        <p className="mt-4 text-center text-[15px] text-gris">
-          {modo === 'entrar' ? '¿Primera vez? ' : '¿Ya tenés cuenta? '}
-          <button type="button" className="font-semibold text-pizarra underline" onClick={() => { setModo(modo === 'entrar' ? 'registro' : 'entrar'); setError('') }}>
-            {modo === 'entrar' ? 'Crear una cuenta' : 'Entrar'}
-          </button>
-        </p>
+        <p className="mt-4 text-center text-[15px] text-gris">¿Todavía no tenés usuario? Pedí el alta a CloudTicket.</p>
       )}
 
       {repo.modo === 'demo' && (
@@ -90,33 +68,13 @@ export function Login({ onListo }: { onListo: () => void }) {
   )
 }
 
-/** Usuario logueado sin cuenta: crea la marca y su local principal */
-export function CrearCuenta({ email, onListo }: { email: string; onListo: () => void }) {
-  const [cuenta, setCuenta] = useState('')
-  const [local, setLocal] = useState('')
-  const [error, setError] = useState('')
-  const [enviando, setEnviando] = useState(false)
-
-  const enviar = async (e: FormEvent) => {
-    e.preventDefault()
-    setEnviando(true); setError('')
-    try { await repo.crearCuenta(cuenta, local || `${cuenta} Principal`); onListo() } catch (err) { setError(mensajeError(err)) }
-    setEnviando(false)
-  }
-
+/** Usuario que entró pero no tiene cuenta asignada (las cuentas las da de alta CloudTicket) */
+export function SinCuenta({ email, onListo }: { email: string; onListo: () => void }) {
   return (
-    <form onSubmit={enviar} className="mx-auto mt-[10vh] max-w-sm space-y-4 px-4">
-      <h1 className="font-cond text-5xl font-bold">Tu cuenta</h1>
-      <p className="text-gris">Entraste como {email}. Poné el nombre de tu marca y de tu primer local. Después vas a poder sumar más locales desde Administración.</p>
-      <Campo label="Nombre de la marca">
-        <input id="cuenta-nombre" required value={cuenta} onChange={e => setCuenta(e.target.value)} className={inputCls} placeholder="Napoles" />
-      </Campo>
-      <Campo label="Nombre del local principal">
-        <input id="cuenta-local" value={local} onChange={e => setLocal(e.target.value)} className={inputCls} placeholder={cuenta ? `${cuenta} Principal` : 'Napoles Principal'} />
-      </Campo>
-      {error && <p className="text-tomate">{error}</p>}
-      <Btn tono="albahaca" grande className="w-full" disabled={enviando || !cuenta.trim()}>{enviando ? 'Creando…' : 'Crear cuenta'}</Btn>
-      <button type="button" onClick={async () => { await repo.logout(); onListo() }} className="w-full text-center text-[15px] text-gris underline">Salir</button>
-    </form>
+    <div className="mx-auto mt-[15vh] max-w-sm space-y-4 px-4 text-center">
+      <h1 className="font-cond text-4xl font-bold">Usuario sin cuenta</h1>
+      <p className="text-gris">Entraste como <b className="text-tinta">{email}</b>, pero este usuario no tiene un local asignado. Pedile el alta al administrador de CloudTicket.</p>
+      <Btn className="w-full" onClick={async () => { await repo.logout(); onListo() }}>Salir</Btn>
+    </div>
   )
 }

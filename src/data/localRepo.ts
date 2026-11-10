@@ -1,7 +1,7 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, ItemComanda, Pago, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem } from '../types'
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, Plan } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
 import { calcularTotales, turnoQueBloquea } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
@@ -20,7 +20,10 @@ export const USUARIOS_DEMO = [
   { usuario: 'admin', password: '1234', descripcion: 'Administrador de la cuenta' },
   { usuario: 'principal', password: '1234', descripcion: 'Local Napoles Principal' },
   { usuario: 'benavidez', password: '1234', descripcion: 'Local Napoles Benavidez' },
+  { usuario: 'cloudticket', password: '1234', descripcion: 'Administrador general' },
 ]
+/** En la demo, el administrador general es un usuario aparte (no es de la cuenta) */
+const SUPERADMIN = { id: 'superadmin', usuario: 'cloudticket', password: '1234' }
 
 type ConLocal<T> = T & { sucursalId: string }
 
@@ -28,7 +31,7 @@ const TIPOS_GASTO_DEMO = ['Motos', 'Proveedores varios', 'Pago remito', 'Servici
   .map((nombre, i) => ({ id: `tg-${i}`, nombre }))
 
 interface DB {
-  cuenta: { id: string; nombre: string }
+  cuenta: { id: string; nombre: string; plan?: Plan; createdAt?: string }
   sucursales: Sucursal[]
   usuarios: (Usuario & { password: string })[]
   ingredientes: Ingrediente[]
@@ -146,12 +149,16 @@ function sesionActual(): Sesion | null {
   const id = sesionMemoria ?? leerStorage(KEY_SESION)
   const u = db().usuarios.find(x => x.userId === id)
   if (!u) return null
-  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar, esProduccion: u.rol !== 'admin' && !!u.esProduccion }
+  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, plan: db().cuenta.plan ?? 'pro', sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar, esProduccion: u.rol !== 'admin' && !!u.esProduccion }
 }
 function ses(): Sesion {
   const s = sesionActual()
   if (!s) throw new Error('Tenés que iniciar sesión')
   return s
+}
+const esSuper = () => (sesionMemoria ?? leerStorage(KEY_SESION)) === SUPERADMIN.id
+function soloSuper() {
+  if (!esSuper()) throw new Error('Solo el administrador de CloudTicket')
 }
 function soloAdmin() {
   const s = ses()
@@ -232,6 +239,7 @@ export const localRepo: Repo = {
   modo: 'demo',
 
   async estadoSesion(): Promise<EstadoSesion> {
+    if (esSuper()) { await asegurarMenu(); return { estado: 'superadmin', usuario: SUPERADMIN.usuario } }
     const s = sesionActual()
     if (!s) return { estado: 'sin_login' }
     await asegurarMenu()
@@ -239,6 +247,11 @@ export const localRepo: Repo = {
   },
 
   async login(usuario, password) {
+    if (usuario.trim().toLowerCase() === SUPERADMIN.usuario && password === SUPERADMIN.password) {
+      sesionMemoria = SUPERADMIN.id
+      escribirStorage(KEY_SESION, SUPERADMIN.id)
+      return
+    }
     const u = db().usuarios.find(x => x.usuario === usuario.trim().toLowerCase() && x.password === password)
     if (!u) throw new Error('Usuario o contraseña incorrectos')
     sesionMemoria = u.userId
@@ -251,8 +264,6 @@ export const localRepo: Repo = {
     escribirStorage(KEY_SESION, null)
   },
 
-  async crearCuenta() { throw new Error('En la demo la cuenta ya está creada') },
-
   onAuthChange(cb) {
     const f = () => cb()
     listeners.add(f)
@@ -264,16 +275,6 @@ export const localRepo: Repo = {
     const s = ses()
     return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
       .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15 }))))
-  },
-
-  async crearSucursal(nombre) {
-    soloAdmin()
-    const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15 }
-    d.sucursales.push(suc)
-    d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
-    guardar('menu')
-    return suc
   },
 
   async listCupones() {
@@ -361,6 +362,7 @@ export const localRepo: Repo = {
 
   async configCocina(sucursalId, c) {
     const s = ses()
+    if (c.activa && s.plan !== 'pro') throw new Error('La pantalla de cocina es del plan PRO')
     if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar la cocina')
     if (c.amarillo < 1 || c.rojo <= c.amarillo) throw new Error('Los minutos de rojo tienen que ser más que los de amarillo')
     const suc = db().sucursales.find(x => x.id === sucursalId)
@@ -382,7 +384,7 @@ export const localRepo: Repo = {
   },
 
   async setTipoUsuario(userId, tipo) {
-    soloAdmin()
+    if (!esSuper()) soloAdmin()
     const u = db().usuarios.find(x => x.userId === userId && x.rol === 'local')
     if (!u) throw new Error('Ese usuario no es de tu cuenta')
     u.puedeDescontar = tipo === 'encargado'
@@ -409,7 +411,7 @@ export const localRepo: Repo = {
   },
 
   async cambiarPassword(userId, password) {
-    soloAdmin()
+    if (!esSuper()) soloAdmin()
     if (password.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.')
     const u = db().usuarios.find(x => x.userId === userId)
     if (u) u.password = password
@@ -417,11 +419,67 @@ export const localRepo: Repo = {
   },
 
   async eliminarUsuario(userId) {
+    if (esSuper()) {
+      db().usuarios = db().usuarios.filter(x => x.userId !== userId)
+      guardar('menu')
+      return
+    }
     soloAdmin()
     const d = db()
     const u = d.usuarios.find(x => x.userId === userId)
     if (u?.rol === 'admin') throw new Error('No se puede borrar un administrador desde acá.')
     d.usuarios = d.usuarios.filter(x => x.userId !== userId)
+    guardar('menu')
+  },
+
+  // ---- Administrador general (la demo tiene una sola cuenta)
+  async saResumen() {
+    soloSuper()
+    const d = db()
+    return pausa(clon([{
+      id: d.cuenta.id, nombre: d.cuenta.nombre, plan: d.cuenta.plan ?? 'pro', createdAt: d.cuenta.createdAt ?? '2026-09-01T12:00:00.000Z',
+      locales: d.sucursales.map(s => ({ id: s.id, nombre: s.nombre, vence: s.vence, activa: s.activa, esPrincipal: s.esPrincipal, createdAt: '2026-09-01T12:00:00.000Z' })),
+      usuarios: d.usuarios.map(({ password: _, ...u }) => { void _; return u }),
+    }]))
+  },
+  async saCrearCuenta() { soloSuper(); throw new Error('En la demo hay una sola cuenta: probalo con la base real') },
+  async saRenombrarCuenta(_id, nombre) { soloSuper(); db().cuenta.nombre = nombre.trim(); guardar('menu') },
+  async saSetPlan(_id, plan) {
+    soloSuper()
+    db().cuenta.plan = plan
+    if (plan === 'principal') db().sucursales.forEach(s => { s.cocinaActiva = false })
+    guardar('menu')
+  },
+  async saCrearLocal(_id, nombre, vence) {
+    soloSuper()
+    if (!nombre.trim()) throw new Error('Poné el nombre del local')
+    const d = db()
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, vence: vence || undefined }
+    d.sucursales.push(suc)
+    d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
+    guardar('menu')
+  },
+  async saEditarLocal(id, nombre, activa) {
+    soloSuper()
+    const s = db().sucursales.find(x => x.id === id)
+    if (s) Object.assign(s, { nombre: nombre.trim(), activa })
+    guardar('menu')
+  },
+  async saSetVence(id, vence) {
+    soloSuper()
+    const s = db().sucursales.find(x => x.id === id)
+    if (s) s.vence = vence || undefined
+    guardar('menu')
+  },
+  async saCrearUsuario({ sucursalId, usuario, password, tipo }) {
+    soloSuper()
+    const u = usuario.trim().toLowerCase()
+    if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(u)) throw new Error('El usuario debe tener entre 3 y 40 caracteres: letras, números, punto, guion o guion bajo.')
+    if (password.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.')
+    if (u === SUPERADMIN.usuario || db().usuarios.some(x => x.usuario === u)) throw new Error(`El usuario "${u}" ya existe. Probá con otro nombre.`)
+    db().usuarios.push(tipo === 'admin'
+      ? { userId: uid(), usuario: u, password, rol: 'admin' }
+      : { userId: uid(), usuario: u, password, rol: 'local', sucursalId, puedeDescontar: tipo === 'encargado', esProduccion: tipo === 'produccion' })
     guardar('menu')
   },
 

@@ -8,7 +8,9 @@ import { hora } from './lib/format'
 import { Tablero } from './components/Tablero'
 import { TomarPedido } from './components/TomarPedido'
 import { CajaCerrada, CajaPanel } from './components/Caja'
-import { CrearCuenta, Login } from './components/Login'
+import { Login, SinCuenta } from './components/Login'
+import { SuperAdmin } from './components/SuperAdmin'
+import { estadoVence } from './lib/suscripcion'
 import { Administracion, type Pestana } from './components/admin/Administracion'
 import { Reportes } from './components/Reportes'
 import { PedidosYa } from './components/PedidosYa'
@@ -69,7 +71,16 @@ function Principal({ onSalir }: { onSalir: () => void }) {
     </div>
   )
 
-  const cocinaActiva = !!sucursales.find(s => s.id === sucursalId)?.cocinaActiva
+  const esPro = sesion?.plan === 'pro'
+  const cocinaActiva = esPro && !!sucursales.find(s => s.id === sucursalId)?.cocinaActiva
+  const salirPantalla = () => { history.replaceState(null, '', location.pathname); setEnCocina(false); setEnPantallaMostrador(false) }
+  if ((enPantallaMostrador || enCocina) && !esPro) return (
+    <div className="mx-auto mt-[20vh] max-w-lg px-4 text-center">
+      <h1 className="font-cond text-4xl font-bold">Función del plan PRO</h1>
+      <p className="mt-2 text-gris">La pantalla de cocina y la pantalla para clientes vienen con el plan PRO. Para pasarte, pedíselo a CloudTicket.</p>
+      <Btn className="mt-6" onClick={salirPantalla}>Ir a los pedidos</Btn>
+    </div>
+  )
   if (enPantallaMostrador) return <PantallaMostrador onClose={() => { history.replaceState(null, '', location.pathname); setEnPantallaMostrador(false) }} />
   if (enCocina) return (
     <>
@@ -117,8 +128,10 @@ function Principal({ onSalir }: { onSalir: () => void }) {
                 PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
               </Btn>
             )}
-            <a href="#mostrador" target="_blank" rel="noopener" title="Pantalla para los clientes del mostrador (en otra pestaña)"
-              className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Pantalla clientes</a>
+            {esPro && (
+              <a href="#mostrador" target="_blank" rel="noopener" title="Pantalla para los clientes del mostrador (en otra pestaña)"
+                className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Pantalla clientes</a>
+            )}
             {cocinaActiva && (
               <a href="#cocina" target="_blank" rel="noopener" title="Abre la pantalla de cocina en otra pestaña"
                 className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Cocina</a>
@@ -139,6 +152,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
         </div>
       </header>
 
+      <AvisoVencimiento />
       {caja ? <Tablero /> : <CajaCerrada />}
 
       {pedidoAbierto && <TomarPedido />}
@@ -155,6 +169,28 @@ function Principal({ onSalir }: { onSalir: () => void }) {
           onSi={async () => { setVerReset(false); resetDemo(); await salir(); onSalir() }}
         />
       )}
+    </div>
+  )
+}
+
+/** Aviso de suscripción: vencida o por vencer (el admin ve todos sus locales, el local solo el suyo) */
+function AvisoVencimiento() {
+  const { sesion, sucursales } = useApp()
+  const [cerrado, setCerrado] = useState(false)
+  const avisos = sucursales
+    .filter(s => s.activa && (sesion?.rol === 'admin' || s.id === sesion?.sucursalId))
+    .map(s => ({ s, v: estadoVence(s.vence) }))
+    .filter(x => x.v.tono === 'vencido' || x.v.tono === 'pronto')
+  if (!avisos.length || cerrado) return null
+  const vencido = avisos.some(x => x.v.tono === 'vencido')
+  return (
+    <div role="alert" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[15px] ${vencido ? 'bg-tomate text-white' : 'bg-muzza-claro text-tinta'}`}>
+      <b>Suscripción</b>
+      <span className="flex-1">
+        {avisos.map(x => `${avisos.length > 1 || sesion?.rol === 'admin' ? `${x.s.nombre}: ` : ''}${x.v.texto.charAt(0).toLowerCase()}${x.v.texto.slice(1)}`).join(' · ')}.
+        {' '}Para renovarla, comunicate con CloudTicket.
+      </span>
+      <button onClick={() => setCerrado(true)} className="rounded px-2 font-semibold underline">Cerrar</button>
     </div>
   )
 }
@@ -176,7 +212,8 @@ export default function App() {
     <>
       {!estado ? <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>
         : estado.estado === 'sin_login' ? <Login onListo={revisar} />
-        : estado.estado === 'sin_cuenta' ? <CrearCuenta email={estado.email} onListo={revisar} />
+        : estado.estado === 'sin_cuenta' ? <SinCuenta email={estado.email} onListo={revisar} />
+        : estado.estado === 'superadmin' ? <SuperAdmin usuario={estado.usuario} onSalir={revisar} />
         : estado.sesion.esProduccion ? <Produccion usuario={estado.sesion.usuario} cuenta={estado.sesion.cuentaNombre} onSalir={revisar} />
         : <Principal onSalir={revisar} />}
       <Toasts />

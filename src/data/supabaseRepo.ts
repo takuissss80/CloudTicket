@@ -3,7 +3,7 @@ import { unirReceta, errorIngredienteEnUso } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica } from '../types'
+  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -31,6 +31,7 @@ const mapSucursal = (r: Row): Sucursal => ({
   id: r.id, nombre: r.nombre, esPrincipal: r.es_principal, activa: r.activa,
   recargoDelivery: num(r.recargo_delivery), recargoDeliveryTipo: r.recargo_delivery_tipo ?? 'monto',
   cocinaActiva: !!r.cocina_activa, cocinaAmarillo: r.cocina_amarillo ?? 7, cocinaRojo: r.cocina_rojo ?? 15,
+  vence: opt(r.vence),
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
@@ -125,7 +126,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     if (perfilCache) return perfilCache
     const { data: u } = await sb.auth.getUser()
     if (!u.user) return null
-    const r = await sb.from('perfiles').select('*, cuentas(nombre)').eq('user_id', u.user.id).maybeSingle()
+    const r = await sb.from('perfiles').select('*, cuentas(nombre, plan)').eq('user_id', u.user.id).maybeSingle()
     perfilCache = ok(r) as Row | null
     return perfilCache
   }
@@ -179,13 +180,16 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const { data } = await sb.auth.getSession()
       if (!data.session) return { estado: 'sin_login' }
       perfilCache = null
+      // El administrador general no tiene cuenta propia: ve todas
+      const sa = await sb.rpc('es_superadmin')
+      if (sa.data === true) return { estado: 'superadmin', usuario: data.session.user.email ?? '' }
       const p = await perfil()
       if (!p) return { estado: 'sin_cuenta', email: data.session.user.email ?? '' }
       return {
         estado: 'ok',
         sesion: {
           userId: p.user_id, usuario: p.usuario, rol: p.rol, cuentaId: p.cuenta_id,
-          cuentaNombre: p.cuentas?.nombre ?? '', sucursalId: opt(p.sucursal_id),
+          cuentaNombre: p.cuentas?.nombre ?? '', plan: p.cuentas?.plan === 'principal' ? 'principal' : 'pro', sucursalId: opt(p.sucursal_id),
           puedeDescontar: p.rol === 'admin' || !!p.puede_descontar,
           esProduccion: p.rol !== 'admin' && !!p.es_produccion,
         },
@@ -200,18 +204,6 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
 
     async logout() { perfilCache = null; await sb.auth.signOut() },
 
-    async registrar(email, password) {
-      const { data, error } = await sb.auth.signUp({ email: email.trim().toLowerCase(), password })
-      if (error) throw new Error(error.message)
-      return { requiereConfirmacion: !data.session }
-    },
-
-    async crearCuenta(nombreCuenta, nombreLocal) {
-      const { data } = await sb.auth.getUser()
-      ok(await sb.rpc('crear_cuenta', { p_cuenta: nombreCuenta, p_local: nombreLocal, p_usuario: data.user?.email ?? '' }))
-      perfilCache = null
-    },
-
     onAuthChange(cb) {
       const { data } = sb.auth.onAuthStateChange(() => { perfilCache = null; cb() })
       return () => data.subscription.unsubscribe()
@@ -220,10 +212,6 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     // ---- Locales y usuarios
     async listSucursales() {
       return (ok(await sb.from('sucursales').select('*').order('es_principal', { ascending: false }).order('created_at')) as Row[]).map(mapSucursal)
-    },
-    async crearSucursal(nombre) {
-      const id = ok(await sb.rpc('crear_sucursal', { p_nombre: nombre })) as unknown as string
-      return mapSucursal(ok(await sb.from('sucursales').select('*').eq('id', id).single()) as Row)
     },
     async configCocina(sucursalId, c) {
       ok(await sb.rpc('config_cocina', { p_sucursal: sucursalId, p_activa: c.activa, p_amarillo: c.amarillo, p_rojo: c.rojo }))
@@ -307,6 +295,35 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     async cambiarPassword(userId, password) { await invocarUsuarios({ accion: 'password', user_id: userId, password }) },
     async eliminarUsuario(userId) { await invocarUsuarios({ accion: 'eliminar', user_id: userId }) },
+
+    // ---- Administrador general
+    async saResumen() {
+      const r = (ok(await sb.rpc('sa_resumen')) ?? []) as Row[]
+      return r.map((c): SaCuenta => ({
+        id: c.id, nombre: c.nombre, plan: c.plan, createdAt: c.created_at,
+        locales: (c.locales ?? []).map((s: Row) => ({ id: s.id, nombre: s.nombre, vence: opt(s.vence), activa: s.activa, esPrincipal: s.es_principal, createdAt: s.created_at })),
+        usuarios: (c.usuarios ?? []).map((p: Row): Usuario => ({
+          userId: p.user_id, usuario: p.usuario, rol: p.rol, sucursalId: opt(p.sucursal_id), nombre: opt(p.nombre),
+          puedeDescontar: !!p.puede_descontar, esProduccion: !!p.es_produccion,
+        })),
+      }))
+    },
+    async saCrearCuenta(d) {
+      await invocarUsuarios({ accion: 'crear_cuenta', cuenta: d.cuenta, local: d.local, usuario: d.usuario, password: d.password, plan: d.plan, vence: d.vence ?? '' })
+    },
+    async saRenombrarCuenta(cuentaId, nombre) { ok(await sb.rpc('sa_renombrar_cuenta', { p_cuenta: cuentaId, p_nombre: nombre })) },
+    async saSetPlan(cuentaId, plan) { ok(await sb.rpc('sa_set_plan', { p_cuenta: cuentaId, p_plan: plan })) },
+    async saCrearLocal(cuentaId, nombre, vence) { ok(await sb.rpc('sa_crear_local', { p_cuenta: cuentaId, p_nombre: nombre, p_vence: vence || null })) },
+    async saEditarLocal(sucursalId, nombre, activa) { ok(await sb.rpc('sa_editar_local', { p_sucursal: sucursalId, p_nombre: nombre, p_activa: activa })) },
+    async saSetVence(sucursalId, vence) { ok(await sb.rpc('sa_set_vence', { p_sucursal: sucursalId, p_vence: vence || null })) },
+    async saCrearUsuario(d) {
+      if (d.tipo === 'admin') {
+        await invocarUsuarios({ accion: 'crear', rol: 'admin', cuenta_id: d.cuentaId, usuario: d.usuario, password: d.password })
+        return
+      }
+      const r = await invocarUsuarios({ accion: 'crear', usuario: d.usuario, password: d.password, sucursal_id: d.sucursalId })
+      if (d.tipo !== 'comun' && r?.user_id) ok(await sb.rpc('set_tipo_usuario', { p_user: r.user_id, p_tipo: d.tipo }))
+    },
 
     // ---- Menú
     async getMenu(sucursalId): Promise<MenuData> {

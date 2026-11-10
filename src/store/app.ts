@@ -78,7 +78,8 @@ const menuVacio: MenuData = { categorias: [], productos: [], ajustes: [], ingred
 /** Recargo de delivery del local activo */
 export const useLocalActivo = () => useApp(s => s.sucursales.find(x => x.id === s.sucursalId))
 /** El local trabaja con pantalla de cocina */
-export const useCocinaActiva = () => useApp(s => !!s.sucursales.find(x => x.id === s.sucursalId)?.cocinaActiva)
+/** Pantalla de cocina: solo plan PRO y si el local la activó */
+export const useCocinaActiva = () => useApp(s => s.sesion?.plan === 'pro' && !!s.sucursales.find(x => x.id === s.sucursalId)?.cocinaActiva)
 
 export const mensajeError = (e: unknown) =>
   e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)

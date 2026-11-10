@@ -9,12 +9,17 @@ export type CanalVenta = 'propio' | 'pedidosya'
 
 export type Rol = 'admin' | 'local'
 
+/** Plan de la cuenta: Principal (sin pantallas de cocina y de clientes) o PRO (todo) */
+export type Plan = 'principal' | 'pro'
+export const NOMBRE_PLAN: Record<Plan, string> = { principal: 'Principal', pro: 'PRO' }
+
 export interface Sesion {
   userId: string
   usuario: string
   rol: Rol
   cuentaId: string
   cuentaNombre: string
+  plan: Plan
   /** Solo usuarios de local */
   sucursalId?: string
   /** Admin o encargado: puede cargar descuentos y adicionales a mano */
@@ -41,6 +46,8 @@ export interface Sucursal {
   /** Minutos en cocina para ponerse amarillo y rojo */
   cocinaAmarillo: number
   cocinaRojo: number
+  /** Vencimiento de la suscripción del local (YYYY-MM-DD) */
+  vence?: string
 }
 
 /** Cupón de descuento (lo crea el administrador) */
@@ -509,4 +516,22 @@ export interface PedidoFabrica {
   recibidoAt?: string
   recibidoPor?: string
   items: PedidoFabricaItem[]
+}
+
+// ---- Administrador general de CloudTicket
+export interface SaLocal {
+  id: string
+  nombre: string
+  vence?: string
+  activa: boolean
+  esPrincipal: boolean
+  createdAt: string
+}
+export interface SaCuenta {
+  id: string
+  nombre: string
+  plan: Plan
+  createdAt: string
+  locales: SaLocal[]
+  usuarios: Usuario[]
 }
