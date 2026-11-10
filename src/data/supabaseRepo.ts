@@ -126,7 +126,9 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     if (perfilCache) return perfilCache
     const { data: u } = await sb.auth.getUser()
     if (!u.user) return null
-    const r = await sb.from('perfiles').select('*, cuentas(nombre, plan)').eq('user_id', u.user.id).maybeSingle()
+    let r = await sb.from('perfiles').select('*, cuentas(nombre, plan)').eq('user_id', u.user.id).maybeSingle()
+    // Base sin la migración 0019 (no existe cuentas.plan): se entra igual, como PRO
+    if (r.error) r = await sb.from('perfiles').select('*, cuentas(nombre)').eq('user_id', u.user.id).maybeSingle()
     perfilCache = ok(r) as Row | null
     return perfilCache
   }
@@ -181,7 +183,8 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       if (!data.session) return { estado: 'sin_login' }
       perfilCache = null
       // El administrador general no tiene cuenta propia: ve todas
-      const sa = await sb.rpc('es_superadmin')
+      // Si la función no existe todavía (falta la 0019), sigue como usuario normal
+      const sa = await sb.rpc('es_superadmin').then(x => x, () => ({ data: false }))
       if (sa.data === true) return { estado: 'superadmin', usuario: data.session.user.email ?? '' }
       const p = await perfil()
       if (!p) return { estado: 'sin_cuenta', email: data.session.user.email ?? '' }
