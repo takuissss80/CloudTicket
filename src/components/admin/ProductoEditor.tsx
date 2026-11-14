@@ -4,7 +4,7 @@ import type { ProductoEdicion } from '../../data/repo'
 import { repo } from '../../data'
 import { mensajeError } from '../../store/app'
 import { costoProducto, divisorUnidad, margen, unidadCorta } from '../../lib/menu'
-import { money } from '../../lib/format'
+import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 
 const numero = (v: string) => (v.trim() === '' ? undefined : Math.max(0, Number(v.replace(',', '.')) || 0))
@@ -179,16 +179,13 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
               <h3 className="mb-2 font-cond text-2xl font-bold">Incluye siempre</h3>
               <ul className="space-y-2">
                 {p.fijos.map((f, i) => {
-                  const prod = vendibles.find(x => x.id === f.productoId)
+                  const prod = productos.find(x => x.id === f.productoId)
                   return (
                     <li key={i} className="flex flex-wrap items-center gap-2 rounded-xl bg-superficie p-2 ring-1 ring-linea">
                       <input aria-label="Cantidad" inputMode="numeric" value={f.cantidad || ''} onChange={e => setFijos(p.fijos.map((x, j) => j === i ? { ...x, cantidad: Math.max(1, Math.round(numero(e.target.value) ?? 1)) } : x))}
                         className={`${inputBase} h-9 w-16 text-center`} />
-                      <select aria-label="Producto" value={f.productoId} onChange={e => setFijos(p.fijos.map((x, j) => j === i ? { ...x, productoId: e.target.value } : x))}
-                        className={`${inputBase} h-9 min-w-0 flex-1`}>
-                        <option value="">Elegí un producto</option>
-                        {vendibles.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                      </select>
+                      <ElegirProducto producto={prod} productos={vendibles} categorias={categorias} abrirAlInicio={!f.productoId}
+                        onElegir={id => setFijos(p.fijos.map((x, j) => j === i ? { ...x, productoId: id } : x))} />
                       {prod?.precioMitad != null && (
                         <select aria-label="Variante" value={f.variante} onChange={e => setFijos(p.fijos.map((x, j) => j === i ? { ...x, variante: e.target.value as PromoFijo['variante'] } : x))}
                           className={`${inputBase} h-9 w-28`}>
@@ -256,5 +253,69 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
         </section>
       </div>
     </Modal>
+  )
+}
+
+/** Botón que abre un buscador de productos por nombre o código, filtrable por categoría */
+function ElegirProducto({ producto, productos, categorias, abrirAlInicio, onElegir }: {
+  producto?: Producto; productos: Producto[]; categorias: Categoria[]; abrirAlInicio?: boolean; onElegir: (id: string) => void
+}) {
+  const [abierto, setAbierto] = useState(!!abrirAlInicio)
+  const [busqueda, setBusqueda] = useState('')
+  const [cat, setCat] = useState('')
+  const q = normalizar(busqueda.trim())
+  const nombreCat = (id: string) => categorias.find(c => c.id === id)?.nombre ?? ''
+  const filtrados = productos.filter(x => (!cat || x.categoriaId === cat)
+    && (!q || normalizar(`${x.nombre} ${x.codigo ?? ''} ${nombreCat(x.categoriaId)}`).includes(q)))
+  const grupos = [...categorias].sort((a, b) => a.orden - b.orden)
+    .map(c => ({ c, productos: filtrados.filter(x => x.categoriaId === c.id).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre)) }))
+    .filter(g => g.productos.length)
+  const conProductos = categorias.filter(c => productos.some(x => x.categoriaId === c.id)).sort((a, b) => a.orden - b.orden)
+  const elegir = (id: string) => { onElegir(id); setAbierto(false); setBusqueda('') }
+
+  return (
+    <>
+      <button type="button" aria-label="Producto" onClick={() => setAbierto(true)}
+        className={`${inputBase} flex h-9 min-w-0 flex-1 items-center justify-between gap-2 text-left`}>
+        {producto
+          ? <span className="truncate">{producto.nombre}<span className="text-sm text-gris"> · {nombreCat(producto.categoriaId)}{producto.activo ? '' : ' · desactivado'}</span></span>
+          : <span className="text-gris">Elegí un producto</span>}
+        <span className="text-gris">▾</span>
+      </button>
+      {abierto && (
+        <Modal titulo="Elegí un producto" onClose={() => setAbierto(false)} ancho="max-w-2xl" alto>
+          <div className="space-y-3 p-4">
+            <input autoFocus aria-label="Buscar producto" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && filtrados.length === 1) elegir(filtrados[0].id) }}
+              placeholder="Buscar por nombre o código (ej.: pepsi, fugazzeta)" className={`${inputBase} h-11 w-full`} />
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Categorías">
+              {[{ id: '', nombre: 'Todas' }, ...conProductos].map(c => (
+                <button key={c.id} type="button" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}
+                  className={`h-8 rounded-full px-3 text-sm font-semibold ring-1 ${cat === c.id ? 'bg-primario text-sobre-primario ring-primario' : 'bg-superficie ring-linea hover:bg-harina'}`}>
+                  {c.nombre}
+                </button>
+              ))}
+            </div>
+            {grupos.map(g => (
+              <section key={g.c.id}>
+                <h4 className="mb-1 text-sm font-bold uppercase text-gris">{g.c.nombre}</h4>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {g.productos.map(x => (
+                    <li key={x.id}>
+                      <button type="button" onClick={() => elegir(x.id)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left ring-1 hover:bg-albahaca-claro ${x.id === producto?.id ? 'bg-albahaca-claro ring-albahaca' : 'bg-superficie ring-linea'}`}>
+                        <span>{x.nombre}{x.codigo && <span className="text-sm text-gris"> · {x.codigo}</span>}</span>
+                        <span className="text-sm tabular-nums text-gris">{money(x.precio)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {!grupos.length && <p className="p-6 text-center text-gris">Ningún producto coincide.</p>}
+          </div>
+        </Modal>
+      )}
+    </>
   )
 }
