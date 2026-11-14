@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Coccion, Componente, Producto } from '../types'
-import { useApp } from '../store/app'
+import { productosParaPromo, useApp } from '../store/app'
 import { itemPromo, usePedido } from '../store/pedido'
 import { money } from '../lib/format'
 import { Btn, Modal, Stepper, inputBase } from './ui'
@@ -29,7 +29,7 @@ export function PromoModal({ promo, onClose }: { promo: Producto; onClose: () =>
         if (p) elegidos.push({ productoId: p.id, descripcion: p.nombre, cantidad: n, coccion: (c || undefined) as Coccion | undefined })
       }
     }
-    agregar(itemPromo(promo, elegidos, productos, nota))
+    agregar(itemPromo(promo, elegidos, productosParaPromo(), nota))
     onClose()
   }
 

@@ -438,3 +438,9 @@ export const useApp = create<AppState>((set, get) => {
 
 /** Nombre del local que se está operando */
 export const useNombreLocal = () => useApp(s => s.sucursales.find(x => x.id === s.sucursalId)?.nombre ?? '')
+
+/**
+ * Productos para armar los fijos de una promo: primero los del local (con su precio) y después todo el menú,
+ * así la promo muestra el nombre aunque el producto esté desactivado, oculto o sea de otro local.
+ */
+export const productosParaPromo = () => { const s = useApp.getState(); return [...s.catalogo.productos, ...(s.menu.productos)] }

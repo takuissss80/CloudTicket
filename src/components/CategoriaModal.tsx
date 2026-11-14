@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Categoria, Coccion, Producto, Variante } from '../types'
-import { useApp } from '../store/app'
+import { productosParaPromo, useApp } from '../store/app'
 import { itemProducto, itemPromo, usePedido, esArmado } from '../store/pedido'
 import { money } from '../lib/format'
 import { Btn, Modal, Stepper } from './ui'
@@ -47,7 +47,7 @@ export function CategoriaModal({ categoria, onClose, onPromo }: {
       const [id, v, c] = k.split('|') as [string, Variante, Coccion | '']
       const p = productos.find(x => x.id === id)
       if (!p) continue
-      if (p.tipo === 'promo') agregar({ ...itemPromo(p, [], productos), cantidad: n })
+      if (p.tipo === 'promo') agregar({ ...itemPromo(p, [], productosParaPromo()), cantidad: n })
       else agregar(itemProducto(p, v, n, c || undefined))
     }
     onClose()

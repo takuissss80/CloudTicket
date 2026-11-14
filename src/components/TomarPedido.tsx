@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Categoria, Producto } from '../types'
-import { useLocalActivo, useApp } from '../store/app'
+import { productosParaPromo, useLocalActivo, useApp } from '../store/app'
 import { itemProducto, itemPromo, totales, usePedido, esArmado, faltaOtraMitad, mitadesSueltas } from '../store/pedido'
 import { coccionLabel, money, nombreConVariante, normalizar, varianteLabel } from '../lib/format'
 import { Btn, Confirmar, Stepper, inputCls } from './ui'
@@ -85,7 +85,7 @@ export function TomarPedido() {
     if (prod.tipo === 'promo' && prod.slots.length) { setPromo(prod); return }
     if (prod.tipo === 'promo') {
       // promo sin elección: se agrega con sus fijos
-      p.agregar(itemPromo(prod, [], catalogo.productos))
+      p.agregar(itemPromo(prod, [], productosParaPromo()))
       return
     }
     p.agregar(itemProducto(prod, prod.precioMitad != null ? variante : 'unica', 1, coccion))
