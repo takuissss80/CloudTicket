@@ -23,7 +23,11 @@ const sumarMeses = (base: string | undefined, meses: number) => {
 }
 
 /** Panel del administrador general de CloudTicket: cuentas, planes, locales, vencimientos y usuarios */
-export function SuperAdmin({ usuario, onSalir }: { usuario: string; onSalir: () => void }) {
+export function SuperAdmin({ usuario, onSalir, cuenta }: {
+  usuario: string; onSalir: () => void
+  /** Si el administrador general también es usuario de una cuenta: botón para entrar a ella */
+  cuenta?: { nombre: string; entrar: () => void }
+}) {
   const avisar = useApp(s => s.avisar)
   const [cuentas, setCuentas] = useState<SaCuenta[] | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -71,6 +75,11 @@ export function SuperAdmin({ usuario, onSalir }: { usuario: string; onSalir: () 
         <h1 className="font-cond text-3xl font-extrabold leading-none">CloudTicket</h1>
         <span className="text-white/75">Administración general</span>
         <div className="ml-auto flex items-center gap-2">
+          {cuenta && (
+            <button onClick={cuenta.entrar} className="h-10 rounded-lg bg-primario px-3 font-semibold text-sobre-primario hover:brightness-110">
+              Entrar a {cuenta.nombre}
+            </button>
+          )}
           <BotonTema className="!border-white/20 !bg-white/15 !text-white hover:!bg-white/25" />
           <button onClick={async () => { await repo.logout(); onSalir() }} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">
             Salir <span className="text-white/60">({usuario})</span>

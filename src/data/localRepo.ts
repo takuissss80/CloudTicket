@@ -146,7 +146,9 @@ async function asegurarMenu() {
 // Permisos (los mismos que las políticas RLS)
 // ---------------------------------------------------------------------
 function sesionActual(): Sesion | null {
-  const id = sesionMemoria ?? leerStorage(KEY_SESION)
+  const id0 = sesionMemoria ?? leerStorage(KEY_SESION)
+  // En la demo, el administrador general también es el admin de la cuenta (como quien la creó)
+  const id = id0 === SUPERADMIN.id ? db().usuarios.find(x => x.rol === 'admin')?.userId : id0
   const u = db().usuarios.find(x => x.userId === id)
   if (!u) return null
   return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, plan: db().cuenta.plan ?? 'pro', sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar, esProduccion: u.rol !== 'admin' && !!u.esProduccion }
@@ -239,7 +241,7 @@ export const localRepo: Repo = {
   modo: 'demo',
 
   async estadoSesion(): Promise<EstadoSesion> {
-    if (esSuper()) { await asegurarMenu(); return { estado: 'superadmin', usuario: SUPERADMIN.usuario } }
+    if (esSuper()) { await asegurarMenu(); return { estado: 'superadmin', usuario: SUPERADMIN.usuario, cuenta: sesionActual() ?? undefined } }
     const s = sesionActual()
     if (!s) return { estado: 'sin_login' }
     await asegurarMenu()

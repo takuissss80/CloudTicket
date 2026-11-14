@@ -19,7 +19,7 @@ import { PantallaMostrador } from './components/PantallaMostrador'
 import { Produccion } from './components/Produccion'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
-function Principal({ onSalir }: { onSalir: () => void }) {
+function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: () => void }) {
   const { cargando, error, caja, sesion, sucursales, sucursalId, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
   const pedidoAbierto = usePedido(s => s.abierto)
   const [verCierre, setVerCierre] = useState(false)
@@ -145,6 +145,7 @@ function Principal({ onSalir }: { onSalir: () => void }) {
             )}
             {caja && <Btn onClick={() => setVerCierre(true)}>Caja</Btn>}
             <BotonTema />
+            {onGeneral && <Btn onClick={onGeneral} title="Volver al panel del administrador general">Administración general</Btn>}
             <Btn tono="fantasma" title={`Usuario: ${sesion?.usuario}`} onClick={async () => { await salir(); onSalir() }}>
               Salir <span className="hidden text-sm font-normal text-gris md:inline">({sesion?.usuario})</span>
             </Btn>
@@ -199,11 +200,24 @@ export default function App() {
   const [estado, setEstado] = useState<EstadoSesion | null>(null)
   const iniciar = useApp(s => s.iniciar)
 
+  // El administrador general que además es usuario de una cuenta elige qué ver (queda recordado en este navegador)
+  const [modo, setModo] = useState<'general' | 'cuenta'>(() => { try { return localStorage.getItem('ct-modo') === 'cuenta' ? 'cuenta' : 'general' } catch { return 'general' } })
+  const cambiarModo = (m: 'general' | 'cuenta') => {
+    try { localStorage.setItem('ct-modo', m) } catch { /* sin storage */ }
+    setModo(m)
+    if (m === 'cuenta' && estado?.estado === 'superadmin' && estado.cuenta) iniciar(estado.cuenta)
+  }
+
   const revisar = useCallback(async () => {
     const e = await repo.estadoSesion().catch(() => ({ estado: 'sin_login' as const }))
     setEstado(e)
     // Producción no opera un local: no carga caja, pedidos ni PedidosYa
     if (e.estado === 'ok' && !e.sesion.esProduccion) iniciar(e.sesion)
+    if (e.estado === 'superadmin' && e.cuenta && !e.cuenta.esProduccion) {
+      let m = 'general'
+      try { m = localStorage.getItem('ct-modo') ?? 'general' } catch { /* sin storage */ }
+      if (m === 'cuenta') iniciar(e.cuenta)
+    }
   }, [iniciar])
 
   useEffect(() => { revisar() }, [revisar])
@@ -213,7 +227,11 @@ export default function App() {
       {!estado ? <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>
         : estado.estado === 'sin_login' ? <Login onListo={revisar} />
         : estado.estado === 'sin_cuenta' ? <SinCuenta email={estado.email} onListo={revisar} />
-        : estado.estado === 'superadmin' ? <SuperAdmin usuario={estado.usuario} onSalir={revisar} />
+        : estado.estado === 'superadmin' ? (
+          estado.cuenta && !estado.cuenta.esProduccion && modo === 'cuenta'
+            ? <Principal onSalir={revisar} onGeneral={() => cambiarModo('general')} />
+            : <SuperAdmin usuario={estado.usuario} onSalir={revisar} cuenta={estado.cuenta && !estado.cuenta.esProduccion ? { nombre: estado.cuenta.cuentaNombre, entrar: () => cambiarModo('cuenta') } : undefined} />
+        )
         : estado.sesion.esProduccion ? <Produccion usuario={estado.sesion.usuario} cuenta={estado.sesion.cuentaNombre} onSalir={revisar} />
         : <Principal onSalir={revisar} />}
       <Toasts />

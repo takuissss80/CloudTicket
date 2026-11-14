@@ -3,7 +3,7 @@ import { unirReceta, errorIngredienteEnUso } from '../lib/menu'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta } from '../types'
+  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta, Sesion } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -187,18 +187,16 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       // El administrador general no tiene cuenta propia: ve todas
       // Si la función no existe todavía (falta la 0019), sigue como usuario normal
       const sa = await sb.rpc('es_superadmin').then(x => x, () => ({ data: false }))
-      if (sa.data === true) return { estado: 'superadmin', usuario: data.session.user.email ?? '' }
       const p = await perfil()
-      if (!p) return { estado: 'sin_cuenta', email: data.session.user.email ?? '' }
-      return {
-        estado: 'ok',
-        sesion: {
+      const sesion = (): Sesion | undefined => p ? ({
           userId: p.user_id, usuario: p.usuario, rol: p.rol, cuentaId: p.cuenta_id,
           cuentaNombre: p.cuentas?.nombre ?? '', plan: p.cuentas?.plan === 'principal' ? 'principal' : 'pro', sucursalId: opt(p.sucursal_id),
           puedeDescontar: p.rol === 'admin' || !!p.puede_descontar,
           esProduccion: p.rol !== 'admin' && !!p.es_produccion,
-        },
-      }
+      }) : undefined
+      if (sa.data === true) return { estado: 'superadmin', usuario: data.session.user.email ?? '', cuenta: sesion() }
+      if (!p) return { estado: 'sin_cuenta', email: data.session.user.email ?? '' }
+      return { estado: 'ok', sesion: sesion()! }
     },
 
     async login(usuario, password) {

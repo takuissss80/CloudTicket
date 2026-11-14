@@ -38,7 +38,8 @@ export type EstadoSesion =
   | { estado: 'sin_login' }
   | { estado: 'sin_cuenta'; email: string }   // logueado, pero todavía no creó su cuenta
   | { estado: 'ok'; sesion: Sesion }
-  | { estado: 'superadmin'; usuario: string }  // administrador general de CloudTicket
+  /** Administrador general de CloudTicket. Si además es usuario de una cuenta, viene su sesión para poder entrar a ella */
+  | { estado: 'superadmin'; usuario: string; cuenta?: Sesion }
 
 export interface CambioProducto { id: string; precio: number; precioMitad?: number; activo: boolean }
 
