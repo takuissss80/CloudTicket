@@ -115,3 +115,11 @@ button:disabled { cursor: not-allowed; }
 }
 
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* Opciones de los desplegables: siempre con los colores del tema (en modo oscuro
+   un <select> con fondo transparente mostraba letra blanca sobre fondo blanco) */
+select option,
+select optgroup {
+  background-color: var(--c-superficie);
+  color: var(--c-tinta);
+}

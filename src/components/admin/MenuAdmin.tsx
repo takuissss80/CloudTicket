@@ -223,7 +223,7 @@ export function MenuAdmin() {
                   <select aria-label={`Cómo se ve ${cat.nombre} en este local`} disabled={cambiandoCat}
                     value={ocultas.has(cat.id) ? 'oculta' : sueltas.has(cat.id) ? 'suelta' : 'normal'}
                     onChange={e => modoEnLocal(cat, e.target.value as ModoCategoriaLocal)}
-                    className="h-full rounded-r-lg border-l border-linea bg-transparent px-2 font-semibold">
+                    className="h-full rounded-r-lg border-l border-linea bg-superficie px-2 font-semibold text-tinta">
                     <option value="normal">Agrupada</option>
                     <option value="suelta">Categorías sueltas</option>
                     <option value="oculta">Oculta</option>
