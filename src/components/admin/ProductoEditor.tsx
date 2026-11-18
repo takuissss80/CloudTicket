@@ -3,7 +3,7 @@ import type { Categoria, Ingrediente, Producto, PromoSlot, RecetaItem, PromoFijo
 import type { ProductoEdicion } from '../../data/repo'
 import { repo } from '../../data'
 import { mensajeError } from '../../store/app'
-import { costoProducto, divisorUnidad, margen, unidadCorta } from '../../lib/menu'
+import { costoProducto, divisorUnidad, margen, nombreCategoria, ordenArbol, unidadCorta } from '../../lib/menu'
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 
@@ -95,7 +95,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
           </Campo>
           <Campo label="Categoría">
             <select id="prod-categoria" value={p.categoriaId} onChange={e => set({ categoriaId: e.target.value })} className={inputCls}>
-              {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              {ordenArbol(categorias).map(({ c }) => <option key={c.id} value={c.id}>{nombreCategoria(c, categorias)}</option>)}
             </select>
           </Campo>
           <Campo label="Tipo">
@@ -215,7 +215,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
                       setSlots(p.slots.map((x, j) => j === i ? { ...x, categoriaId: e.target.value, nombre: x.nombre || (cat ? cat.nombre.charAt(0) + cat.nombre.slice(1).toLowerCase() : '') } : x))
                     }} className={`${inputBase} h-9 min-w-0 flex-1`}>
                       <option value="">Elegí una categoría</option>
-                      {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      {ordenArbol(categorias).map(({ c }) => <option key={c.id} value={c.id}>{nombreCategoria(c, categorias)}</option>)}
                     </select>
                     <input aria-label="Nombre del grupo" value={s.nombre} onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))}
                       className={`${inputBase} h-9 w-36`} placeholder="Empanadas" />

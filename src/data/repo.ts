@@ -50,7 +50,8 @@ export const PREFIJO_PRODUCTO = 'p:'
 export const productoDePlanilla = (clave: string) => (clave.startsWith(PREFIJO_PRODUCTO) ? clave.slice(PREFIJO_PRODUCTO.length) : undefined)
 
 export type ProductoEdicion = Omit<Producto, 'id' | 'agotado'> & { id?: string }
-export type CategoriaEdicion = Omit<Categoria, 'id'> & { id?: string }
+/** padreId: undefined = no se toca, null = sacarla de su categoría contenedora */
+export type CategoriaEdicion = Omit<Categoria, 'id' | 'padreId'> & { id?: string; padreId?: string | null }
 export type IngredienteEdicion = Omit<Ingrediente, 'id'> & { id?: string }
 
 /**

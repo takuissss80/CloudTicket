@@ -1,4 +1,4 @@
-import type { AjusteLocal, Ingrediente, Producto, RecetaItem, Variante, Zona } from '../types'
+import type { AjusteLocal, Categoria, Ingrediente, Producto, RecetaItem, Variante, Zona } from '../types'
 import type { Catalogo, MenuData, Repo } from '../data/repo'
 import * as ejemplo from '../data/menu'
 
@@ -8,8 +8,11 @@ import * as ejemplo from '../data/menu'
  */
 export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: string): Catalogo {
   const ajustes = new Map(menu.ajustes.map(a => [a.productoId, a]))
-  // Categorías del menú madre que este local no muestra (ni sus productos)
-  const ocultas = new Set(menu.categoriasOcultas ?? [])
+  const porId = new Map(menu.categorias.map(c => [c.id, c]))
+  // Categorías del menú madre que este local no muestra (ni sus productos). Ocultar la de afuera oculta las de adentro.
+  const ocultas = new Set((menu.categoriasOcultas ?? []).flatMap(id => [id, ...menu.categorias.filter(c => c.padreId === id).map(c => c.id)]))
+  const enLocal = (c: Categoria) => c.activa && !ocultas.has(c.id) && (!c.sucursalId || c.sucursalId === sucursalId)
+  const padreVisible = (c: Categoria) => { const p = c.padreId ? porId.get(c.padreId) : undefined; return !p || enLocal(p) }
   const productos = menu.productos
     .filter(p => p.activo && (!p.sucursalId || p.sucursalId === sucursalId) && !ocultas.has(p.categoriaId))
     .filter(p => !ajustes.get(p.id)?.oculto)
@@ -22,10 +25,13 @@ export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: stri
         agotado: !!a?.agotado,
       }
     })
-  const categorias = menu.categorias
-    .filter(c => c.activa && !ocultas.has(c.id) && (!c.sucursalId || c.sucursalId === sucursalId))
+  const conProductos = menu.categorias
+    .filter(c => enLocal(c) && padreVisible(c))
     .filter(c => productos.some(p => p.categoriaId === c.id))
-    .sort((a, b) => a.orden - b.orden)
+  // Las contenedoras (ej.: una marca) aparecen si tienen alguna categoría visible adentro
+  const contenedoras = menu.categorias
+    .filter(c => enLocal(c) && !conProductos.includes(c) && conProductos.some(h => h.padreId === c.id))
+  const categorias = [...conProductos, ...contenedoras].sort((a, b) => a.orden - b.orden)
   return { categorias, productos, zonas }
 }
 
@@ -136,4 +142,19 @@ export async function importarMenuEjemplo(repo: Repo, onProgreso?: (texto: strin
 export function errorIngredienteEnUso(productos: string[]) {
   const lista = productos.slice(0, 5).join(', ') + (productos.length > 5 ? ` y ${productos.length - 5} más` : '')
   return `No se puede eliminar: está en la receta de ${productos.length === 1 ? '' : `${productos.length} productos: `}${lista}. Sacalo de esas recetas primero.`
+}
+
+/** "NAPOLES › PIZZAS" para una categoría que va dentro de otra */
+export function nombreCategoria(c: Categoria | undefined, categorias: Categoria[]) {
+  if (!c) return ''
+  const p = c.padreId ? categorias.find(x => x.id === c.padreId) : undefined
+  return p ? `${p.nombre} › ${c.nombre}` : c.nombre
+}
+
+/** Categorías en orden de árbol: cada contenedora seguida de las que tiene adentro */
+export function ordenArbol(categorias: Categoria[]): { c: Categoria; nivel: 0 | 1 }[] {
+  const ids = new Set(categorias.map(c => c.id))
+  const orden = (a: Categoria, b: Categoria) => a.orden - b.orden || a.nombre.localeCompare(b.nombre)
+  const raiz = categorias.filter(c => !c.padreId || !ids.has(c.padreId)).sort(orden)
+  return raiz.flatMap(r => [{ c: r, nivel: 0 as const }, ...categorias.filter(h => h.padreId === r.id).sort(orden).map(c => ({ c, nivel: 1 as const }))])
 }

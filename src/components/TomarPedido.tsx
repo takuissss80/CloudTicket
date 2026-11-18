@@ -3,6 +3,7 @@ import type { Categoria, Producto } from '../types'
 import { productosParaPromo, useLocalActivo, useApp } from '../store/app'
 import { itemProducto, itemPromo, totales, usePedido, esArmado, faltaOtraMitad, mitadesSueltas } from '../store/pedido'
 import { coccionLabel, money, nombreConVariante, normalizar, varianteLabel } from '../lib/format'
+import { nombreCategoria } from '../lib/menu'
 import { Btn, Confirmar, Stepper, inputCls } from './ui'
 import { CategoriaModal } from './CategoriaModal'
 import { PromoModal } from './PromoModal'
@@ -21,6 +22,8 @@ export function TomarPedido() {
   const p = usePedido()
   const { catalogo } = useApp()
   const [categoria, setCategoria] = useState<Categoria | null>(null)
+  // Categoría contenedora abierta (ej.: la marca NAPOLES con sus categorías adentro)
+  const [grupo, setGrupo] = useState<Categoria | null>(null)
   const [promo, setPromo] = useState<Producto | null>(null)
   const [verCliente, setVerCliente] = useState(false)
   const [verCobro, setVerCobro] = useState(false)
@@ -95,6 +98,13 @@ export function TomarPedido() {
 
   const zona = catalogo.zonas.find(z => z.id === p.zonaId)
   const categorias = [...catalogo.categorias].sort((a, b) => a.orden - b.orden)
+  const hijas = (id: string) => categorias.filter(c => c.padreId === id)
+  const tienePropios = (id: string) => catalogo.productos.some(x => x.categoriaId === id)
+  const grupoVisible = grupo && categorias.some(c => c.id === grupo.id) ? grupo : null
+  const fichas = grupoVisible
+    ? [...(tienePropios(grupoVisible.id) ? [grupoVisible] : []), ...hijas(grupoVisible.id)]
+    : categorias.filter(c => !c.padreId || !categorias.some(x => x.id === c.padreId))
+  const cantidad = (c: Categoria) => (enCarrito[c.id] ?? 0) + (c.id === grupoVisible?.id ? 0 : hijas(c.id).reduce((s, h) => s + (enCarrito[h.id] ?? 0), 0))
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
@@ -163,7 +173,7 @@ export function TomarPedido() {
                 <li key={prod.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{prod.codigo && <span className="mr-2 text-tomate">{prod.codigo}</span>}{prod.nombre}</div>
-                    <div className="text-sm text-gris">{catalogo.categorias.find(c => c.id === prod.categoriaId)?.nombre}</div>
+                    <div className="text-sm text-gris">{nombreCategoria(catalogo.categorias.find(c => c.id === prod.categoriaId), catalogo.categorias)}</div>
                   </div>
                   {prod.precioMitad != null ? (
                     <>
@@ -186,18 +196,30 @@ export function TomarPedido() {
               {!resultados.length && <li className="px-4 py-8 text-center text-gris">No hay productos con “{busqueda}”.</li>}
             </ul>
           ) : (
+            <>
+            {grupoVisible && (
+              <div className="mb-3 flex items-center gap-3">
+                <Btn onClick={() => setGrupo(null)}>← Volver</Btn>
+                <h2 className="font-cond text-3xl font-bold">{grupoVisible.nombre}</h2>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              {categorias.map(c => {
-                const n = enCarrito[c.id] ?? 0
+              {fichas.map(c => {
+                const n = cantidad(c)
+                const contiene = c.id === grupoVisible?.id ? [] : hijas(c.id)
                 return (
-                  <button key={c.id} onClick={() => setCategoria(c)}
-                    className={`flex min-h-32 flex-col justify-between rounded-xl border border-linea border-t-[6px] bg-superficie p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${colorTile[c.color]}`}>
-                    <span className="font-cond text-2xl font-bold leading-tight">{c.nombre}</span>
+                  <button key={c.id} onClick={() => (contiene.length ? setGrupo(c) : setCategoria(c))}
+                    className={`flex min-h-32 flex-col justify-between rounded-xl border border-linea border-t-[6px] bg-superficie p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${colorTile[c.color]} ${contiene.length ? 'ring-1 ring-linea' : ''}`}>
+                    <span>
+                      <span className="block font-cond text-2xl font-bold leading-tight">{c.nombre}</span>
+                      {contiene.length > 0 && <span className="text-sm text-gris">{contiene.length} categoría{contiene.length === 1 ? '' : 's'} ›</span>}
+                    </span>
                     <span className={`self-end font-cond text-5xl font-extrabold leading-none tabular-nums ${n ? 'text-tinta' : 'text-linea'}`}>{n}</span>
                   </button>
                 )
               })}
             </div>
+            </>
           )}
         </main>
 

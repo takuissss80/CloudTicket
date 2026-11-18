@@ -113,6 +113,8 @@ export interface Categoria {
   activa: boolean
   /** Con valor: categoría propia de ese local */
   sucursalId?: string
+  /** Con valor: va dentro de esa categoría (ej.: PIZZAS dentro de NAPOLES). Un solo nivel */
+  padreId?: string
 }
 
 export interface PromoFijo {

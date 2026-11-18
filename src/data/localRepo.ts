@@ -505,15 +505,25 @@ export const localRepo: Repo = {
   async guardarCategoria(c) {
     puedeEditarProducto(c.sucursalId)
     const d = db()
+    // Mismas reglas que la base: un solo nivel
+    if (c.padreId) {
+      const p = d.categorias.find(y => y.id === c.padreId)
+      if (!p || p.id === c.id) throw new Error('Categoría contenedora inválida')
+      if (p.padreId) throw new Error(`${p.nombre} ya está dentro de otra categoría: solo se puede anidar un nivel`)
+      if (c.id && d.categorias.some(y => y.padreId === c.id)) throw new Error('Esta categoría ya tiene categorías adentro: no puede ir dentro de otra')
+      if (p.sucursalId && p.sucursalId !== c.sucursalId) throw new Error('Una categoría propia de un local solo puede contener categorías de ese local')
+    }
+    const { padreId, ...resto } = c
+    const conPadre = <T extends object>(x: T) => (padreId === undefined ? x : { ...x, padreId: padreId ?? undefined })
     if (c.id) {
       const x = d.categorias.find(y => y.id === c.id)
       if (!x) throw new Error('Categoría no encontrada')
       puedeEditarProducto(x.sucursalId)
-      Object.assign(x, c)
+      Object.assign(x, conPadre(resto))
       guardar('menu')
       return clon(x)
     }
-    const nueva: Categoria = { ...c, id: uid() }
+    const nueva: Categoria = conPadre({ ...resto, id: uid() })
     d.categorias.push(nueva)
     guardar('menu')
     return clon(nueva)
@@ -606,6 +616,7 @@ export const localRepo: Repo = {
     const c = d.categorias.find(x => x.id === id)
     if (!c) throw new Error('Categoría no encontrada')
     puedeEditarProducto(c.sucursalId)
+    d.categorias.forEach(x => { if (x.padreId === id) x.padreId = undefined })
     const borrados = new Set(d.productos.filter(p => p.categoriaId === id).map(p => p.id))
     d.productos = d.productos.filter(p => !borrados.has(p.id))
     for (const p of d.productos) {

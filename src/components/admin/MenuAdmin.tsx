@@ -3,7 +3,7 @@ import type { AjusteLocal, Categoria, ColorCategoria, Producto } from '../../typ
 import type { MenuData } from '../../data/repo'
 import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
-import { costoProducto, importarMenuEjemplo, margen, precioEnLocal } from '../../lib/menu'
+import { costoProducto, importarMenuEjemplo, margen, nombreCategoria, ordenArbol, precioEnLocal } from '../../lib/menu'
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 import { ProductoEditor } from './ProductoEditor'
@@ -161,13 +161,16 @@ export function MenuAdmin() {
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           {/* ---- Categorías */}
           <aside className="space-y-1">
-            {categorias.map(c => {
+            {ordenArbol(categorias).map(({ c, nivel }) => {
               const n = menu.productos.filter(p => p.categoriaId === c.id).length
+              const hijas = categorias.filter(h => h.padreId === c.id).length
+              const padre = c.padreId ? categorias.find(x => x.id === c.padreId) : undefined
+              const apagada = !c.activa || ocultas.has(c.id) || (!!padre && (!padre.activa || ocultas.has(padre.id)))
               return (
                 <button key={c.id} onClick={() => { setCatSel(c.id); setBusqueda('') }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${c.activa && !ocultas.has(c.id) ? '' : 'opacity-50'}`}>
-                  <span className={`h-6 w-1.5 rounded-full ${bordeColor[c.color]}`} />
-                  <span className="min-w-0 flex-1 truncate font-semibold">{c.nombre}</span>
+                  className={`flex w-full items-center gap-3 rounded-lg py-2.5 pr-3 text-left ${nivel ? 'pl-8' : 'pl-3'} ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${apagada ? 'opacity-50' : ''}`}>
+                  <span className={`${nivel ? 'h-5 w-1' : 'h-6 w-1.5'} rounded-full ${bordeColor[c.color]}`} />
+                  <span className={`min-w-0 flex-1 truncate ${nivel ? 'font-medium' : 'font-semibold'}`}>{c.nombre}{hijas > 0 && <span className="ml-1.5 text-xs font-normal text-gris">{hijas} cat.</span>}</span>
                   {c.sucursalId && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold">Propia</span>}
                   {ocultas.has(c.id) && <span className="rounded bg-tomate-claro px-1.5 text-xs font-semibold text-tomate">Oculta</span>}
                   <span className="text-sm tabular-nums text-gris">{n}</span>
@@ -229,7 +232,7 @@ export function MenuAdmin() {
                             {p.tipo === 'extra' && <span className="rounded bg-harina px-1.5 text-gris">Extra</span>}
                             {propio && <span className="rounded bg-muzza-claro px-1.5">Propio del local</span>}
                             {!p.activo && <span className="rounded bg-linea px-1.5">Inactivo</span>}
-                            {busqueda && <span className="text-gris">{categorias.find(c => c.id === p.categoriaId)?.nombre}</span>}
+                            {busqueda && <span className="text-gris">{nombreCategoria(categorias.find(c => c.id === p.categoriaId), categorias)}</span>}
                           </div>
                         </td>
                         {enLocal && (
@@ -405,21 +408,40 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
   const [color, setColor] = useState<ColorCategoria>(categoria?.color ?? 'blue')
   const [pos, setPos] = useState(categoria?.orden ?? orden)
   const [activa, setActiva] = useState(categoria?.activa ?? true)
+  const ambito = categoria ? categoria.sucursalId : sucursalId
+  const todas = menu.categorias
+  const tieneHijas = !!categoria && todas.some(c => c.padreId === categoria.id)
+  // Dentro de qué categoría va: una del menú madre o del mismo local, que no esté dentro de otra
+  const padres = todas.filter(c => c.id !== categoria?.id && !c.padreId && (!c.sucursalId || c.sucursalId === ambito)).sort((a, b) => a.orden - b.orden)
+  const [padre, setPadre] = useState(categoria?.padreId ?? '')
+  // Qué categorías van adentro de esta (si esta no va dentro de otra)
+  const candidatas = todas.filter(c => c.id !== categoria?.id && c.sucursalId === ambito && !todas.some(h => h.padreId === c.id)
+    && (!c.padreId || c.padreId === categoria?.id)).sort((a, b) => a.orden - b.orden)
+  const [adentro, setAdentro] = useState<Set<string>>(() => new Set(categoria ? todas.filter(c => c.padreId === categoria.id).map(c => c.id) : []))
+  const [guardando, setGuardando] = useState(false)
   const guardar = async () => {
     if (!nombre.trim()) return
+    setGuardando(true)
     try {
       const c = await repo.guardarCategoria({
         id: categoria?.id, nombre: nombre.trim().toUpperCase(), color, orden: pos, activa,
-        sucursalId: categoria ? categoria.sucursalId : sucursalId,
+        sucursalId: ambito,
+        ...((padre || undefined) !== categoria?.padreId ? { padreId: padre || null } : {}),
       })
+      if (!padre) {
+        for (const x of candidatas) {
+          const va = adentro.has(x.id), estaba = x.padreId === c.id
+          if (va !== estaba) await repo.guardarCategoria({ ...x, padreId: va ? c.id : null })
+        }
+      }
       onGuardado(c)
-    } catch (e) { avisar(mensajeError(e), 'error') }
+    } catch (e) { avisar(mensajeError(e), 'error') } finally { setGuardando(false) }
   }
   return (
     <Modal titulo={categoria ? 'Editar categoría' : 'Nueva categoría'} onClose={onClose} ancho="max-w-md"
       pie={<div className="flex justify-end gap-2">
         {categoria && <Btn tono="fantasma" className="mr-auto text-tomate" onClick={() => setBorrar(true)}>Eliminar categoría</Btn>}
-        <Btn onClick={onClose}>Cancelar</Btn><Btn tono="albahaca" disabled={!nombre.trim()} onClick={guardar}>Guardar</Btn>
+        <Btn onClick={onClose}>Cancelar</Btn><Btn tono="albahaca" disabled={!nombre.trim() || guardando} onClick={guardar}>{guardando ? 'Guardando…' : 'Guardar'}</Btn>
       </div>}>
       <div className="space-y-4 p-5">
         <Campo label="Nombre">
@@ -442,6 +464,32 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
         </Campo>
         {categoria && (
           <label className="flex items-center gap-2"><input type="checkbox" className="size-5 accent-albahaca" checked={activa} onChange={e => setActiva(e.target.checked)} /> Visible en la pantalla de pedidos</label>
+        )}
+        <Campo label="Dentro de">
+          <select id="cat-padre" value={padre} disabled={tieneHijas} onChange={e => setPadre(e.target.value)} className={inputCls}>
+            <option value="">Ninguna (va suelta en la pantalla de pedidos)</option>
+            {padres.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </Campo>
+        {tieneHijas && <p className="-mt-2 text-sm text-gris">Tiene categorías adentro, así que no puede ir dentro de otra.</p>}
+        {!padre && candidatas.length > 0 && (
+          <div>
+            <span className="mb-1 block text-sm font-medium text-gris">Categorías que van adentro de esta</span>
+            <p className="mb-2 text-sm text-gris">Sirve para agrupar, por ejemplo por marca: en la pantalla de pedidos se toca {nombre.trim().toUpperCase() || 'esta'} y aparecen sus categorías.</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className="h-8 rounded-full px-3 text-sm font-semibold text-pizarra hover:underline"
+                onClick={() => setAdentro(adentro.size === candidatas.length ? new Set() : new Set(candidatas.map(x => x.id)))}>
+                {adentro.size === candidatas.length ? 'Ninguna' : 'Todas'}
+              </button>
+              {candidatas.map(x => (
+                <button key={x.id} type="button" aria-pressed={adentro.has(x.id)}
+                  onClick={() => setAdentro(s => { const n = new Set(s); if (n.has(x.id)) n.delete(x.id); else n.add(x.id); return n })}
+                  className={`h-8 rounded-full px-3 text-sm font-semibold ring-1 ${adentro.has(x.id) ? 'bg-primario text-sobre-primario ring-primario' : 'bg-superficie ring-linea hover:bg-harina'}`}>
+                  {x.nombre}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
       {borrar && categoria && <EliminarCategoria categoria={categoria} menu={menu} onNo={() => setBorrar(false)} onListo={n => onEliminada(categoria, n)} />}

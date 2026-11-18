@@ -42,7 +42,7 @@ const mapCupon = (c: Row): Cupon => ({
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
 const mapCategoria = (c: Row): Categoria => ({
-  id: c.id, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa, sucursalId: opt(c.sucursal_id),
+  id: c.id, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa, sucursalId: opt(c.sucursal_id), padreId: opt(c.padre_id),
 })
 const mapRepartidor = (r: Row): Repartidor => ({
   id: r.id, nombre: r.nombre, dni: opt(r.dni), telefono: opt(r.telefono), activo: r.activo,
@@ -352,7 +352,9 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
 
     async guardarCategoria(c) {
       const p = await perfil()
-      const row = { cuenta_id: p!.cuenta_id, sucursal_id: c.sucursalId ?? null, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa }
+      const row: Row = { cuenta_id: p!.cuenta_id, sucursal_id: c.sucursalId ?? null, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa }
+      // Solo si se cambia: así sigue andando en una base sin la migración 0022
+      if (c.padreId !== undefined) row.padre_id = c.padreId
       const r = c.id
         ? ok(await sb.from('categorias').update(row).eq('id', c.id).select().single())
         : ok(await sb.from('categorias').insert(row).select().single())
