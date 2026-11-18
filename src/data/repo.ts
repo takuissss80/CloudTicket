@@ -18,6 +18,8 @@ export interface MenuData {
   /** Ajustes del local pedido sobre el menú madre */
   ajustes: AjusteLocal[]
   ingredientes: Ingrediente[]
+  /** Categorías del menú madre que el local pedido no muestra */
+  categoriasOcultas?: string[]
 }
 
 export interface NuevoPrintJob {
@@ -115,6 +117,8 @@ export interface Repo {
   actualizarProductos(cambios: CambioProducto[]): Promise<void>
   guardarAjuste(sucursalId: string, a: AjusteLocal): Promise<void>
   quitarAjuste(sucursalId: string, productoId: string): Promise<void>
+  /** Mostrar u ocultar una categoría del menú madre en un local */
+  mostrarCategoriaEnLocal(sucursalId: string, categoriaId: string, mostrar: boolean): Promise<void>
   aumentarPrecios(categoriaId: string, porcentaje: number, sucursalId: string | null, redondeo: number): Promise<number>
   guardarIngrediente(i: IngredienteEdicion): Promise<Ingrediente>
   /** Borra un ingrediente. Falla si alguna receta (de cualquier local) lo usa. */

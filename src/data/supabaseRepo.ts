@@ -331,11 +331,13 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     // ---- Menú
     async getMenu(sucursalId): Promise<MenuData> {
       const filtroLocal = sucursalId ? `sucursal_id.is.null,sucursal_id.eq.${sucursalId}` : 'sucursal_id.is.null'
-      const [cats, prods, ajustes, ings] = await Promise.all([
+      const [cats, prods, ajustes, ings, ocultas] = await Promise.all([
         sb.from('categorias').select('*').or(filtroLocal).order('orden'),
         sb.from('productos').select(SELECT_PRODUCTO).or(filtroLocal).order('orden'),
         sucursalId ? sb.from('producto_sucursal').select('*').eq('sucursal_id', sucursalId) : Promise.resolve({ data: [], error: null }),
         sb.from('ingredientes').select('*').order('nombre'),
+        // Sin la migración 0021 la tabla no existe: no hay categorías ocultas
+        sucursalId ? sb.from('categoria_sucursal').select('categoria_id').eq('sucursal_id', sucursalId).then(r => r, () => ({ data: [], error: null })) : Promise.resolve({ data: [], error: null }),
       ])
       return {
         categorias: (ok(cats) as Row[]).map(mapCategoria),
@@ -344,6 +346,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
           productoId: a.producto_id, precio: numOpt(a.precio), precioMitad: numOpt(a.precio_mitad), oculto: a.oculto, agotado: a.agotado,
         })),
         ingredientes: (ok(ings) as Row[]).map(mapIngrediente),
+        categoriasOcultas: ocultas.error ? [] : ((ocultas.data ?? []) as Row[]).map(r => r.categoria_id as string),
       }
     },
 
@@ -401,6 +404,11 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         producto_id: a.productoId, sucursal_id: sucursalId, precio: a.precio ?? null,
         precio_mitad: a.precioMitad ?? null, oculto: a.oculto, agotado: a.agotado,
       }))
+    },
+
+    async mostrarCategoriaEnLocal(sucursalId, categoriaId, mostrar) {
+      if (mostrar) ok(await sb.from('categoria_sucursal').delete().eq('sucursal_id', sucursalId).eq('categoria_id', categoriaId))
+      else ok(await sb.from('categoria_sucursal').upsert({ sucursal_id: sucursalId, categoria_id: categoriaId }, { ignoreDuplicates: true }))
     },
 
     async quitarAjuste(sucursalId, productoId) {
@@ -742,7 +750,11 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sucursales' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_externos' }, () => onChange('externos'))
         .subscribe()
-      return () => { sb.removeChannel(ch) }
+      // Aparte: si falta la migración 0021, este canal falla solo sin afectar al resto
+      const ch2 = sb.channel('comandas-web-categorias')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'categoria_sucursal' }, () => onChange('menu'))
+        .subscribe()
+      return () => { sb.removeChannel(ch); sb.removeChannel(ch2) }
     },
   }
   return repo

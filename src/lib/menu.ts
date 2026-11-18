@@ -8,8 +8,10 @@ import * as ejemplo from '../data/menu'
  */
 export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: string): Catalogo {
   const ajustes = new Map(menu.ajustes.map(a => [a.productoId, a]))
+  // Categorías del menú madre que este local no muestra (ni sus productos)
+  const ocultas = new Set(menu.categoriasOcultas ?? [])
   const productos = menu.productos
-    .filter(p => p.activo && (!p.sucursalId || p.sucursalId === sucursalId))
+    .filter(p => p.activo && (!p.sucursalId || p.sucursalId === sucursalId) && !ocultas.has(p.categoriaId))
     .filter(p => !ajustes.get(p.id)?.oculto)
     .map(p => {
       const a = ajustes.get(p.id)
@@ -21,7 +23,7 @@ export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: stri
       }
     })
   const categorias = menu.categorias
-    .filter(c => c.activa && (!c.sucursalId || c.sucursalId === sucursalId))
+    .filter(c => c.activa && !ocultas.has(c.id) && (!c.sucursalId || c.sucursalId === sucursalId))
     .filter(c => productos.some(p => p.categoriaId === c.id))
     .sort((a, b) => a.orden - b.orden)
   return { categorias, productos, zonas }

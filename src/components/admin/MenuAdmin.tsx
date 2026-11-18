@@ -57,6 +57,17 @@ export function MenuAdmin() {
   const ajustes = useMemo(() => new Map((menu?.ajustes ?? []).map(a => [a.productoId, a])), [menu])
   const categorias = useMemo(() => [...(menu?.categorias ?? [])].sort((a, b) => a.orden - b.orden), [menu])
   const cat = categorias.find(c => c.id === catSel)
+  const ocultas = useMemo(() => new Set(menu?.categoriasOcultas ?? []), [menu])
+  const [cambiandoCat, setCambiandoCat] = useState(false)
+  const mostrarEnLocal = async (c: Categoria, mostrar: boolean) => {
+    if (!vista) return
+    setCambiandoCat(true)
+    try {
+      await repo.mostrarCategoriaEnLocal(vista, c.id, mostrar)
+      avisar(`${c.nombre} ${mostrar ? 'se muestra' : 'ya no se muestra'} en ${local?.nombre ?? 'este local'}`)
+      await despuesDeGuardar()
+    } catch (e) { avisar(mensajeError(e), 'error') } finally { setCambiandoCat(false) }
+  }
   const q = normalizar(busqueda.trim())
   const productos = (menu?.productos ?? [])
     .filter(p => q ? normalizar(`${p.nombre} ${p.codigo ?? ''}`).includes(q) : p.categoriaId === catSel)
@@ -154,10 +165,11 @@ export function MenuAdmin() {
               const n = menu.productos.filter(p => p.categoriaId === c.id).length
               return (
                 <button key={c.id} onClick={() => { setCatSel(c.id); setBusqueda('') }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${c.activa ? '' : 'opacity-50'}`}>
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${c.activa && !ocultas.has(c.id) ? '' : 'opacity-50'}`}>
                   <span className={`h-6 w-1.5 rounded-full ${bordeColor[c.color]}`} />
                   <span className="min-w-0 flex-1 truncate font-semibold">{c.nombre}</span>
                   {c.sucursalId && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold">Propia</span>}
+                  {ocultas.has(c.id) && <span className="rounded bg-tomate-claro px-1.5 text-xs font-semibold text-tomate">Oculta</span>}
                   <span className="text-sm tabular-nums text-gris">{n}</span>
                 </button>
               )
@@ -172,6 +184,14 @@ export function MenuAdmin() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h2 className="mr-auto font-cond text-3xl font-bold">{busqueda ? 'Resultados' : cat?.nombre}</h2>
               <input id="menu-buscar" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar en todo el menú" className={`${inputBase} h-10 w-56`} />
+              {cat && !busqueda && enLocal && !cat.sucursalId && (
+                <label className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg px-3 font-semibold ring-1 ${ocultas.has(cat.id) ? 'bg-tomate-claro text-tomate ring-tomate' : 'bg-superficie ring-linea'}`}
+                  title="Solo para este local: en los demás locales la categoría sigue igual">
+                  <input type="checkbox" className="size-5 accent-albahaca" disabled={cambiandoCat} checked={!ocultas.has(cat.id)}
+                    onChange={e => mostrarEnLocal(cat, e.target.checked)} />
+                  Mostrar en {local?.nombre ?? 'este local'}
+                </label>
+              )}
               {cat && !busqueda && puedeEditar(cat) && <Btn onClick={() => setCatEdit(cat)}>Editar categoría</Btn>}
               {cat && !busqueda && !masivo && <Btn onClick={() => setCopiando(cat)}>Copiar categoría</Btn>}
               {cat && !busqueda && !masivo && <Btn onClick={() => setVerAumento(true)}>Aumentar precios</Btn>}
