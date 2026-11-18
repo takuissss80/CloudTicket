@@ -58,6 +58,19 @@ export function MenuAdmin() {
   const categorias = useMemo(() => [...(menu?.categorias ?? [])].sort((a, b) => a.orden - b.orden), [menu])
   const cat = categorias.find(c => c.id === catSel)
   const ocultas = useMemo(() => new Set(menu?.categoriasOcultas ?? []), [menu])
+  // Categorías contenedoras abiertas en la lista (se recuerda en este navegador)
+  const [abiertas, setAbiertas] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ct-menu-abiertas') ?? '[]')) } catch { return new Set() }
+  })
+  const alternar = (id: string, abrir?: boolean) => setAbiertas(prev => {
+    const n = new Set(prev)
+    if (abrir ?? !n.has(id)) n.add(id); else n.delete(id)
+    try { localStorage.setItem('ct-menu-abiertas', JSON.stringify([...n])) } catch { /* sin storage */ }
+    return n
+  })
+  // Si la categoría elegida está dentro de otra (ej.: recién creada), se abre su contenedora
+  const padreSel = categorias.find(c => c.id === catSel)?.padreId
+  useEffect(() => { if (padreSel && !abiertas.has(padreSel)) alternar(padreSel, true) }, [padreSel]) // eslint-disable-line react-hooks/exhaustive-deps
   const [cambiandoCat, setCambiandoCat] = useState(false)
   const mostrarEnLocal = async (c: Categoria, mostrar: boolean) => {
     if (!vista) return
@@ -161,16 +174,20 @@ export function MenuAdmin() {
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           {/* ---- Categorías */}
           <aside className="space-y-1">
-            {ordenArbol(categorias).map(({ c, nivel }) => {
-              const n = menu.productos.filter(p => p.categoriaId === c.id).length
-              const hijas = categorias.filter(h => h.padreId === c.id).length
+            {ordenArbol(categorias).filter(({ c, nivel }) => !nivel || (c.padreId && abiertas.has(c.padreId))).map(({ c, nivel }) => {
+              const idsHijas = new Set(categorias.filter(h => h.padreId === c.id).map(h => h.id))
+              const hijas = idsHijas.size
+              const n = menu.productos.filter(p => p.categoriaId === c.id || idsHijas.has(p.categoriaId)).length
               const padre = c.padreId ? categorias.find(x => x.id === c.padreId) : undefined
               const apagada = !c.activa || ocultas.has(c.id) || (!!padre && (!padre.activa || ocultas.has(padre.id)))
+              const abierta = abiertas.has(c.id)
               return (
-                <button key={c.id} onClick={() => { setCatSel(c.id); setBusqueda('') }}
+                <button key={c.id} aria-expanded={hijas ? abierta : undefined}
+                  onClick={() => { setCatSel(c.id); setBusqueda(''); if (hijas) alternar(c.id) }}
                   className={`flex w-full items-center gap-3 rounded-lg py-2.5 pr-3 text-left ${nivel ? 'pl-8' : 'pl-3'} ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${apagada ? 'opacity-50' : ''}`}>
                   <span className={`${nivel ? 'h-5 w-1' : 'h-6 w-1.5'} rounded-full ${bordeColor[c.color]}`} />
                   <span className={`min-w-0 flex-1 truncate ${nivel ? 'font-medium' : 'font-semibold'}`}>{c.nombre}{hijas > 0 && <span className="ml-1.5 text-xs font-normal text-gris">{hijas} cat.</span>}</span>
+                  {hijas > 0 && <span aria-hidden className={`text-gris transition-transform ${abierta ? 'rotate-90' : ''}`}>›</span>}
                   {c.sucursalId && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold">Propia</span>}
                   {ocultas.has(c.id) && <span className="rounded bg-tomate-claro px-1.5 text-xs font-semibold text-tomate">Oculta</span>}
                   <span className="text-sm tabular-nums text-gris">{n}</span>
@@ -304,7 +321,17 @@ export function MenuAdmin() {
                   })}
                   {!productos.length && (
                     <tr><td colSpan={8} className="px-3 py-10 text-center text-gris">
-                      {busqueda ? `Nada coincide con “${busqueda}”.` : 'Esta categoría no tiene productos. Agregá el primero con “Nuevo producto”.'}
+                      {busqueda ? `Nada coincide con “${busqueda}”.`
+                        : cat && categorias.some(h => h.padreId === cat.id) ? (
+                          <>
+                            <p className="mb-3">{cat.nombre} agrupa estas categorías. Elegí una para ver sus productos:</p>
+                            <div className="flex flex-wrap justify-center gap-2">
+                              {categorias.filter(h => h.padreId === cat.id).sort((a, b) => a.orden - b.orden).map(h => (
+                                <Btn key={h.id} onClick={() => setCatSel(h.id)}>{h.nombre}</Btn>
+                              ))}
+                            </div>
+                          </>
+                        ) : 'Esta categoría no tiene productos. Agregá el primero con “Nuevo producto”.'}
                     </td></tr>
                   )}
                 </tbody>
