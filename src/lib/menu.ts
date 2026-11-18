@@ -8,9 +8,12 @@ import * as ejemplo from '../data/menu'
  */
 export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: string): Catalogo {
   const ajustes = new Map(menu.ajustes.map(a => [a.productoId, a]))
-  const porId = new Map(menu.categorias.map(c => [c.id, c]))
+  // Contenedoras que en este local no agrupan: sus categorías quedan sueltas
+  const sueltas = new Set(menu.categoriasSueltas ?? [])
+  const cats = menu.categorias.map(c => (c.padreId && sueltas.has(c.padreId) ? { ...c, padreId: undefined } : c))
+  const porId = new Map(cats.map(c => [c.id, c]))
   // Categorías del menú madre que este local no muestra (ni sus productos). Ocultar la de afuera oculta las de adentro.
-  const ocultas = new Set((menu.categoriasOcultas ?? []).flatMap(id => [id, ...menu.categorias.filter(c => c.padreId === id).map(c => c.id)]))
+  const ocultas = new Set((menu.categoriasOcultas ?? []).flatMap(id => [id, ...cats.filter(c => c.padreId === id).map(c => c.id)]))
   const enLocal = (c: Categoria) => c.activa && !ocultas.has(c.id) && (!c.sucursalId || c.sucursalId === sucursalId)
   const padreVisible = (c: Categoria) => { const p = c.padreId ? porId.get(c.padreId) : undefined; return !p || enLocal(p) }
   const productos = menu.productos
@@ -25,11 +28,11 @@ export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: stri
         agotado: !!a?.agotado,
       }
     })
-  const conProductos = menu.categorias
+  const conProductos = cats
     .filter(c => enLocal(c) && padreVisible(c))
     .filter(c => productos.some(p => p.categoriaId === c.id))
   // Las contenedoras (ej.: una marca) aparecen si tienen alguna categoría visible adentro
-  const contenedoras = menu.categorias
+  const contenedoras = cats
     .filter(c => enLocal(c) && !conProductos.includes(c) && conProductos.some(h => h.padreId === c.id))
   const categorias = [...conProductos, ...contenedoras].sort((a, b) => a.orden - b.orden)
   return { categorias, productos, zonas }

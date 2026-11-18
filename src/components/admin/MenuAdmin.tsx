@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AjusteLocal, Categoria, ColorCategoria, Producto } from '../../types'
 import type { MenuData } from '../../data/repo'
 import { repo } from '../../data'
+import type { ModoCategoriaLocal } from '../../data/repo'
 import { mensajeError, useApp } from '../../store/app'
 import { costoProducto, importarMenuEjemplo, margen, nombreCategoria, ordenArbol, precioEnLocal } from '../../lib/menu'
 import { money, normalizar } from '../../lib/format'
@@ -58,6 +59,16 @@ export function MenuAdmin() {
   const categorias = useMemo(() => [...(menu?.categorias ?? [])].sort((a, b) => a.orden - b.orden), [menu])
   const cat = categorias.find(c => c.id === catSel)
   const ocultas = useMemo(() => new Set(menu?.categoriasOcultas ?? []), [menu])
+  const sueltas = useMemo(() => new Set(menu?.categoriasSueltas ?? []), [menu])
+  const modoEnLocal = async (c: Categoria, modo: ModoCategoriaLocal) => {
+    if (!vista) return
+    setCambiandoCat(true)
+    try {
+      await repo.setModoCategoriaLocal(vista, c.id, modo)
+      avisar(`${c.nombre} en ${local?.nombre ?? 'este local'}: ${modo === 'normal' ? 'agrupada' : modo === 'suelta' ? 'categorías sueltas' : 'oculta'}`)
+      await despuesDeGuardar()
+    } catch (e) { avisar(mensajeError(e), 'error') } finally { setCambiandoCat(false) }
+  }
   // Categorías contenedoras abiertas en la lista (se recuerda en este navegador)
   const [abiertas, setAbiertas] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('ct-menu-abiertas') ?? '[]')) } catch { return new Set() }
@@ -190,6 +201,7 @@ export function MenuAdmin() {
                   {hijas > 0 && <span aria-hidden className={`text-gris transition-transform ${abierta ? 'rotate-90' : ''}`}>›</span>}
                   {c.sucursalId && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold">Propia</span>}
                   {ocultas.has(c.id) && <span className="rounded bg-tomate-claro px-1.5 text-xs font-semibold text-tomate">Oculta</span>}
+                  {sueltas.has(c.id) && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold" title="En este local sus categorías aparecen sueltas">Sueltas</span>}
                   <span className="text-sm tabular-nums text-gris">{n}</span>
                 </button>
               )
@@ -204,7 +216,21 @@ export function MenuAdmin() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h2 className="mr-auto font-cond text-3xl font-bold">{busqueda ? 'Resultados' : cat?.nombre}</h2>
               <input id="menu-buscar" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar en todo el menú" className={`${inputBase} h-10 w-56`} />
-              {cat && !busqueda && enLocal && !cat.sucursalId && (
+              {cat && !busqueda && enLocal && !cat.sucursalId && categorias.some(h => h.padreId === cat.id) && (
+                <label className={`flex h-10 items-center gap-2 rounded-lg pl-3 font-semibold ring-1 ${ocultas.has(cat.id) ? 'bg-tomate-claro text-tomate ring-tomate' : 'bg-superficie ring-linea'}`}
+                  title="Solo para este local: en los demás locales sigue igual">
+                  En {local?.nombre ?? 'este local'}:
+                  <select aria-label={`Cómo se ve ${cat.nombre} en este local`} disabled={cambiandoCat}
+                    value={ocultas.has(cat.id) ? 'oculta' : sueltas.has(cat.id) ? 'suelta' : 'normal'}
+                    onChange={e => modoEnLocal(cat, e.target.value as ModoCategoriaLocal)}
+                    className="h-full rounded-r-lg border-l border-linea bg-transparent px-2 font-semibold">
+                    <option value="normal">Agrupada</option>
+                    <option value="suelta">Categorías sueltas</option>
+                    <option value="oculta">Oculta</option>
+                  </select>
+                </label>
+              )}
+              {cat && !busqueda && enLocal && !cat.sucursalId && !categorias.some(h => h.padreId === cat.id) && (
                 <label className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg px-3 font-semibold ring-1 ${ocultas.has(cat.id) ? 'bg-tomate-claro text-tomate ring-tomate' : 'bg-superficie ring-linea'}`}
                   title="Solo para este local: en los demás locales la categoría sigue igual">
                   <input type="checkbox" className="size-5 accent-albahaca" disabled={cambiandoCat} checked={!ocultas.has(cat.id)}
@@ -446,6 +472,15 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
     && (!c.padreId || c.padreId === categoria?.id)).sort((a, b) => a.orden - b.orden)
   const [adentro, setAdentro] = useState<Set<string>>(() => new Set(categoria ? todas.filter(c => c.padreId === categoria.id).map(c => c.id) : []))
   const [guardando, setGuardando] = useState(false)
+  // Contenedora del menú madre: cómo se ve en cada local (agrupada, sueltas u oculta)
+  const sucursales = useApp(s => s.sucursales)
+  const [modos, setModos] = useState<Record<string, ModoCategoriaLocal>>({})
+  const [modosOrig, setModosOrig] = useState<Record<string, ModoCategoriaLocal>>({})
+  useEffect(() => {
+    if (!categoria || ambito) return
+    repo.modosCategoria(categoria.id).then(m => { setModos(m); setModosOrig(m) }).catch(() => {})
+  }, [categoria, ambito])
+  const esContenedora = !ambito && !padre && (adentro.size > 0 || tieneHijas)
   const guardar = async () => {
     if (!nombre.trim()) return
     setGuardando(true)
@@ -459,6 +494,12 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
         for (const x of candidatas) {
           const va = adentro.has(x.id), estaba = x.padreId === c.id
           if (va !== estaba) await repo.guardarCategoria({ ...x, padreId: va ? c.id : null })
+        }
+      }
+      if (esContenedora) {
+        for (const s of sucursales) {
+          const m = modos[s.id] ?? 'normal', o = modosOrig[s.id] ?? 'normal'
+          if (m !== o) await repo.setModoCategoriaLocal(s.id, c.id, m)
         }
       }
       onGuardado(c)
@@ -477,7 +518,7 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
         </Campo>
         <div>
           <span className="mb-1 block text-sm font-medium text-gris">Color del botón</span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {COLORES.map(c => (
               <button key={c.key} type="button" onClick={() => setColor(c.key)} aria-pressed={color === c.key}
                 className={`flex h-10 items-center gap-2 rounded-lg px-3 ring-1 ${color === c.key ? 'bg-superficie ring-2 ring-tinta' : 'bg-superficie ring-linea'}`}>
@@ -516,6 +557,37 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
                 </button>
               ))}
             </div>
+          </div>
+        )}
+        {esContenedora && sucursales.length > 0 && (
+          <div>
+            <span className="mb-1 block text-sm font-medium text-gris">En cada local</span>
+            <p className="mb-2 text-sm text-gris">
+              <b>Agrupada</b>: se toca {nombre.trim().toUpperCase() || 'esta'} y aparecen sus categorías. <b>Sueltas</b>: sus categorías aparecen sueltas, como si no estuvieran agrupadas. <b>Oculta</b>: no se ve nada de lo que tiene adentro.
+            </p>
+            <div className="mb-2 flex flex-wrap gap-1.5 text-sm">
+              <span className="self-center text-gris">Todos:</span>
+              {(['normal', 'suelta', 'oculta'] as const).map(m => (
+                <button key={m} type="button" className="h-8 rounded-full px-3 font-semibold text-pizarra ring-1 ring-linea hover:bg-harina"
+                  onClick={() => setModos(Object.fromEntries(sucursales.map(s => [s.id, m])))}>
+                  {m === 'normal' ? 'Agrupada' : m === 'suelta' ? 'Sueltas' : 'Oculta'}
+                </button>
+              ))}
+            </div>
+            <ul className="max-h-64 divide-y divide-linea overflow-y-auto rounded-lg ring-1 ring-linea">
+              {sucursales.map(s => (
+                <li key={s.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <span className="min-w-0 truncate">{s.nombre}</span>
+                  <select aria-label={`${nombre} en ${s.nombre}`} value={modos[s.id] ?? 'normal'}
+                    onChange={e => setModos(m => ({ ...m, [s.id]: e.target.value as ModoCategoriaLocal }))}
+                    className={`${inputBase} h-8 w-auto py-0 text-sm`}>
+                    <option value="normal">Agrupada</option>
+                    <option value="suelta">Sueltas</option>
+                    <option value="oculta">Oculta</option>
+                  </select>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

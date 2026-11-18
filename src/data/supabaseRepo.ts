@@ -4,7 +4,7 @@ import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } fro
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
   Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta, Sesion } from '../types'
-import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
+import { PREFIJO_PRODUCTO, productoDePlanilla, type ModoCategoriaLocal } from './repo'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
@@ -337,7 +337,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         sucursalId ? sb.from('producto_sucursal').select('*').eq('sucursal_id', sucursalId) : Promise.resolve({ data: [], error: null }),
         sb.from('ingredientes').select('*').order('nombre'),
         // Sin la migración 0021 la tabla no existe: no hay categorías ocultas
-        sucursalId ? sb.from('categoria_sucursal').select('categoria_id').eq('sucursal_id', sucursalId).then(r => r, () => ({ data: [], error: null })) : Promise.resolve({ data: [], error: null }),
+        sucursalId ? sb.from('categoria_sucursal').select('*').eq('sucursal_id', sucursalId).then(r => r, () => ({ data: [], error: null })) : Promise.resolve({ data: [], error: null }),
       ])
       return {
         categorias: (ok(cats) as Row[]).map(mapCategoria),
@@ -346,7 +346,9 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
           productoId: a.producto_id, precio: numOpt(a.precio), precioMitad: numOpt(a.precio_mitad), oculto: a.oculto, agotado: a.agotado,
         })),
         ingredientes: (ok(ings) as Row[]).map(mapIngrediente),
-        categoriasOcultas: ocultas.error ? [] : ((ocultas.data ?? []) as Row[]).map(r => r.categoria_id as string),
+        // Sin la migración 0023 no hay "modo": todas las filas son ocultas
+        categoriasOcultas: ocultas.error ? [] : ((ocultas.data ?? []) as Row[]).filter(r => (r.modo ?? 'oculta') === 'oculta').map(r => r.categoria_id as string),
+        categoriasSueltas: ocultas.error ? [] : ((ocultas.data ?? []) as Row[]).filter(r => r.modo === 'suelta').map(r => r.categoria_id as string),
       }
     },
 
@@ -411,6 +413,21 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async mostrarCategoriaEnLocal(sucursalId, categoriaId, mostrar) {
       if (mostrar) ok(await sb.from('categoria_sucursal').delete().eq('sucursal_id', sucursalId).eq('categoria_id', categoriaId))
       else ok(await sb.from('categoria_sucursal').upsert({ sucursal_id: sucursalId, categoria_id: categoriaId }, { ignoreDuplicates: true }))
+    },
+
+    async setModoCategoriaLocal(sucursalId, categoriaId, modo) {
+      ok(await sb.from('categoria_sucursal').delete().eq('sucursal_id', sucursalId).eq('categoria_id', categoriaId))
+      if (modo === 'oculta') ok(await sb.from('categoria_sucursal').insert({ sucursal_id: sucursalId, categoria_id: categoriaId }))
+      else if (modo === 'suelta') {
+        const r = await sb.from('categoria_sucursal').insert({ sucursal_id: sucursalId, categoria_id: categoriaId, modo: 'suelta' })
+        if (r.error) throw new Error(/modo/.test(r.error.message) ? 'Falta correr la migración 0023 en Supabase' : r.error.message)
+      }
+    },
+
+    async modosCategoria(categoriaId) {
+      const r = await sb.from('categoria_sucursal').select('*').eq('categoria_id', categoriaId)
+      if (r.error) return {}
+      return Object.fromEntries((r.data as Row[]).map(x => [x.sucursal_id as string, (x.modo === 'suelta' ? 'suelta' : 'oculta') as ModoCategoriaLocal]))
     },
 
     async quitarAjuste(sucursalId, productoId) {

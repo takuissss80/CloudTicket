@@ -20,7 +20,12 @@ export interface MenuData {
   ingredientes: Ingrediente[]
   /** Categorías del menú madre que el local pedido no muestra */
   categoriasOcultas?: string[]
+  /** Contenedoras que en el local pedido no agrupan: sus categorías van sueltas */
+  categoriasSueltas?: string[]
 }
+
+/** Cómo se ve una categoría del menú madre en un local */
+export type ModoCategoriaLocal = 'normal' | 'suelta' | 'oculta'
 
 export interface NuevoPrintJob {
   impresoraId: string
@@ -120,6 +125,10 @@ export interface Repo {
   quitarAjuste(sucursalId: string, productoId: string): Promise<void>
   /** Mostrar u ocultar una categoría del menú madre en un local */
   mostrarCategoriaEnLocal(sucursalId: string, categoriaId: string, mostrar: boolean): Promise<void>
+  /** Normal, sueltas (la contenedora no agrupa) u oculta, en un local */
+  setModoCategoriaLocal(sucursalId: string, categoriaId: string, modo: ModoCategoriaLocal): Promise<void>
+  /** Cómo se ve una categoría en cada local (los que no figuran: normal) */
+  modosCategoria(categoriaId: string): Promise<Record<string, ModoCategoriaLocal>>
   aumentarPrecios(categoriaId: string, porcentaje: number, sucursalId: string | null, redondeo: number): Promise<number>
   guardarIngrediente(i: IngredienteEdicion): Promise<Ingrediente>
   /** Borra un ingrediente. Falla si alguna receta (de cualquier local) lo usa. */

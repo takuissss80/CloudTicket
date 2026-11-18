@@ -38,7 +38,7 @@ interface DB {
   categorias: Categoria[]
   productos: Producto[]
   ajustes: ConLocal<AjusteLocal>[]
-  categoriasOcultas?: { categoriaId: string; sucursalId: string }[]
+  categoriasOcultas?: { categoriaId: string; sucursalId: string; modo?: 'oculta' | 'suelta' }[]
   zonas: ConLocal<Zona>[]
   impresoras: ConLocal<Impresora>[]
   repartidores?: ConLocal<Repartidor>[]
@@ -498,7 +498,8 @@ export const localRepo: Repo = {
       productos: d.productos.filter(p => visible(p.sucursalId)),
       ajustes: sucursalId ? d.ajustes.filter(a => a.sucursalId === sucursalId).map(sinLocal) : [],
       ingredientes: d.ingredientes,
-      categoriasOcultas: sucursalId ? (d.categoriasOcultas ?? []).filter(x => x.sucursalId === sucursalId).map(x => x.categoriaId) : [],
+      categoriasOcultas: sucursalId ? (d.categoriasOcultas ?? []).filter(x => x.sucursalId === sucursalId && (x.modo ?? 'oculta') === 'oculta').map(x => x.categoriaId) : [],
+      categoriasSueltas: sucursalId ? (d.categoriasOcultas ?? []).filter(x => x.sucursalId === sucursalId && x.modo === 'suelta').map(x => x.categoriaId) : [],
     }))
   },
 
@@ -575,6 +576,20 @@ export const localRepo: Repo = {
     d.categoriasOcultas = (d.categoriasOcultas ?? []).filter(x => !(x.sucursalId === sucursalId && x.categoriaId === categoriaId))
     if (!mostrar) d.categoriasOcultas.push({ sucursalId, categoriaId })
     guardar('menu')
+  },
+
+  async setModoCategoriaLocal(sucursalId, categoriaId, modo) {
+    puedeLocal(sucursalId)
+    const s = ses()
+    if (s.rol !== 'admin' && !s.puedeDescontar) throw new Error('Solo el administrador o un encargado pueden cambiar el menú del local')
+    const d = db()
+    d.categoriasOcultas = (d.categoriasOcultas ?? []).filter(x => !(x.sucursalId === sucursalId && x.categoriaId === categoriaId))
+    if (modo !== 'normal') d.categoriasOcultas.push({ sucursalId, categoriaId, modo })
+    guardar('menu')
+  },
+
+  async modosCategoria(categoriaId) {
+    return pausa(Object.fromEntries((db().categoriasOcultas ?? []).filter(x => x.categoriaId === categoriaId).map(x => [x.sucursalId, x.modo ?? 'oculta' as const])))
   },
 
   async quitarAjuste(sucursalId, productoId) {
