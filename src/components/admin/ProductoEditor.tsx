@@ -49,7 +49,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
     if (!p.categoriaId) return setError('Elegí una categoría.')
     if (porMitad && !p.precioMitad) return setError('Cargá el precio de la mitad o desactivá la venta por mitad.')
     if (esPromo && !p.fijos.length && !p.slots.length) return setError('Una promo tiene que incluir al menos un producto o un grupo para elegir.')
-    if (esPromo && p.slots.some(s => !s.categoriaId || s.cantidad < 1)) return setError('Revisá los grupos de la promo: cada uno necesita categoría y cantidad.')
+    if (esPromo && p.slots.some(s => (s.productos ? !s.productos.length : !s.categoriaId) || s.cantidad < 1)) return setError('Revisá los grupos de la promo: cada uno necesita cantidad y una categoría o productos elegidos.')
     if (esPromo && p.slots.some(s => s.minimo != null && s.minimo > s.cantidad)) return setError('En un grupo con rango, el mínimo no puede ser mayor que el máximo.')
     setGuardando(true)
     try {
@@ -221,16 +221,36 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
                       rango
                     </label>
                     <span className="text-gris">de</span>
-                    <select aria-label="Categoría a elegir" value={s.categoriaId} onChange={e => {
+                    <select aria-label="Categoría a elegir" value={s.productos ? LISTA : s.categoriaId} onChange={e => {
+                      if (e.target.value === LISTA) return setSlots(p.slots.map((x, j) => j === i ? { ...x, categoriaId: '', productos: x.productos ?? [] } : x))
                       const cat = categorias.find(c => c.id === e.target.value)
-                      setSlots(p.slots.map((x, j) => j === i ? { ...x, categoriaId: e.target.value, nombre: x.nombre || (cat ? cat.nombre.charAt(0) + cat.nombre.slice(1).toLowerCase() : '') } : x))
+                      setSlots(p.slots.map((x, j) => j === i ? { ...x, categoriaId: e.target.value, productos: undefined, nombre: x.nombre || (cat ? cat.nombre.charAt(0) + cat.nombre.slice(1).toLowerCase() : '') } : x))
                     }} className={`${inputBase} h-9 min-w-0 flex-1`}>
                       <option value="">Elegí una categoría</option>
+                      <option value={LISTA}>Productos que elijo (de cualquier categoría)</option>
                       {ordenArbol(categorias).map(({ c }) => <option key={c.id} value={c.id}>{nombreCategoria(c, categorias)}</option>)}
                     </select>
                     <input aria-label="Nombre del grupo" value={s.nombre} onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))}
                       className={`${inputBase} h-9 w-36`} placeholder="Empanadas" />
                     <button aria-label="Quitar" onClick={() => setSlots(p.slots.filter((_, j) => j !== i))} className="size-8 rounded-full text-xl text-gris hover:bg-tomate-claro hover:text-tomate">×</button>
+                    {s.productos && (
+                      <div className="w-full pl-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {s.productos.map(id => {
+                            const x = productos.find(y => y.id === id)
+                            return (
+                              <span key={id} className="inline-flex items-center gap-1 rounded-full bg-harina py-1 pl-3 pr-1 text-sm font-semibold ring-1 ring-linea">
+                                {x ? x.nombre : 'Producto borrado'}
+                                <button aria-label={`Sacar ${x?.nombre ?? 'producto'}`} onClick={() => setSlots(p.slots.map((y, j) => j === i ? { ...y, productos: y.productos!.filter(z => z !== id) } : y))}
+                                  className="size-6 rounded-full text-gris hover:bg-tomate-claro hover:text-tomate">×</button>
+                              </span>
+                            )
+                          })}
+                          <ElegirVarios elegidos={s.productos} productos={vendibles} categorias={categorias} abrirAlInicio={!s.productos.length}
+                            onCambiar={ids => setSlots(p.slots.map((y, j) => j === i ? { ...y, productos: ids } : y))} />
+                        </div>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -318,6 +338,79 @@ function ElegirProducto({ producto, productos, categorias, abrirAlInicio, onEleg
                         <span>{x.nombre}{x.codigo && <span className="text-sm text-gris"> · {x.codigo}</span>}</span>
                         <span className="text-sm tabular-nums text-gris">{money(x.precio)}</span>
                       </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {!grupos.length && <p className="p-6 text-center text-gris">Ningún producto coincide.</p>}
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
+
+const LISTA = '__productos'
+
+/** Selector de varios productos (de cualquier categoría) para un grupo de promo */
+function ElegirVarios({ elegidos, productos, categorias, abrirAlInicio, onCambiar }: {
+  elegidos: string[]; productos: Producto[]; categorias: Categoria[]; abrirAlInicio?: boolean; onCambiar: (ids: string[]) => void
+}) {
+  const [abierto, setAbierto] = useState(!!abrirAlInicio)
+  const [busqueda, setBusqueda] = useState('')
+  const [cat, setCat] = useState('')
+  const q = normalizar(busqueda.trim())
+  const nombreCat = (id: string) => categorias.find(c => c.id === id)?.nombre ?? ''
+  const filtrados = productos.filter(x => (!cat || x.categoriaId === cat)
+    && (!q || normalizar(`${x.nombre} ${x.codigo ?? ''} ${nombreCat(x.categoriaId)}`).includes(q)))
+  const grupos = [...categorias].sort((a, b) => a.orden - b.orden)
+    .map(c => ({ c, productos: filtrados.filter(x => x.categoriaId === c.id).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre)) }))
+    .filter(g => g.productos.length)
+  const conProductos = categorias.filter(c => productos.some(x => x.categoriaId === c.id)).sort((a, b) => a.orden - b.orden)
+  const sel = new Set(elegidos)
+  const alternar = (id: string) => onCambiar(sel.has(id) ? elegidos.filter(x => x !== id) : [...elegidos, id])
+  const todosVisibles = filtrados.length > 0 && filtrados.every(x => sel.has(x.id))
+  const marcarVisibles = () => onCambiar(todosVisibles
+    ? elegidos.filter(id => !filtrados.some(x => x.id === id))
+    : [...elegidos, ...filtrados.filter(x => !sel.has(x.id)).map(x => x.id)])
+
+  return (
+    <>
+      <button type="button" onClick={() => setAbierto(true)}
+        className="h-8 rounded-full px-3 text-sm font-semibold text-albahaca ring-1 ring-albahaca hover:bg-albahaca-claro">
+        {elegidos.length ? '+ Agregar o sacar productos' : '+ Elegir productos'}
+      </button>
+      {abierto && (
+        <Modal titulo={`Productos para elegir (${elegidos.length})`} onClose={() => setAbierto(false)} ancho="max-w-2xl" alto
+          pie={<div className="flex justify-end"><Btn tono="albahaca" onClick={() => { setAbierto(false); setBusqueda('') }}>Listo</Btn></div>}>
+          <div className="space-y-3 p-4">
+            <input autoFocus aria-label="Buscar producto" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre o código (ej.: completo, pepsi)" className={`${inputBase} h-11 w-full`} />
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Categorías">
+              {[{ id: '', nombre: 'Todas' }, ...conProductos].map(c => (
+                <button key={c.id} type="button" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}
+                  className={`h-8 rounded-full px-3 text-sm font-semibold ring-1 ${cat === c.id ? 'bg-primario text-sobre-primario ring-primario' : 'bg-superficie ring-linea hover:bg-harina'}`}>
+                  {c.nombre}
+                </button>
+              ))}
+            </div>
+            {(cat || q) && filtrados.length > 1 && (
+              <button type="button" onClick={marcarVisibles} className="text-sm font-semibold text-albahaca hover:underline">
+                {todosVisibles ? 'Sacar todos los que se ven' : `Marcar todos los que se ven (${filtrados.length})`}
+              </button>
+            )}
+            {grupos.map(g => (
+              <section key={g.c.id}>
+                <h4 className="mb-1 text-sm font-bold uppercase text-gris">{g.c.nombre}</h4>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {g.productos.map(x => (
+                    <li key={x.id}>
+                      <label className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 ring-1 hover:bg-albahaca-claro ${sel.has(x.id) ? 'bg-albahaca-claro ring-albahaca' : 'bg-superficie ring-linea'}`}>
+                        <input type="checkbox" className="size-5 accent-albahaca" checked={sel.has(x.id)} onChange={() => alternar(x.id)} />
+                        <span className="flex-1">{x.nombre}{x.codigo && <span className="text-sm text-gris"> · {x.codigo}</span>}</span>
+                        <span className="text-sm tabular-nums text-gris">{money(x.precio)}</span>
+                      </label>
                     </li>
                   ))}
                 </ul>

@@ -141,6 +141,8 @@ export interface PromoSlot {
   cantidad: number
   /** Si está, se puede elegir de `minimo` a `cantidad` (ej.: de 1 a 4 sabores) */
   minimo?: number
+  /** Si está, se elige entre estos productos (de cualquier categoría) en vez de la categoría entera */
+  productos?: string[]
 }
 
 export interface Producto {

@@ -1,4 +1,4 @@
-import type { AjusteLocal, Categoria, Ingrediente, Producto, RecetaItem, Variante, Zona } from '../types'
+import type { AjusteLocal, Categoria, Ingrediente, Producto, PromoSlot, RecetaItem, Variante, Zona } from '../types'
 import type { Catalogo, MenuData, Repo } from '../data/repo'
 import * as ejemplo from '../data/menu'
 
@@ -87,7 +87,7 @@ export function costoProducto(p: Producto, productos: Producto[], ingredientes: 
     if (x) total += f.cantidad * costoProducto(x, productos, ingredientes, f.variante, profundidad + 1)
   }
   for (const s of p.slots) {
-    const opciones = productos.filter(y => y.categoriaId === s.categoriaId && y.tipo === 'producto' && y.activo)
+    const opciones = opcionesSlot(s, productos).filter(y => y.activo)
     if (!opciones.length) continue
     const prom = opciones.reduce((acc, y) => acc + costoProducto(y, productos, ingredientes, 'entera', profundidad + 1), 0) / opciones.length
     total += s.cantidad * prom
@@ -160,4 +160,13 @@ export function ordenArbol(categorias: Categoria[]): { c: Categoria; nivel: 0 | 
   const orden = (a: Categoria, b: Categoria) => a.orden - b.orden || a.nombre.localeCompare(b.nombre)
   const raiz = categorias.filter(c => !c.padreId || !ids.has(c.padreId)).sort(orden)
   return raiz.flatMap(r => [{ c: r, nivel: 0 as const }, ...categorias.filter(h => h.padreId === r.id).sort(orden).map(c => ({ c, nivel: 1 as const }))])
+}
+
+/** Productos que se pueden elegir en un grupo de promo: los elegidos a mano o los de la categoría */
+export function opcionesSlot<T extends Pick<Producto, 'id' | 'categoriaId' | 'tipo'>>(s: PromoSlot, productos: T[]): T[] {
+  if (s.productos?.length) {
+    const orden = new Map(s.productos.map((id, i) => [id, i]))
+    return productos.filter(y => orden.has(y.id) && y.tipo !== 'promo').sort((a, b) => orden.get(a.id)! - orden.get(b.id)!)
+  }
+  return productos.filter(y => y.categoriaId === s.categoriaId && y.tipo === 'producto')
 }

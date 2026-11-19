@@ -3,6 +3,7 @@ import type { Coccion, Componente, Producto } from '../types'
 import { productosParaPromo, useApp } from '../store/app'
 import { itemPromo, usePedido } from '../store/pedido'
 import { money } from '../lib/format'
+import { opcionesSlot } from '../lib/menu'
 import { Btn, Modal, Stepper, inputBase } from './ui'
 
 /** Armado de una promo: productos fijos + grupos "elegí N" */
@@ -57,7 +58,7 @@ export function PromoModal({ promo, onClose }: { promo: Producto; onClose: () =>
           const minimo = minimoDe(slot)
           const rango = minimo < slot.cantidad
           const ok = elegidos >= minimo
-          const opciones = productos.filter(p => p.categoriaId === slot.categoriaId && p.tipo === 'producto' && !p.agotado)
+          const opciones = opcionesSlot(slot, productos).filter(p => !p.agotado)
           return (
             <section key={slot.id}>
               <div className="mb-3 flex items-baseline gap-3">
