@@ -78,6 +78,11 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
             Activo
           </label>
         )}
+        <label className="flex items-center gap-2 text-[15px]" title="El usuario común cierra la caja poniendo el efectivo sin ver lo vendido; solo se le avisa si está correcto o hay diferencia. El encargado ve todo.">
+          <input type="checkbox" className="size-5 accent-albahaca" checked={local.cierreCiegas}
+            onChange={e => intentar(() => repo.actualizarSucursal(local.id, { cierreCiegas: e.target.checked }), e.target.checked ? 'Cierre a ciegas activado para usuarios comunes' : 'Cierre a ciegas desactivado')} />
+          Cierre de caja a ciegas (usuarios comunes)
+        </label>
       </header>
 
       <div className="p-4">

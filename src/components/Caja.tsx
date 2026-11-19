@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Caja, Comanda, MovimientoCaja, TipoMovimiento, TotalesCaja } from '../types'
 import { FORMAS_PAGO, TIPOS_MOVIMIENTO } from '../types'
 import { repo } from '../data'
-import { useApp } from '../store/app'
-import { calcularTotales, cobradoPorForma, TURNOS, turnoQueBloquea, turnoSugerido } from '../lib/caja'
+import { useApp, useCierreCiegas } from '../store/app'
+import { calcularTotales, cobradoPorForma, TURNOS, turnoQueBloquea, turnoSugerido, ventasPorGrupo } from '../lib/caja'
 import { fecha, hora, money } from '../lib/format'
 import { minutosDelivery } from '../lib/estados'
 import { Btn, Campo, Confirmar, Modal, inputBase, inputCls } from './ui'
@@ -19,6 +19,7 @@ export const fechaLarga = (iso: string) => `${DIAS[new Date(iso).getDay()]} ${fe
 export function CajaCerrada() {
   const { abrirCaja, reabrirCaja, sucursalId, sesion } = useApp()
   const esAdmin = sesion?.rol === 'admin'
+  const ciegas = useCierreCiegas()
   const [turno, setTurno] = useState(turnoSugerido())
   const [ultima, setUltima] = useState<Caja | null | undefined>(undefined)
   const [recientes, setRecientes] = useState<Caja[]>([])
@@ -83,11 +84,11 @@ export function CajaCerrada() {
           <div className="mt-1 font-cond text-2xl font-bold">{fechaLarga(ultima.abiertaAt)}, turno {ultima.turno.toLowerCase()}</div>
           <p className="text-[15px] text-gris">
             Cerrada {ultima.cerradaAt ? `a las ${hora(ultima.cerradaAt)}` : ''}{ultima.cerradaPor ? ` por ${ultima.cerradaPor}` : ''}
-            {ultima.totales ? `. ${ultima.totales.cantComandas} comandas, ${money(ultima.totales.totalVentas)}` : ''}
+            {ultima.totales && !ciegas ? `. ${ultima.totales.cantComandas} comandas, ${money(ultima.totales.totalVentas)}` : ''}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Btn onClick={() => setConfirmarReabrir(true)}>Reabrir esta caja</Btn>
-            <Btn tono="fantasma" onClick={() => setVerHistorial(true)}>Ver historial de cajas</Btn>
+            {!ciegas && <Btn tono="fantasma" onClick={() => setVerHistorial(true)}>Ver historial de cajas</Btn>}
           </div>
         </section>
       )}
@@ -160,6 +161,9 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
   const t = totales
   const online = t.totalVentas - t.ventasEfectivo
   const porForma = comandas ? cobradoPorForma(comandas) : null
+  const menu = useApp(s => s.menu)
+  const porGrupo = useMemo(() => (comandas ? ventasPorGrupo(comandas, menu.categorias, menu.productos) : []), [comandas, menu])
+  const nombreForma = (forma: string) => FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma
   const motos = new Map<string, { viajes: number; minutos: number }>()
   for (const c of comandas ?? []) {
     const m = c.entregadaAt && c.estado !== 'anulada' ? minutosDelivery(c) : null
@@ -194,11 +198,40 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
           <ul className="divide-y divide-linea rounded-xl bg-superficie ring-1 ring-linea">
             {[...porForma].map(([forma, monto]) => (
               <li key={forma} className="flex justify-between px-4 py-2">
-                <span>{FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma}</span>
+                <span>{nombreForma(forma)}</span>
                 <b className="tabular-nums">{money(monto)}</b>
               </li>
             ))}
+            <li className="flex justify-between bg-harina px-4 py-2 font-bold">
+              <span>Total cobrado (todos los medios)</span>
+              <span className="tabular-nums">{money([...porForma.values()].reduce((s, v) => s + v, 0))}</span>
+            </li>
           </ul>
+        </div>
+      )}
+      {porGrupo.length > 0 && (
+        <div>
+          <div className="mb-1 text-sm font-medium text-gris">Venta por marca</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {porGrupo.map(g => (
+              <section key={g.nombre} className="rounded-xl bg-superficie ring-1 ring-linea">
+                <div className="flex items-baseline justify-between gap-2 border-b border-linea px-4 py-2.5">
+                  <h4 className="font-cond text-xl font-bold">{g.nombre}</h4>
+                  <span className="text-sm text-gris">{g.comandas} {g.comandas === 1 ? 'comanda' : 'comandas'}</span>
+                </div>
+                <ul className="divide-y divide-linea">
+                  <li className="flex justify-between px-4 py-2 font-bold"><span>Venta total</span><span className="tabular-nums">{money(g.total)}</span></li>
+                  {[...g.porForma].map(([forma, monto]) => (
+                    <li key={forma} className="flex justify-between px-4 py-1.5 text-[15px]"><span>{nombreForma(forma)}</span><span className="tabular-nums">{money(monto)}</span></li>
+                  ))}
+                  {g.total - g.cobrado > 0.5 && (
+                    <li className="flex justify-between px-4 py-1.5 text-[15px] text-gris"><span>Sin cobrar</span><span className="tabular-nums">{money(g.total - g.cobrado)}</span></li>
+                  )}
+                </ul>
+              </section>
+            ))}
+          </div>
+          <p className="mt-1 text-sm text-gris">El efectivo es una sola caja: esto es solo para ver cuánto vendió cada marca. Un pedido con productos de dos marcas se reparte según lo que suma cada una.</p>
         </div>
       )}
     </div>
@@ -276,6 +309,7 @@ function NuevoMovimiento() {
 // ---------------------------------------------------------------------
 export function CajaPanel({ onClose }: { onClose: () => void }) {
   const { caja, comandas, movimientos, eliminarMovimiento } = useApp()
+  const ciegas = useCierreCiegas()
   const [pestana, setPestana] = useState<'resumen' | 'movimientos'>('resumen')
   const [cerrando, setCerrando] = useState(false)
   const [verHistorial, setVerHistorial] = useState(false)
@@ -291,7 +325,7 @@ export function CajaPanel({ onClose }: { onClose: () => void }) {
       alto
       pie={
         <div className="flex flex-wrap items-center gap-2">
-          <Btn tono="fantasma" onClick={() => setVerHistorial(true)}>Historial de cajas</Btn>
+          {!ciegas && <Btn tono="fantasma" onClick={() => setVerHistorial(true)}>Historial de cajas</Btn>}
           <Btn tono="tomate" className="ml-auto" onClick={() => setCerrando(true)}>Cerrar caja</Btn>
         </div>
       }
@@ -307,7 +341,9 @@ export function CajaPanel({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         {pestana === 'resumen'
-          ? <ResumenCaja caja={caja} totales={totales} comandas={comandas} />
+          ? ciegas
+            ? <p className="rounded-xl bg-harina p-6 text-center text-gris">Este local cierra la caja <b className="text-tinta">a ciegas</b>: al cerrar, contá el efectivo y ponelo sin ver lo vendido. El detalle lo ve el encargado.</p>
+            : <ResumenCaja caja={caja} totales={totales} comandas={comandas} />
           : <div className="space-y-4"><NuevoMovimiento /><ListaMovimientos movimientos={movimientos} onEliminar={setBorrar} /></div>}
       </div>
       {cerrando && <CierreCaja totales={totales} onClose={() => setCerrando(false)} onCerrada={onClose} />}
@@ -325,6 +361,7 @@ export function CajaPanel({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------
 function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onClose: () => void; onCerrada: () => void }) {
   const { caja, comandas, cerrarCaja, impresoras, imprimirCierre, sesion } = useApp()
+  const ciegas = useCierreCiegas()
   const [contado, setContado] = useState('')
   const [obs, setObs] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -357,18 +394,24 @@ function CierreCaja({ totales, onClose, onCerrada }: { totales: TotalesCaja; onC
         {(sinCobrar.length > 0 || sinEntregar.length > 0) && (
           <div className="rounded-xl bg-muzza-claro p-4 text-[15px]">
             {sinEntregar.length > 0 && <p><b>{sinEntregar.length}</b> sin entregar: {sinEntregar.map(c => `#${c.numero}`).join(', ')}</p>}
-            {sinCobrar.length > 0 && <p><b>{sinCobrar.length}</b> sin cobrar ({money(sinCobrar.reduce((s, c) => s + c.total, 0))}): no suman al efectivo.</p>}
+            {sinCobrar.length > 0 && <p><b>{sinCobrar.length}</b> sin cobrar{ciegas ? '' : ` (${money(sinCobrar.reduce((s, c) => s + c.total, 0))})`}: no suman al efectivo.</p>}
           </div>
         )}
-        <ColumnasCaja caja={caja} totales={totales} compacto />
+        {ciegas
+          ? <p className="rounded-xl bg-harina px-4 py-3 text-[15px]">Cierre <b>a ciegas</b>: contá todo el efectivo de la caja (incluido el cambio del inicio) y ponelo abajo.</p>
+          : <ColumnasCaja caja={caja} totales={totales} compacto />}
         <Campo label="Efectivo contado (dinero real en la caja)">
           <input id="caja-contado" autoFocus inputMode="decimal" value={contado} onChange={e => setContado(e.target.value)} placeholder="0"
             className={`${inputCls} h-14 text-right font-cond text-3xl font-bold`} />
         </Campo>
         {contado.trim() !== '' && (
           <div className={`flex items-center justify-between rounded-xl p-4 font-semibold ${diferencia > -0.01 ? 'bg-albahaca-claro text-albahaca' : 'bg-tomate-claro text-tomate'}`}>
-            <span>{Math.abs(diferencia) < 0.01 ? 'Sin diferencia' : diferencia > 0 ? 'Sobra' : 'Falta'}</span>
-            <span className="font-cond text-3xl font-bold tabular-nums">{diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}{money(Math.abs(diferencia))}</span>
+            {ciegas ? (
+              <span className="text-lg">{Math.abs(diferencia) < 0.01 ? '✓ El efectivo está correcto' : diferencia > 0 ? 'Hay un sobrante: volvé a contar antes de cerrar' : 'Hay un faltante: volvé a contar antes de cerrar'}</span>
+            ) : <>
+              <span>{Math.abs(diferencia) < 0.01 ? 'Sin diferencia' : diferencia > 0 ? 'Sobra' : 'Falta'}</span>
+              <span className="font-cond text-3xl font-bold tabular-nums">{diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}{money(Math.abs(diferencia))}</span>
+            </>}
           </div>
         )}
         <Campo label="Observaciones (opcional)">

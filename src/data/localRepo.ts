@@ -91,8 +91,8 @@ function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' = 'coman
 }
 
 function baseVacia(): DB {
-  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro' }
-  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro' }
+  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false }
+  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false }
   return {
     cuenta: { id: uid(), nombre: 'Napoles' },
     sucursales: [principal, benavidez],
@@ -277,7 +277,7 @@ export const localRepo: Repo = {
   async listSucursales() {
     const s = ses()
     return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
-      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro' }))))
+      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro', cierreCiegas: !!x.cierreCiegas }))))
   },
 
   async listCupones() {
@@ -457,7 +457,7 @@ export const localRepo: Repo = {
     soloSuper()
     if (!nombre.trim()) throw new Error('Poné el nombre del local')
     const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, vence: vence || undefined }
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, cierreCiegas: false, vence: vence || undefined }
     d.sucursales.push(suc)
     d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
     guardar('menu')

@@ -1,3 +1,4 @@
+import type { VentaGrupo } from './caja'
 import type { Caja, Comanda, FormatoTicket, Impresora, LineaTicket, MovimientoCaja, TipoPrintJob, TotalesCaja, Zona } from '../types'
 import { FORMAS_PAGO } from '../types'
 import { coccionLabel, fecha, hora, money, nombreConVariante, varianteLabel } from './format'
@@ -222,6 +223,8 @@ export interface DatosCierre {
   comandas: Comanda[]
   movimientos: MovimientoCaja[]
   nombreLocal?: string
+  /** Venta por categoría contenedora (marca), si hay más de una */
+  porGrupo?: VentaGrupo[]
 }
 
 export function ticketCierre(d: DatosCierre, ancho: number): LineaTicket[] {
@@ -271,6 +274,18 @@ export function ticketCierre(d: DatosCierre, ancho: number): LineaTicket[] {
   if (porForma.size) {
     titulo('COBRADO POR FORMA DE PAGO')
     for (const [forma, monto] of porForma) dos(`  ${FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma}`, money(monto))
+    dos('TOTAL COBRADO', money([...porForma.values()].reduce((s, v) => s + v, 0)), { bold: true })
+  }
+
+  // Venta por marca (categorías contenedoras)
+  if (d.porGrupo?.length) {
+    titulo('VENTA POR MARCA')
+    for (const g of d.porGrupo) {
+      L.push({ t: 'feed', n: 1 })
+      linea(g.nombre, 'normal', { bold: true, invert: true })
+      dos(`  Venta total (${g.comandas})`, money(g.total), { bold: true })
+      for (const [forma, monto] of g.porForma) dos(`  ${FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma}`, money(monto))
+    }
   }
 
   // Efectivo

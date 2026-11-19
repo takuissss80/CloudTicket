@@ -34,6 +34,7 @@ const mapSucursal = (r: Row): Sucursal => ({
   vence: opt(r.vence),
   // Sin la migración 0020 no hay plan por local: se toma como PRO
   plan: r.plan === 'principal' ? 'principal' : 'pro',
+  cierreCiegas: !!r.cierre_ciegas,
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
@@ -228,7 +229,10 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       if (data.activa !== undefined) row.activa = data.activa
       if (data.recargoDelivery !== undefined) row.recargo_delivery = data.recargoDelivery
       if (data.recargoDeliveryTipo !== undefined) row.recargo_delivery_tipo = data.recargoDeliveryTipo
-      ok(await sb.from('sucursales').update(row).eq('id', id))
+      if (data.cierreCiegas !== undefined) row.cierre_ciegas = data.cierreCiegas
+      const r = await sb.from('sucursales').update(row).eq('id', id)
+      if (r.error && /cierre_ciegas/.test(r.error.message)) throw new Error('Falta correr la migración 0024 en Supabase')
+      ok(r)
     },
 
     // ---- Cupones

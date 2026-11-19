@@ -51,6 +51,8 @@ export interface Sucursal {
   vence?: string
   /** Plan del local: PRO tiene pantalla de cocina y pantalla para clientes */
   plan: Plan
+  /** El usuario común cierra la caja sin ver lo vendido ni el teórico */
+  cierreCiegas: boolean
 }
 
 /** Cupón de descuento (lo crea el administrador) */

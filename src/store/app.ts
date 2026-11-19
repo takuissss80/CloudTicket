@@ -1,4 +1,4 @@
-import { calcularTotales } from '../lib/caja'
+import { calcularTotales, ventasPorGrupo } from '../lib/caja'
 import { create } from 'zustand'
 import { repo } from '../data'
 import type { Catalogo, MenuData } from '../data/repo'
@@ -280,7 +280,10 @@ export const useApp = create<AppState>((set, get) => {
         const totales = caja.totales ?? calcularTotales(caja, comandas, movimientos)
         await repo.encolarImpresion([{
           impresoraId: imp.id, tipo: 'cierre', copias: 1,
-          contenido: ticketCierre({ caja, totales, comandas, movimientos, nombreLocal: nombreLocal() }, imp.ancho),
+          contenido: ticketCierre({
+            caja, totales, comandas, movimientos, nombreLocal: nombreLocal(),
+            porGrupo: ventasPorGrupo(comandas, get().menu.categorias, get().menu.productos),
+          }, imp.ancho),
         }])
         get().avisar(`Cierre enviado a imprimir en ${imp.nombre}`)
         return true
@@ -444,3 +447,9 @@ export const useNombreLocal = () => useApp(s => s.sucursales.find(x => x.id === 
  * así la promo muestra el nombre aunque el producto esté desactivado, oculto o sea de otro local.
  */
 export const productosParaPromo = () => { const s = useApp.getState(); return [...s.catalogo.productos, ...(s.menu.productos)] }
+
+/** Cierre de caja a ciegas: el local lo tiene activo y el usuario es común (el encargado y el admin ven todo) */
+export const useCierreCiegas = () => useApp(s => {
+  const l = s.sucursales.find(x => x.id === s.sucursalId)
+  return !!l?.cierreCiegas && s.sesion?.rol === 'local' && !s.sesion.puedeDescontar && !s.sesion.esProduccion
+})

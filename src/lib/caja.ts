@@ -1,4 +1,4 @@
-import type { Caja, Comanda, MovimientoCaja, TotalesCaja } from '../types'
+import type { Caja, Categoria, Comanda, MovimientoCaja, Producto, TotalesCaja } from '../types'
 
 /** Efectivo que realmente quedó de una comanda: lo pagado en efectivo menos el vuelto */
 export function efectivoNeto(c: Comanda) {
@@ -70,4 +70,51 @@ export function turnoQueBloquea(turno: string, cajas: { turno: string; abiertaAt
     if (j >= i && (peor == null || j > TURNOS.indexOf(peor))) peor = c.turno
   }
   return peor
+}
+
+/**
+ * Venta por categoría contenedora (ej.: por marca: NAPOLES, MAXX BURGER, TODO MILA).
+ * Si una comanda mezcla marcas, su total y sus pagos se reparten en proporción a lo que suma cada una.
+ * Devuelve vacío si las ventas no se reparten en al menos dos grupos.
+ */
+export interface VentaGrupo { nombre: string; comandas: number; total: number; cobrado: number; porForma: Map<string, number> }
+export function ventasPorGrupo(comandas: Comanda[], categorias: Categoria[], productos: Producto[]): VentaGrupo[] {
+  const cat = new Map(categorias.map(c => [c.id, c]))
+  const conHijas = new Set(categorias.filter(c => c.padreId).map(c => c.padreId!))
+  if (!conHijas.size) return []
+  const prodCat = new Map(productos.map(p => [p.id, p.categoriaId]))
+  const OTROS = 'OTROS'
+  const grupoDe = (it: Comanda['items'][number]) => {
+    const c = cat.get(prodCat.get(it.productoId ?? '') ?? '')
+    if (!c) return OTROS
+    if (conHijas.has(c.id)) return c.nombre
+    const p = c.padreId ? cat.get(c.padreId) : undefined
+    return p ? p.nombre : OTROS
+  }
+  const g = new Map<string, VentaGrupo>()
+  const de = (n: string) => { let x = g.get(n); if (!x) g.set(n, x = { nombre: n, comandas: 0, total: 0, cobrado: 0, porForma: new Map() }); return x }
+  for (const c of comandas) {
+    if (c.estado === 'anulada') continue
+    const partes = new Map<string, number>()
+    for (const it of c.items) partes.set(grupoDe(it), (partes.get(grupoDe(it)) ?? 0) + it.precioUnit * it.cantidad)
+    const suma = [...partes.values()].reduce((s, v) => s + v, 0)
+    if (!partes.size) partes.set(OTROS, 1)
+    const vuelto = Math.max(0, c.pagos.reduce((s, p) => s + p.monto, 0) - c.total)
+    for (const [n, v] of partes) {
+      const parte = suma > 0 ? v / suma : 1 / partes.size
+      const x = de(n)
+      x.comandas++
+      x.total += c.total * parte
+      if (!c.cobrada) continue
+      for (const p of c.pagos) {
+        const monto = (p.forma === 'efectivo' ? Math.max(0, p.monto - vuelto) : p.monto) * parte
+        x.porForma.set(p.forma, (x.porForma.get(p.forma) ?? 0) + monto)
+        x.cobrado += monto
+      }
+    }
+  }
+  const lista = [...g.values()]
+  if (lista.length < 2) return []
+  const orden = new Map(categorias.map(c => [c.nombre, c.orden]))
+  return lista.sort((a, b) => (a.nombre === OTROS ? 1 : b.nombre === OTROS ? -1 : (orden.get(a.nombre) ?? 0) - (orden.get(b.nombre) ?? 0)))
 }
