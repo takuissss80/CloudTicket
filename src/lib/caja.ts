@@ -1,4 +1,4 @@
-import type { Caja, Categoria, Comanda, MovimientoCaja, Producto, TotalesCaja } from '../types'
+import type { Caja, Categoria, Comanda, MovimientoCaja, Producto, TotalesCaja, TurnoCaja } from '../types'
 
 /** Efectivo que realmente quedó de una comanda: lo pagado en efectivo menos el vuelto */
 export function efectivoNeto(c: Comanda) {
@@ -45,11 +45,24 @@ export function cobradoPorForma(comandas: Comanda[]) {
   return m
 }
 
-export const TURNOS = ['Mañana', 'Tarde', 'Noche']
+/** Turnos cuando el local no configuró los suyos */
+export const TURNOS_DEFECTO: TurnoCaja[] = [{ nombre: 'Mañana', desde: '06:00' }, { nombre: 'Tarde', desde: '14:00' }, { nombre: 'Noche', desde: '19:00' }]
+export const TURNOS = TURNOS_DEFECTO.map(t => t.nombre)
 
-export const turnoSugerido = () => {
-  const h = new Date().getHours()
-  return h >= 6 && h < 14 ? 'Mañana' : h >= 14 && h < 19 ? 'Tarde' : 'Noche'
+/** Lista válida y ordenada por hora (o la de siempre si está vacía) */
+export function normalizarTurnos(t: unknown): TurnoCaja[] {
+  const l = Array.isArray(t)
+    ? t.filter((x): x is TurnoCaja => !!x && typeof x.nombre === 'string' && x.nombre.trim() !== '')
+      .map(x => ({ nombre: x.nombre.trim(), desde: /^\d{2}:\d{2}$/.test(x.desde ?? '') ? x.desde : '00:00' }))
+    : []
+  return l.length ? [...l].sort((a, b) => a.desde.localeCompare(b.desde)) : TURNOS_DEFECTO
+}
+
+/** El turno que corresponde a esta hora: el último que ya empezó (antes del primero, sigue el último de la noche) */
+export const turnoSugerido = (turnos: TurnoCaja[] = TURNOS_DEFECTO, ahora = new Date()) => {
+  const hm = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
+  const l = normalizarTurnos(turnos)
+  return [...l].reverse().find(t => t.desde <= hm)?.nombre ?? l[l.length - 1].nombre
 }
 
 /** Día local (yyyy-mm-dd) de una fecha ISO */
@@ -60,14 +73,16 @@ const diaLocal = (iso: string) => { const d = new Date(iso); return `${d.getFull
  * a otro que ya se abrió. Devuelve el turno que lo impide, o null si se puede abrir.
  * Solo el administrador puede saltearlo (lo valida también la base).
  */
-export function turnoQueBloquea(turno: string, cajas: { turno: string; abiertaAt: string }[], ahora = new Date().toISOString()) {
+export function turnoQueBloquea(turno: string, cajas: { turno: string; abiertaAt: string }[], turnos: TurnoCaja[] = TURNOS_DEFECTO, ahora = new Date().toISOString()) {
+  const orden = normalizarTurnos(turnos).map(t => t.nombre)
   const hoy = diaLocal(ahora)
-  const i = TURNOS.indexOf(turno)
+  const i = orden.indexOf(turno)
+  if (i < 0) return null
   let peor: string | null = null
   for (const c of cajas) {
     if (diaLocal(c.abiertaAt) !== hoy) continue
-    const j = TURNOS.indexOf(c.turno)
-    if (j >= i && (peor == null || j > TURNOS.indexOf(peor))) peor = c.turno
+    const j = orden.indexOf(c.turno)
+    if (j >= i && (peor == null || j > orden.indexOf(peor))) peor = c.turno
   }
   return peor
 }
@@ -78,7 +93,9 @@ export function turnoQueBloquea(turno: string, cajas: { turno: string; abiertaAt
  * Devuelve vacío si las ventas no se reparten en al menos dos grupos.
  */
 export interface VentaGrupo { nombre: string; comandas: number; total: number; cobrado: number; porForma: Map<string, number> }
-export function ventasPorGrupo(comandas: Comanda[], categorias: Categoria[], productos: Producto[]): VentaGrupo[] {
+export function ventasPorGrupo(comandas: Comanda[], categorias: Categoria[], productos: Producto[],
+  /** Marcas que se muestran siempre (aunque no hayan vendido); con esto no se exige que haya dos con ventas */
+  siempre?: string[]): VentaGrupo[] {
   const cat = new Map(categorias.map(c => [c.id, c]))
   const conHijas = new Set(categorias.filter(c => c.padreId).map(c => c.padreId!))
   if (!conHijas.size) return []
@@ -113,8 +130,24 @@ export function ventasPorGrupo(comandas: Comanda[], categorias: Categoria[], pro
       }
     }
   }
+  for (const n of siempre ?? []) de(n)
   const lista = [...g.values()]
   if (lista.length < 2) return []
   const orden = new Map(categorias.map(c => [c.nombre, c.orden]))
   return lista.sort((a, b) => (a.nombre === OTROS ? 1 : b.nombre === OTROS ? -1 : (orden.get(a.nombre) ?? 0) - (orden.get(b.nombre) ?? 0)))
+}
+
+/**
+ * Marcas (categorías contenedoras) que se ven en los locales de estos menús:
+ * las que agrupan algo y no están ocultas ni "sueltas" en ese local.
+ */
+export function marcasDeLocales(menus: { categorias: Categoria[]; categoriasOcultas?: string[]; categoriasSueltas?: string[] }[]) {
+  const nombres = new Set<string>()
+  for (const m of menus) {
+    const fuera = new Set([...(m.categoriasOcultas ?? []), ...(m.categoriasSueltas ?? [])])
+    for (const c of m.categorias) {
+      if (c.activa && !fuera.has(c.id) && m.categorias.some(h => h.padreId === c.id)) nombres.add(c.nombre)
+    }
+  }
+  return [...nombres]
 }

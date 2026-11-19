@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Caja, Comanda, MovimientoCaja, TipoMovimiento, TotalesCaja } from '../types'
 import { FORMAS_PAGO, TIPOS_MOVIMIENTO } from '../types'
 import { repo } from '../data'
-import { useApp, useCierreCiegas } from '../store/app'
-import { calcularTotales, cobradoPorForma, TURNOS, turnoQueBloquea, turnoSugerido, ventasPorGrupo } from '../lib/caja'
+import { useApp, useCierreCiegas, useLocalActivo } from '../store/app'
+import { calcularTotales, cobradoPorForma, TURNOS_DEFECTO, turnoQueBloquea, turnoSugerido, ventasPorGrupo } from '../lib/caja'
 import { fecha, hora, money } from '../lib/format'
 import { minutosDelivery } from '../lib/estados'
 import { Btn, Campo, Confirmar, Modal, inputBase, inputCls } from './ui'
@@ -20,7 +20,9 @@ export function CajaCerrada() {
   const { abrirCaja, reabrirCaja, sucursalId, sesion } = useApp()
   const esAdmin = sesion?.rol === 'admin'
   const ciegas = useCierreCiegas()
-  const [turno, setTurno] = useState(turnoSugerido())
+  const turnos = useLocalActivo()?.turnos ?? TURNOS_DEFECTO
+  const nombres = turnos.map(t => t.nombre)
+  const [turno, setTurno] = useState(() => turnoSugerido(turnos))
   const [ultima, setUltima] = useState<Caja | null | undefined>(undefined)
   const [recientes, setRecientes] = useState<Caja[]>([])
   const [inicial, setInicial] = useState('')
@@ -34,14 +36,16 @@ export function CajaCerrada() {
       setUltima(u)
       setRecientes(l)
       // Si el turno sugerido ya no se puede abrir, se pasa al siguiente que sí
-      if (!esAdmin) setTurno(t => turnoQueBloquea(t, l) ? TURNOS.find(x => !turnoQueBloquea(x, l)) ?? t : t)
+      if (!esAdmin) setTurno(t => turnoQueBloquea(t, l, turnos) ? nombres.find(x => !turnoQueBloquea(x, l, turnos)) ?? t : t)
       // Arranca con lo que quedó contado al cerrar la anterior
       if (u?.dineroCierre != null) setInicial(String(u.dineroCierre))
     }).catch(() => setUltima(null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursalId])
 
-  const bloquea = turnoQueBloquea(turno, recientes)
+  // Si cambian los turnos del local y el elegido ya no existe, se sugiere de nuevo
+  useEffect(() => { if (!nombres.includes(turno)) setTurno(turnoSugerido(turnos)) }, [nombres.join('|')]) // eslint-disable-line react-hooks/exhaustive-deps
+  const bloquea = turnoQueBloquea(turno, recientes, turnos)
   const bloqueado = !!bloquea && !esAdmin
 
   return (
@@ -52,9 +56,9 @@ export function CajaCerrada() {
       </div>
 
       <section className="space-y-4 rounded-2xl bg-superficie p-5 ring-1 ring-linea">
-        <div className="flex justify-center gap-2">
-          {TURNOS.map(t => {
-            const fuera = !!turnoQueBloquea(t, recientes)
+        <div className="flex flex-wrap justify-center gap-2">
+          {nombres.map(t => {
+            const fuera = !!turnoQueBloquea(t, recientes, turnos)
             return (
               <button key={t} onClick={() => setTurno(t)} aria-pressed={turno === t} disabled={fuera && !esAdmin}
                 title={fuera ? 'Hoy ya se abrió este turno o uno posterior' : undefined}
@@ -65,7 +69,7 @@ export function CajaCerrada() {
         {bloquea && (
           <p className={`-mt-1 rounded-lg px-3 py-2 text-sm ${esAdmin ? 'bg-muzza-claro' : 'bg-tomate-claro text-tomate'}`}>
             Hoy ya se abrió la caja {bloquea.toLowerCase()}.{' '}
-            {esAdmin ? 'Como administrador podés abrir este turno igual.' : 'Los turnos van en orden: mañana, tarde y noche. Solo el administrador puede abrir un turno anterior o repetirlo.'}
+            {esAdmin ? 'Como administrador podés abrir este turno igual.' : `Los turnos van en orden: ${nombres.map(n => n.toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' y $1')}. Solo el administrador puede abrir un turno anterior o repetirlo.`}
           </p>
         )}
         <Campo label="Dinero al inicio (efectivo en la caja)">

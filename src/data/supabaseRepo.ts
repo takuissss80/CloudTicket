@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { unirReceta, errorIngredienteEnUso } from '../lib/menu'
+import { normalizarTurnos } from '../lib/caja'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
@@ -35,6 +36,7 @@ const mapSucursal = (r: Row): Sucursal => ({
   // Sin la migración 0020 no hay plan por local: se toma como PRO
   plan: r.plan === 'principal' ? 'principal' : 'pro',
   cierreCiegas: !!r.cierre_ciegas,
+  turnos: normalizarTurnos(r.turnos),
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
@@ -230,8 +232,10 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       if (data.recargoDelivery !== undefined) row.recargo_delivery = data.recargoDelivery
       if (data.recargoDeliveryTipo !== undefined) row.recargo_delivery_tipo = data.recargoDeliveryTipo
       if (data.cierreCiegas !== undefined) row.cierre_ciegas = data.cierreCiegas
+      if (data.turnos !== undefined) row.turnos = data.turnos
       const r = await sb.from('sucursales').update(row).eq('id', id)
       if (r.error && /cierre_ciegas/.test(r.error.message)) throw new Error('Falta correr la migración 0024 en Supabase')
+      if (r.error && /turnos/.test(r.error.message)) throw new Error('Falta correr la migración 0025 en Supabase')
       ok(r)
     },
 

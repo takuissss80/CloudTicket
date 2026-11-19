@@ -3,7 +3,7 @@ import type {
   AjusteLocal, Caja, ItemComanda, Pago, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, Plan } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
-import { calcularTotales, turnoQueBloquea } from '../lib/caja'
+import { calcularTotales, normalizarTurnos, turnoQueBloquea, TURNOS_DEFECTO } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
 import { descuentoCupon, normalizarCodigo, problemaCupon } from '../lib/descuentos'
 import { errorIngredienteEnUso, importarMenuEjemplo, unirReceta } from '../lib/menu'
@@ -91,8 +91,8 @@ function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' = 'coman
 }
 
 function baseVacia(): DB {
-  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false }
-  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false }
+  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false, turnos: TURNOS_DEFECTO }
+  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false, turnos: TURNOS_DEFECTO }
   return {
     cuenta: { id: uid(), nombre: 'Napoles' },
     sucursales: [principal, benavidez],
@@ -277,7 +277,7 @@ export const localRepo: Repo = {
   async listSucursales() {
     const s = ses()
     return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
-      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro', cierreCiegas: !!x.cierreCiegas }))))
+      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro', cierreCiegas: !!x.cierreCiegas, turnos: normalizarTurnos(x.turnos) }))))
   },
 
   async listCupones() {
@@ -457,7 +457,7 @@ export const localRepo: Repo = {
     soloSuper()
     if (!nombre.trim()) throw new Error('Poné el nombre del local')
     const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, cierreCiegas: false, vence: vence || undefined }
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, cierreCiegas: false, turnos: TURNOS_DEFECTO, vence: vence || undefined }
     d.sucursales.push(suc)
     d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
     guardar('menu')
@@ -759,7 +759,7 @@ export const localRepo: Repo = {
     puedeLocal(sucursalId)
     const d = db()
     if (d.cajas.some(c => c.sucursalId === sucursalId && c.estado === 'abierta')) throw new Error('Ya hay una caja abierta en este local.')
-    const bloquea = turnoQueBloquea(turno, d.cajas.filter(c => c.sucursalId === sucursalId))
+    const bloquea = turnoQueBloquea(turno, d.cajas.filter(c => c.sucursalId === sucursalId), d.sucursales.find(s => s.id === sucursalId)?.turnos)
     if (bloquea && ses().rol !== 'admin') throw new Error(`Hoy ya se abrió la caja ${bloquea.toLowerCase()}. Solo el administrador puede abrir un turno anterior o repetirlo.`)
     const caja = {
       id: uid(), sucursalId, turno, estado: 'abierta' as const, abiertaAt: ahora(), ultimoNumero: 0,

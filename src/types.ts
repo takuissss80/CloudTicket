@@ -53,6 +53,14 @@ export interface Sucursal {
   plan: Plan
   /** El usuario común cierra la caja sin ver lo vendido ni el teórico */
   cierreCiegas: boolean
+  /** Turnos de caja del local, ordenados por hora de inicio */
+  turnos: TurnoCaja[]
+}
+
+export interface TurnoCaja {
+  nombre: string
+  /** Hora de inicio "HH:MM": sirve para ordenar y para sugerir el turno al abrir */
+  desde: string
 }
 
 /** Cupón de descuento (lo crea el administrador) */

@@ -3,6 +3,9 @@ import { fecha, money } from '../lib/format'
 import { rangoISO, reporteGastos, reporteVentas, type Periodo } from '../lib/reportes'
 import { FORMAS_PAGO, type Caja, type Comanda, type MovimientoReporte } from '../types'
 import { useRepo } from './cuentas'
+import type { MenuData } from '../data/repo'
+import { marcasDeLocales, ventasPorGrupo } from '../lib/caja'
+import { VentaPorMarca } from './VentaPorMarca'
 import {
   Aviso, mayuscula, BarraSegmentada, BarrasHorizontales, BotonRecargar, Cargando, Cifra, ColumnasDia, Fila, SelectorLocal, Tarjeta,
   useLocalElegido, useSucursales,
@@ -17,7 +20,7 @@ export function periodoMes(y: number, m: number): Periodo {
   return { desde: `${y}-${pad(m + 1)}-01`, hasta: `${y}-${pad(m + 1)}-${pad(ultimo)}` }
 }
 
-interface Datos { comandas: Comanda[]; movs: MovimientoReporte[]; cajas: (Caja & { local: string })[] }
+interface Datos { comandas: Comanda[]; movs: MovimientoReporte[]; cajas: (Caja & { local: string })[]; menus: MenuData[] }
 
 export function Mensual() {
   const repo = useRepo()
@@ -44,14 +47,15 @@ export function Mensual() {
     setCargando(true); setError('')
     try {
       const { desde, hasta } = rangoISO(periodo)
-      const [comandas, movs, cajas] = await Promise.all([
+      const [comandas, movs, cajas, menus] = await Promise.all([
         repo.reporteComandas(ids, desde, hasta),
         repo.reporteMovimientosCaja(ids, desde, hasta),
         Promise.all(ids.map(async id => (await repo.listCajas(id, 120))
           .filter(c => c.abiertaAt >= desde && c.abiertaAt < hasta)
           .map(c => ({ ...c, local: lista.find(s => s.id === id)?.nombre ?? '' })))),
+        Promise.all(ids.map(id => repo.getMenu(id))),
       ])
-      setDatos({ comandas, movs, cajas: cajas.flat().sort((a, b) => b.abiertaAt.localeCompare(a.abiertaAt)) })
+      setDatos({ comandas, movs, cajas: cajas.flat().sort((a, b) => b.abiertaAt.localeCompare(a.abiertaAt)), menus })
     } catch (e) {
       setError((e as Error).message)
     } finally { setCargando(false) }
@@ -59,6 +63,14 @@ export function Mensual() {
 
   useEffect(() => { setDatos(null); void cargar() }, [cargar])
 
+  // Si los locales tienen más de una marca, la venta va siempre discriminada
+  const marcas = useMemo(() => {
+    if (!datos) return []
+    const nombres = marcasDeLocales(datos.menus)
+    if (nombres.length < 2) return []
+    const unico = <T extends { id: string }>(l: T[]) => [...new Map(l.map(x => [x.id, x])).values()]
+    return ventasPorGrupo(datos.comandas, unico(datos.menus.flatMap(m => m.categorias)), unico(datos.menus.flatMap(m => m.productos)), nombres)
+  }, [datos])
   const r = useMemo(() => {
     if (!datos) return null
     const v = reporteVentas(datos.comandas, periodo)
@@ -140,6 +152,8 @@ export function Mensual() {
             </div>
             <p className="mt-2 text-[12px] text-gris">Los retiros no se restan: es plata que sale de la caja, no un gasto.</p>
           </Tarjeta>
+
+          <VentaPorMarca grupos={marcas} />
 
           {r.porLocal.length > 0 && (
             <Tarjeta titulo="Por local"><BarrasHorizontales filas={r.porLocal} /></Tarjeta>

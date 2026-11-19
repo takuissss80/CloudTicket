@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { calcularTotales, TURNOS } from '../lib/caja'
+import { calcularTotales, marcasDeLocales, TURNOS, ventasPorGrupo } from '../lib/caja'
+import { VentaPorMarca } from './VentaPorMarca'
 import { fecha, hora, money } from '../lib/format'
 import { isoDia } from '../lib/reportes'
 import type { Caja, Categoria, Comanda, MovimientoCaja, Producto, Sucursal } from '../types'
@@ -16,6 +17,8 @@ interface Datos {
   abiertas: { local: string; caja: Caja; efectivo: number }[]
   categorias: Categoria[]
   productos: Producto[]
+  /** Marcas (categorías contenedoras) que tienen estos locales */
+  marcas: string[]
 }
 
 const fmtCant = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','))
@@ -65,6 +68,7 @@ export function Inicio() {
         abiertas: porLocal.flatMap(p => p.abiertas),
         categorias: unico(porLocal.flatMap(p => p.menu.categorias)),
         productos: unico(porLocal.flatMap(p => p.menu.productos)),
+        marcas: marcasDeLocales(porLocal.map(p => p.menu)),
       })
     } catch (e) {
       setError((e as Error).message)
@@ -73,7 +77,14 @@ export function Inicio() {
 
   useEffect(() => { void cargar() }, [cargar])
 
+  // Turnos de los locales elegidos (cada local puede tener los suyos)
+  const turnosLocales = useMemo(() => {
+    const l = (lista ?? []).filter(s => local.ids.includes(s.id)).flatMap(s => s.turnos ?? []).sort((a, b) => a.desde.localeCompare(b.desde)).map(t => t.nombre)
+    return l.length ? [...new Set(l)] : TURNOS
+  }, [lista, idsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const r = useMemo(() => (datos ? resumir(datos) : null), [datos])
+  // Si los locales tienen más de una marca, la venta va siempre discriminada
+  const marcas = useMemo(() => (datos && datos.marcas.length > 1 ? ventasPorGrupo(datos.comandas, datos.categorias, datos.productos, datos.marcas) : []), [datos])
   const hoy = isoDia(new Date())
 
   if (errLocales) return <Aviso>{errLocales}</Aviso>
@@ -92,7 +103,7 @@ export function Inicio() {
           <span className="sr-only">Turno</span>
           <select value={turno} onChange={e => setTurno(e.target.value)} className={selectCls}>
             <option value="todos">Todo el día</option>
-            {TURNOS.map(t => <option key={t} value={t}>{t}</option>)}
+            {turnosLocales.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
         <BotonRecargar onClick={() => void cargar()} cargando={cargando} />
@@ -118,6 +129,8 @@ export function Inicio() {
               <p className="mt-3 text-center text-[13px] text-gris">No hubo caja {turno === 'todos' ? '' : `de turno ${turno.toLowerCase()} `}ese día.</p>
             )}
           </Tarjeta>
+
+          <VentaPorMarca grupos={marcas} />
 
           <Tarjeta titulo="Orígenes de pedidos">
             <div className="grid grid-cols-3 gap-2">

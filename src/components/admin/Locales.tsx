@@ -1,6 +1,7 @@
 import type { TipoUsuario as TipoUsuarioT } from '../../types'
 import { useCallback, useEffect, useState } from 'react'
-import type { Sucursal, Usuario } from '../../types'
+import type { Sucursal, TurnoCaja, Usuario } from '../../types'
+import { normalizarTurnos } from '../../lib/caja'
 import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
 import { Btn, Confirmar, inputBase, inputCls } from '../ui'
@@ -58,7 +59,11 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
   const [borrar, setBorrar] = useState<Usuario | null>(null)
 
   const intentar = async (f: () => Promise<unknown>, ok?: string) => {
-    try { await f(); if (ok) avisar(ok); await onCambio() } catch (e) { avisar(mensajeError(e), 'error') }
+    try {
+      await f(); if (ok) avisar(ok); await onCambio()
+      // Para que la caja y el resto de la app tomen los cambios del local (turnos, cierre a ciegas…)
+      await useApp.getState().refrescarMenu().catch(() => {})
+    } catch (e) { avisar(mensajeError(e), 'error') }
   }
 
   const sugerido = local.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).slice(-1)[0] ?? ''
@@ -86,6 +91,8 @@ function TarjetaLocal({ local, usuarios, onCambio }: { local: Sucursal; usuarios
       </header>
 
       <div className="p-4">
+        <TurnosLocal local={local} intentar={intentar} />
+
         {/* ---- Usuarios */}
         <div>
           <h4 className="mb-2 font-semibold">Usuarios del local</h4>
@@ -147,6 +154,43 @@ export function TipoUsuario({ valor, etiqueta, onChange }: { valor: TipoUsuarioT
         <button key={l} type="button" aria-pressed={valor === v} onClick={() => valor !== v && onChange(v)}
           className={`h-9 px-3 font-semibold ${valor === v ? 'bg-primario text-sobre-primario' : 'bg-superficie hover:bg-harina'}`}>{l}</button>
       ))}
+    </div>
+  )
+}
+
+/** Turnos de caja del local: se agregan, renombran o eliminan; se ordenan por hora de inicio */
+function TurnosLocal({ local, intentar }: { local: Sucursal; intentar: (f: () => Promise<unknown>, ok?: string) => Promise<void> }) {
+  const [filas, setFilas] = useState<TurnoCaja[]>(local.turnos)
+  useEffect(() => { setFilas(local.turnos) }, [local.turnos])
+  const limpias = filas.map(t => ({ nombre: t.nombre.trim(), desde: t.desde })).filter(t => t.nombre)
+  const repetido = new Set(limpias.map(t => t.nombre.toLowerCase())).size !== limpias.length
+  const cambios = JSON.stringify(normalizarTurnos(limpias)) !== JSON.stringify(local.turnos)
+  const error = !limpias.length ? 'Tiene que quedar al menos un turno' : repetido ? 'Hay dos turnos con el mismo nombre' : ''
+  return (
+    <div className="mb-5">
+      <h4 className="font-semibold">Turnos de caja</h4>
+      <p className="mb-2 text-sm text-gris">Se abren en este orden durante el día. La hora sirve para sugerir el turno al abrir la caja.</p>
+      <ul className="space-y-1.5">
+        {filas.map((t, i) => (
+          <li key={i} className="flex flex-wrap items-center gap-2">
+            <input aria-label={`Nombre del turno ${i + 1}`} value={t.nombre} placeholder="Ej.: Mediodía"
+              onChange={e => setFilas(f => f.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))} className={`${inputBase} h-9 w-44`} />
+            <label className="flex items-center gap-1.5 text-sm text-gris">desde
+              <input type="time" aria-label={`Hora de inicio del turno ${i + 1}`} value={t.desde}
+                onChange={e => setFilas(f => f.map((x, j) => (j === i ? { ...x, desde: e.target.value || '00:00' } : x)))} className={`${inputBase} h-9 w-36`} />
+            </label>
+            <button type="button" aria-label={`Eliminar turno ${t.nombre}`} disabled={filas.length === 1}
+              onClick={() => setFilas(f => f.filter((_, j) => j !== i))}
+              className="grid size-9 place-items-center rounded-md text-tomate hover:bg-tomate-claro disabled:opacity-30">✕</button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Btn tono="fantasma" onClick={() => setFilas(f => [...f, { nombre: '', desde: '12:00' }])}>+ Agregar turno</Btn>
+        {cambios && <Btn tono="albahaca" disabled={!!error} onClick={() => intentar(() => repo.actualizarSucursal(local.id, { turnos: normalizarTurnos(limpias) }), 'Turnos guardados')}>Guardar turnos</Btn>}
+        {cambios && <Btn onClick={() => setFilas(local.turnos)}>Deshacer</Btn>}
+        {error && <span className="text-sm font-semibold text-tomate">{error}</span>}
+      </div>
     </div>
   )
 }

@@ -80,7 +80,7 @@ export interface Repo {
   configCocina(sucursalId: string, c: { activa: boolean; amarillo: number; rojo: number }): Promise<void>
   /** Hora de la base, para corregir el reloj de la PC */
   horaServidor(): Promise<string>
-  actualizarSucursal(id: string, data: Partial<Pick<Sucursal, 'nombre' | 'activa' | 'recargoDelivery' | 'recargoDeliveryTipo' | 'cierreCiegas'>>): Promise<void>
+  actualizarSucursal(id: string, data: Partial<Pick<Sucursal, 'nombre' | 'activa' | 'recargoDelivery' | 'recargoDeliveryTipo' | 'cierreCiegas' | 'turnos'>>): Promise<void>
 
   // ---- Cupones (admin crea; cualquiera valida un código)
   listCupones(): Promise<Cupon[]>
