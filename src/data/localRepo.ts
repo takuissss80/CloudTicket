@@ -783,6 +783,16 @@ export const localRepo: Repo = {
     guardar()
   },
 
+  async cambiarDineroInicial(id, monto) {
+    const c = db().cajas.find(x => x.id === id && x.estado === 'abierta')
+    if (!c) throw new Error('Solo se puede cambiar el inicio de la caja abierta')
+    puedeLocal(c.sucursalId)
+    const s = ses()
+    if (s.rol !== 'admin' && !s.puedeDescontar) throw new Error('Solo el administrador o el encargado del local pueden cambiar el dinero al inicio')
+    c.dineroInicial = Math.max(0, monto)
+    guardar()
+  },
+
   async reabrirCaja(id) {
     const d = db()
     const c = d.cajas.find(x => x.id === id && x.estado === 'cerrada')

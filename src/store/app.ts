@@ -40,6 +40,7 @@ interface AppState {
   refrescarMenu(): Promise<void>
   salir(): Promise<void>
   abrirCaja(turno: string, dineroInicial: number): Promise<void>
+  cambiarDineroInicial(monto: number): Promise<boolean>
   cerrarCaja(dineroCierre: number, observaciones?: string): Promise<boolean>
   reabrirCaja(id: string): Promise<void>
   agregarMovimiento(m: Pick<MovimientoCaja, 'tipo' | 'tipoGastoId' | 'concepto' | 'monto'>): Promise<boolean>
@@ -183,6 +184,17 @@ export const useApp = create<AppState>((set, get) => {
         await repo.cerrarCaja(caja.id, dineroCierre, observaciones)
         set({ caja: null, comandas: [], movimientos: [] })
         get().avisar('Caja cerrada')
+        return true
+      } catch (e) { fallo(e); return false }
+    },
+
+    async cambiarDineroInicial(monto) {
+      const caja = get().caja
+      if (!caja) return false
+      try {
+        await repo.cambiarDineroInicial(caja.id, monto)
+        await get().refrescar()
+        get().avisar('Dinero al inicio actualizado')
         return true
       } catch (e) { fallo(e); return false }
     },

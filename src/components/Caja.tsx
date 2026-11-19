@@ -112,6 +112,44 @@ export function CajaCerrada() {
   )
 }
 
+/** Dinero al inicio: el admin o el encargado lo pueden corregir mientras la caja está abierta */
+function DineroInicio({ caja, compacto }: { caja: Caja; compacto?: boolean }) {
+  const { sesion, cambiarDineroInicial } = useApp()
+  const cajaAbierta = useApp(s => s.caja)
+  const puede = (sesion?.rol === 'admin' || !!sesion?.puedeDescontar) && caja.estado === 'abierta' && cajaAbierta?.id === caja.id
+  const [editando, setEditando] = useState(false)
+  const [valor, setValor] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const guardar = async () => {
+    setGuardando(true)
+    if (await cambiarDineroInicial(numero(valor))) setEditando(false)
+    setGuardando(false)
+  }
+  return (
+    <li className={`flex items-start justify-between gap-3 ${compacto ? 'py-1.5' : 'py-2.5'}`}>
+      <div className="min-w-0">
+        <div className="font-semibold">Dinero al inicio</div>
+        {puede && !editando && (
+          <button onClick={() => { setValor(String(caja.dineroInicial || 0)); setEditando(true) }}
+            className="text-sm font-semibold text-albahaca underline-offset-2 hover:underline">Cambiar</button>
+        )}
+      </div>
+      {editando ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <input autoFocus inputMode="decimal" aria-label="Dinero al inicio" value={valor} onFocus={e => e.target.select()}
+            onChange={e => setValor(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') guardar(); if (e.key === 'Escape') setEditando(false) }}
+            className={`${inputBase} h-10 w-32 text-right font-semibold`} />
+          <Btn onClick={() => setEditando(false)} disabled={guardando}>Cancelar</Btn>
+          <Btn tono="albahaca" onClick={guardar} disabled={guardando || valor.trim() === ''}>{guardando ? 'Guardando…' : 'Guardar'}</Btn>
+        </div>
+      ) : (
+        <span className="shrink-0 font-semibold tabular-nums">{money(caja.dineroInicial || 0)}</span>
+      )}
+    </li>
+  )
+}
+
 // ---------------------------------------------------------------------
 // Resumen de movimientos (como en Datalive)
 // ---------------------------------------------------------------------
@@ -140,7 +178,7 @@ export function ColumnasCaja({ caja, totales: t, detalleVentas, compacto }: { ca
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         {columna('Entra a la caja', '+', entra, 'text-albahaca', <>
-          {fila('Dinero al inicio', caja.dineroInicial || 0)}
+          <DineroInicio caja={caja} compacto={compacto} />
           {fila('Ventas en efectivo', t.ventasEfectivo, detalleVentas)}
           {fila('Ingresos de dinero', t.totalIngresos)}
         </>)}

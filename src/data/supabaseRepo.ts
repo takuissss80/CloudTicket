@@ -529,6 +529,9 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async cerrarCaja(id, dineroCierre, observaciones) {
       ok(await sb.rpc('cerrar_caja', { p_caja: id, p_dinero_cierre: dineroCierre, p_observaciones: observaciones ?? null }))
     },
+    async cambiarDineroInicial(id, monto) {
+      ok(await sb.rpc('cambiar_dinero_inicial', { p_caja: id, p_monto: monto }))
+    },
     async reabrirCaja(id) {
       ok(await sb.rpc('reabrir_caja', { p_caja: id }))
     },

@@ -154,6 +154,8 @@ export interface Repo {
   cerrarCaja(id: string, dineroCierre: number, observaciones?: string): Promise<void>
   /** Solo la última caja del local y si no hay otra abierta */
   reabrirCaja(id: string): Promise<void>
+  /** Corrige el dinero al inicio de la caja abierta (admin o encargado) */
+  cambiarDineroInicial(id: string, monto: number): Promise<void>
   /** Historial, de la más nueva a la más vieja */
   listCajas(sucursalId: string, limit?: number): Promise<Caja[]>
   listMovimientos(cajaId: string): Promise<MovimientoCaja[]>
