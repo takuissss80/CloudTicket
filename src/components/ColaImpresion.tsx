@@ -40,7 +40,8 @@ export function ImpresionPanel() {
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <div className="mr-auto">
           <h2 className="font-cond text-3xl font-bold">Impresión</h2>
-          <p className="text-[15px] text-gris">Comanderas de {local} y lo que se mandó a imprimir.</p>
+          <p className="mt-1 text-[15px] text-gris">Comanderas y lo que se mandó a imprimir del local</p>
+          <p className="mt-1 inline-block rounded-lg border-2 border-tinta/30 px-3 py-1 font-cond text-3xl font-bold uppercase tracking-wide text-tinta">{local}</p>
         </div>
         <span className="rounded-lg bg-muzza-claro px-3 py-1.5 font-semibold">{pendientes} en cola</span>
         {conError > 0 && <span className="rounded-lg bg-tomate px-3 py-1.5 font-semibold text-white">{conError} con error</span>}
