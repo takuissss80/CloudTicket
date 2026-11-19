@@ -776,16 +776,24 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       }))
     },
 
-    subscribe(onChange) {
-      const ch = sb.channel('comandas-web')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'comandas' }, () => onChange('comandas'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'print_jobs' }, () => onChange('print_jobs'))
+    subscribe(onChange, filtro) {
+      // Solo los cambios del local que se está usando: así la base no revisa permisos de cada pantalla
+      // por cada comanda o impresión de los demás locales
+      const suc = filtro?.sucursalId
+      const imps = filtro?.impresoraIds ?? []
+      const deSuc = suc ? { filter: `sucursal_id=eq.${suc}` } : {}
+      let ch = sb.channel(`comandas-web-${suc ?? 'todos'}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'comandas', ...deSuc }, () => onChange('comandas'))
+      if (!suc || imps.length) {
+        ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'print_jobs', ...(suc ? { filter: `impresora_id=in.(${imps.join(',')})` } : {}) }, () => onChange('print_jobs'))
+      }
+      ch = ch
         .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'producto_sucursal' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, () => onChange('menu'))
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sucursales' }, () => onChange('menu'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_externos' }, () => onChange('externos'))
-        .subscribe()
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_externos', ...deSuc }, () => onChange('externos'))
+      ch.subscribe()
       // Aparte: si falta la migración 0021, este canal falla solo sin afectar al resto
       const ch2 = sb.channel('comandas-web-categorias')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categoria_sucursal' }, () => onChange('menu'))

@@ -218,5 +218,6 @@ export interface Repo {
   reporteStockMovimientos(sucursalIds: string[], desde: string, hasta: string, tipos?: TipoMovStock[]): Promise<StockMovimiento[]>
 
   /** Cambios de comandas, cola o menú (realtime / otras pestañas) */
-  subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos') => void): () => void
+  /** filtro: solo los cambios de ese local y de sus comanderas */
+  subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos') => void, filtro?: { sucursalId?: string; impresoraIds?: string[] }): () => void
 }

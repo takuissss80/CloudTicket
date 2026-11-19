@@ -15,6 +15,8 @@ type EstadoVinculo struct {
 	UltimoOK  string `json:"ultimoOk,omitempty"`
 	Impresos  int    `json:"impresos"`
 	Fallidos  int    `json:"fallidos"`
+	// Instantaneo: escuchando los avisos del tiempo real (si no, revisa la cola cada 2 s)
+	Instantaneo bool `json:"instantaneo"`
 }
 
 var (
@@ -71,7 +73,13 @@ func vinculoActual(token string) (Vinculo, bool) {
 	return Vinculo{}, false
 }
 
-const intervaloCola = 2 * time.Second
+const (
+	intervaloCola = 2 * time.Second // sin aviso instantáneo: como siempre
+	// Con aviso instantáneo igual se revisa la cola cada tanto, por si un aviso no llegó
+	intervaloRespaldo = 30 * time.Second
+	// Después de un error de impresión se reintenta con calma (no gastar los 5 intentos de golpe)
+	intervaloReintento = 5 * time.Second
+)
 
 // esperaTokenInvalido: con un token que ya no sirve no tiene sentido insistir cada 10 s
 // (llena de errores la base). Se espera cada vez más: 30 s, 1, 2, 5 y después cada 10 minutos.
@@ -92,6 +100,33 @@ func trabajar(token string, parar chan struct{}) {
 	ultimoPing := time.Time{}
 	espera := intervaloCola
 	fallosToken := 0
+	marcarInstantaneo(token, false)
+
+	// Avisos del tiempo real: un aviso pendiente como máximo (si llegan varios, alcanza con revisar una vez)
+	aviso := make(chan struct{}, 1)
+	canalActual := ""
+	var pararAvisos chan struct{}
+	escuchar := func(canal string) {
+		if canal == canalActual {
+			return
+		}
+		if pararAvisos != nil {
+			close(pararAvisos)
+			pararAvisos = nil
+		}
+		canalActual = canal
+		if canal != "" {
+			pararAvisos = make(chan struct{})
+			go escucharAvisos(token, canal, aviso, pararAvisos)
+		}
+	}
+	defer func() {
+		if pararAvisos != nil {
+			close(pararAvisos)
+		}
+		marcarInstantaneo(token, false)
+	}()
+
 	// Según el error, cuánto esperar antes de reintentar
 	esperaPorError := func(err error) time.Duration {
 		if esTokenInvalido(err) {
@@ -105,6 +140,7 @@ func trabajar(token string, parar chan struct{}) {
 		case <-parar:
 			return
 		case <-time.After(espera):
+		case <-aviso:
 		}
 		v, ok := vinculoActual(token)
 		if !ok {
@@ -129,6 +165,7 @@ func trabajar(token string, parar chan struct{}) {
 			}
 			_ = guardarConfig()
 			cfgMu.Unlock()
+			escuchar(info.Canal) // base sin la migración 0027: canal vacío, sigue cada 2 s
 		}
 
 		trabajos, err := apiTomar(token)
@@ -146,10 +183,21 @@ func trabajar(token string, parar chan struct{}) {
 		} else {
 			estMu.Unlock()
 		}
-		espera = intervaloCola
-
+		huboError := false
 		for _, t := range trabajos {
-			imprimirTrabajo(token, v, t)
+			if !imprimirTrabajo(token, v, t) {
+				huboError = true
+			}
+		}
+		switch {
+		case huboError:
+			espera = intervaloReintento
+		case len(trabajos) >= 10: // puede haber más en la cola
+			espera = 100 * time.Millisecond
+		case copiaEstado(token).Instantaneo:
+			espera = intervaloRespaldo
+		default:
+			espera = intervaloCola
 		}
 	}
 }
@@ -183,7 +231,8 @@ func tokenCorto(t string) string {
 	return t
 }
 
-func imprimirTrabajo(token string, v Vinculo, t Trabajo) {
+// imprimirTrabajo devuelve false si no se pudo imprimir (vuelve a la cola para reintentar)
+func imprimirTrabajo(token string, v Vinculo, t Trabajo) bool {
 	est := estadoDe(token)
 	datos, err := Renderizar(t.Contenido, v.Ancho, v.CodePage)
 	if err == nil {
@@ -204,7 +253,7 @@ func imprimirTrabajo(token string, v Vinculo, t Trabajo) {
 		estMu.Unlock()
 		registrar("error", "%s: no se pudo imprimir (%s): %v", nombreVinculo(v), t.Tipo, err)
 		_ = apiConfirmar(token, t.ID, false, err.Error())
-		return
+		return false
 	}
 	if e := apiConfirmar(token, t.ID, true, ""); e != nil {
 		registrar("error", "Se imprimió pero no se pudo avisar al servidor: %v", e)
@@ -214,4 +263,5 @@ func imprimirTrabajo(token string, v Vinculo, t Trabajo) {
 	est.UltimoOK = time.Now().Format("15:04:05")
 	estMu.Unlock()
 	registrar("ok", "%s: impreso %s", nombreVinculo(v), t.Tipo)
+	return true
 }

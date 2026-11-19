@@ -20,7 +20,7 @@ import { Produccion } from './components/Produccion'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 
 function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: () => void }) {
-  const { cargando, error, caja, sesion, sucursales, sucursalId, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
+  const { cargando, error, caja, sesion, sucursales, sucursalId, impresoras, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
   const pedidoAbierto = usePedido(s => s.abierto)
   const [verCierre, setVerCierre] = useState(false)
   const [verAdmin, setVerAdmin] = useState<Pestana | null>(null)
@@ -37,7 +37,8 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     return () => removeEventListener('hashchange', f)
   }, [])
 
-  // Cambios en tiempo real: otras PCs, el spool, cambios de menú
+  // Cambios en tiempo real: otras PCs, el spool, cambios de menú (solo del local elegido)
+  const idsImpresoras = impresoras.map(i => i.id).sort().join(',')
   useEffect(() => {
     let t1: ReturnType<typeof setTimeout> | undefined
     let t2: ReturnType<typeof setTimeout> | undefined
@@ -46,9 +47,9 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
       if (tabla === 'menu') { clearTimeout(t2); t2 = setTimeout(() => refrescarMenu(), 300) }
       else if (tabla === 'externos') { clearTimeout(t3); t3 = setTimeout(() => procesarExternos(), 400) }
       else { clearTimeout(t1); t1 = setTimeout(() => refrescar(), 150) }
-    })
+    }, { sucursalId: sucursalId ?? undefined, impresoraIds: idsImpresoras ? idsImpresoras.split(',') : [] })
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); off() }
-  }, [refrescar, refrescarMenu, procesarExternos])
+  }, [refrescar, refrescarMenu, procesarExternos, sucursalId, idsImpresoras])
 
   // Importación de PedidosYa: al abrir la caja y cada 15 s (por si se perdió un aviso en tiempo real)
   const cajaId = caja?.id

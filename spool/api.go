@@ -100,6 +100,7 @@ type InfoComandera struct {
 	Copias      int    `json:"copias"`
 	Local       string `json:"local"`
 	Cuenta      string `json:"cuenta"`
+	Canal       string `json:"canal"` // canal de avisos instantáneos (desde la migración 0027)
 }
 
 func apiPing(token, impresora string) (InfoComandera, error) {
