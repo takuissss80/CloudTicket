@@ -14,7 +14,8 @@ export function PromoModal({ promo, onClose }: { promo: Producto; onClose: () =>
   const [nota, setNota] = useState('')
 
   const elegidosEn = (slotId: string) => Object.values(sel[slotId] ?? {}).reduce((s, n) => s + n, 0)
-  const completo = promo.slots.every(s => elegidosEn(s.id) === s.cantidad)
+  const minimoDe = (s: Producto['slots'][number]) => Math.min(s.minimo ?? s.cantidad, s.cantidad)
+  const completo = promo.slots.every(s => elegidosEn(s.id) >= minimoDe(s) && elegidosEn(s.id) <= s.cantidad)
 
   const setCant = (slotId: string, k: string, n: number) =>
     setSel(s => ({ ...s, [slotId]: { ...(s[slotId] ?? {}), [k]: Math.max(0, n) } }))
@@ -53,13 +54,18 @@ export function PromoModal({ promo, onClose }: { promo: Producto; onClose: () =>
         {promo.slots.map(slot => {
           const elegidos = elegidosEn(slot.id)
           const faltan = slot.cantidad - elegidos
+          const minimo = minimoDe(slot)
+          const rango = minimo < slot.cantidad
+          const ok = elegidos >= minimo
           const opciones = productos.filter(p => p.categoriaId === slot.categoriaId && p.tipo === 'producto' && !p.agotado)
           return (
             <section key={slot.id}>
               <div className="mb-3 flex items-baseline gap-3">
                 <h3 className="font-cond text-2xl font-bold">{slot.nombre}</h3>
-                <span className={`rounded-full px-3 py-0.5 font-semibold ${faltan ? 'bg-muzza-claro text-tinta' : 'bg-albahaca-claro text-albahaca'}`}>
-                  {faltan ? `Elegí ${faltan} más (${elegidos} de ${slot.cantidad})` : `Listo: ${slot.cantidad} de ${slot.cantidad}`}
+                <span className={`rounded-full px-3 py-0.5 font-semibold ${!ok ? 'bg-muzza-claro text-tinta' : 'bg-albahaca-claro text-albahaca'}`}>
+                  {rango
+                    ? (ok ? `Listo: ${elegidos} elegido${elegidos === 1 ? '' : 's'}${faltan ? ` (podés sumar ${faltan} más)` : ''}` : `Elegí de ${minimo} a ${slot.cantidad} (${elegidos} elegido${elegidos === 1 ? '' : 's'})`)
+                    : (faltan ? `Elegí ${faltan} más (${elegidos} de ${slot.cantidad})` : `Listo: ${slot.cantidad} de ${slot.cantidad}`)}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">

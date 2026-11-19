@@ -137,7 +137,10 @@ export interface PromoSlot {
   id: string
   nombre: string
   categoriaId: string
+  /** Máximo a elegir (o exacto si no hay mínimo) */
   cantidad: number
+  /** Si está, se puede elegir de `minimo` a `cantidad` (ej.: de 1 a 4 sabores) */
+  minimo?: number
 }
 
 export interface Producto {

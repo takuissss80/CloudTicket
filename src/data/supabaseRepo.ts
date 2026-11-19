@@ -74,7 +74,7 @@ function mapProducto(p: Row): Producto {
     fijos: (p.promo_fijos ?? []).map((f: Row) => ({ productoId: f.producto_id, cantidad: f.cantidad, variante: f.variante })),
     slots: (p.promo_slots ?? [])
       .sort((a: Row, b: Row) => a.orden - b.orden)
-      .map((s: Row) => ({ id: s.id, nombre: s.nombre, categoriaId: s.categoria_id, cantidad: s.cantidad })),
+      .map((s: Row) => ({ id: s.id, nombre: s.nombre, categoriaId: s.categoria_id, cantidad: s.cantidad, minimo: s.minimo ?? undefined })),
   }
 }
 
@@ -400,7 +400,9 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       if (receta.length) ok(await sb.from('recetas').insert(receta.map(x => ({ producto_id: id, ingrediente_id: x.ingredienteId, cantidad: x.cantidad }))))
       if (prod.tipo === 'promo') {
         if (prod.fijos.length) ok(await sb.from('promo_fijos').insert(prod.fijos.map(f => ({ promo_id: id, producto_id: f.productoId, cantidad: f.cantidad, variante: f.variante }))))
-        if (prod.slots.length) ok(await sb.from('promo_slots').insert(prod.slots.map((s, orden) => ({ promo_id: id, nombre: s.nombre, categoria_id: s.categoriaId, cantidad: s.cantidad, orden }))))
+        if (prod.slots.length) ok(await sb.from('promo_slots').insert(prod.slots.map((s, orden) => ({ promo_id: id, nombre: s.nombre, categoria_id: s.categoriaId, cantidad: s.cantidad, orden,
+          // solo si se usa: así funciona aunque falte la migración 0029
+          ...(s.minimo != null && s.minimo < s.cantidad ? { minimo: s.minimo } : {}) }))))
       }
       return mapProducto(ok(await sb.from('productos').select(SELECT_PRODUCTO).eq('id', id).single()) as Row)
     },

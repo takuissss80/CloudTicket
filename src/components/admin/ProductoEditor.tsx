@@ -50,6 +50,7 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
     if (porMitad && !p.precioMitad) return setError('Cargá el precio de la mitad o desactivá la venta por mitad.')
     if (esPromo && !p.fijos.length && !p.slots.length) return setError('Una promo tiene que incluir al menos un producto o un grupo para elegir.')
     if (esPromo && p.slots.some(s => !s.categoriaId || s.cantidad < 1)) return setError('Revisá los grupos de la promo: cada uno necesita categoría y cantidad.')
+    if (esPromo && p.slots.some(s => s.minimo != null && s.minimo > s.cantidad)) return setError('En un grupo con rango, el mínimo no puede ser mayor que el máximo.')
     setGuardando(true)
     try {
       const g = await repo.guardarProducto({
@@ -207,8 +208,18 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
                 {p.slots.map((s, i) => (
                   <li key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-superficie p-2 ring-1 ring-linea">
                     <span className="text-gris">Elegí</span>
-                    <input aria-label="Cantidad a elegir" inputMode="numeric" value={s.cantidad || ''} onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, cantidad: Math.max(1, Math.round(numero(e.target.value) ?? 1)) } : x))}
+                    {s.minimo != null && <>
+                      <input aria-label="Mínimo a elegir" inputMode="numeric" value={s.minimo || ''} onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, minimo: Math.max(1, Math.round(numero(e.target.value) ?? 1)) } : x))}
+                        className={`${inputBase} h-9 w-16 text-center`} />
+                      <span className="text-gris">a</span>
+                    </>}
+                    <input aria-label={s.minimo != null ? 'Máximo a elegir' : 'Cantidad a elegir'} inputMode="numeric" value={s.cantidad || ''} onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, cantidad: Math.max(1, Math.round(numero(e.target.value) ?? 1)) } : x))}
                       className={`${inputBase} h-9 w-16 text-center`} />
+                    <label className="flex items-center gap-1 text-sm text-gris" title="Ej.: de 1 a 4 sabores">
+                      <input type="checkbox" className="size-4 accent-albahaca" checked={s.minimo != null}
+                        onChange={e => setSlots(p.slots.map((x, j) => j === i ? { ...x, minimo: e.target.checked ? 1 : undefined } : x))} />
+                      rango
+                    </label>
                     <span className="text-gris">de</span>
                     <select aria-label="Categoría a elegir" value={s.categoriaId} onChange={e => {
                       const cat = categorias.find(c => c.id === e.target.value)
