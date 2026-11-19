@@ -25,7 +25,9 @@ var (
 		Duplicados int    `json:"duplicados"`
 		Ignorados  int    `json:"ignorados"`
 		Imagenes   int    `json:"imagenes"`
-		Ultimo     string `json:"ultimo,omitempty"`
+		// Avisos de GoWin "tenés el pedido X sin confirmar": no se imprimen ni se mandan a la web
+		Avisos int    `json:"avisos"`
+		Ultimo string `json:"ultimo,omitempty"`
 	}{}
 	ultimoTexto string
 )
@@ -128,6 +130,17 @@ func procesarCaptura(datos []byte) {
 
 	texto, imagen, cortes := ExtraerTexto(datos)
 
+	// Recordatorio de GoWin ("Atención: tenés el pedido 1 de PedidosYa sin confirmar"): no es un pedido.
+	// Ni se imprime ni va a la web; los pedidos se confirman en GoWin.
+	if !imagen && esAvisoSinConfirmar(texto) {
+		capMu.Lock()
+		capEstado.Avisos++
+		capEstado.Ultimo = time.Now().Format("15:04:05")
+		capMu.Unlock()
+		registrarDetalle("Captura: aviso de GoWin de pedido sin confirmar (no se imprime)")
+		return
+	}
+
 	// 1) Que se imprima igual (lo primero: la cocina no puede quedarse sin el ticket)
 	if c.Reenviar != "" && !EsImpresoraVirtual(c.Reenviar) {
 		salida := datos
@@ -186,4 +199,15 @@ func recortar(s string, n int) string {
 		return string(r[:n]) + "…"
 	}
 	return s
+}
+
+// esAvisoSinConfirmar reconoce el recordatorio de GoWin. Un pedido de verdad trae "Nro. Orden",
+// así que nunca se confunde con un aviso.
+func esAvisoSinConfirmar(texto string) bool {
+	t := strings.ToLower(texto)
+	for _, r := range [][2]string{{"á", "a"}, {"é", "e"}, {"í", "i"}, {"ó", "o"}, {"ú", "u"}} {
+		t = strings.ReplaceAll(t, r[0], r[1])
+	}
+	t = strings.Join(strings.Fields(t), " ")
+	return strings.Contains(t, "sin confirmar") && !strings.Contains(t, "nro. orden") && !strings.Contains(t, "nro orden") && len(t) < 600
 }
