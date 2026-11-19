@@ -164,7 +164,8 @@ export interface Repo {
   crearComanda(cajaId: string, data: NuevaComanda): Promise<Comanda>
   actualizarComanda(id: string, data: NuevaComanda): Promise<Comanda>
   cambiarEstado(id: string, estado: EstadoComanda): Promise<void>
-  marcarCobrada(id: string, cobrada: boolean): Promise<void>
+  /** pagos: si se pasan, reemplazan los de la comanda (para que nunca quede sin forma de pago) */
+  marcarCobrada(id: string, cobrada: boolean, pagos?: Pago[]): Promise<void>
   /** Delivery: asigna la moto, pasa a "en camino" y arranca el contador */
   asignarRepartidor(comandaId: string, repartidorId: string): Promise<void>
   /** Saca la moto asignada (por si se eligió mal); vuelve a quedar sin moto */

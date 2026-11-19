@@ -49,6 +49,9 @@ export function CobroModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!p.pagos.length && !p.editandoId) {
       p.set({ pagos: [{ forma: 'efectivo', monto: total }], cobrada: p.tipo === 'mostrador' })
+    } else if (!p.pagos.some(x => x.monto > 0)) {
+      // Comanda vieja sin forma de pago: arranca en Efectivo por el total
+      p.set({ pagos: [{ forma: 'efectivo', monto: total }] })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

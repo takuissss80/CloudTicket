@@ -117,6 +117,9 @@ const SELECT_PRODUCTO = '*, recetas(*), promo_fijos!promo_fijos_promo_id_fkey(*)
 export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { headers?: Record<string, string>; storageKey?: string }): Repo & { client: SupabaseClient } {
   // storageKey: la app del celular guarda una sesión aparte por cada cuenta
   const sb = createClient(url, anonKey, {
+    // Latido del tiempo real en un worker: si la pestaña queda atrás (ej. usando Datalive), el navegador
+    // frena los timers, el latido se atrasa y se corta la conexión; en un worker no se frena.
+    realtime: { worker: true },
     ...(opciones?.headers ? { global: { headers: opciones.headers } } : {}),
     ...(opciones?.storageKey ? { auth: { storageKey: opciones.storageKey } } : {}),
   })
@@ -669,7 +672,13 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       return getComanda(id)
     },
     async cambiarEstado(id, estado) { ok(await sb.from('comandas').update({ estado }).eq('id', id)) },
-    async marcarCobrada(id, cobrada) { ok(await sb.from('comandas').update({ cobrada }).eq('id', id)) },
+    async marcarCobrada(id, cobrada, pagos) {
+      if (pagos?.length) {
+        ok(await sb.from('pagos').delete().eq('comanda_id', id))
+        ok(await sb.from('pagos').insert(pagos.map(p => ({ comanda_id: id, forma: p.forma, monto: p.monto }))))
+      }
+      ok(await sb.from('comandas').update({ cobrada }).eq('id', id))
+    },
     async asignarRepartidor(comandaId, repartidorId) {
       ok(await sb.from('comandas').update({ repartidor_id: repartidorId, asignada_at: new Date().toISOString(), estado: 'en_camino' }).eq('id', comandaId))
     },

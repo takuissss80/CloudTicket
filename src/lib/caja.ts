@@ -1,4 +1,4 @@
-import type { Caja, Categoria, Comanda, MovimientoCaja, Producto, TotalesCaja, TurnoCaja } from '../types'
+import type { Caja, Categoria, Comanda, MovimientoCaja, Pago, Producto, TotalesCaja, TurnoCaja } from '../types'
 
 /** Efectivo que realmente quedó de una comanda: lo pagado en efectivo menos el vuelto */
 export function efectivoNeto(c: Comanda) {
@@ -150,4 +150,11 @@ export function marcasDeLocales(menus: { categorias: Categoria[]; categoriasOcul
     }
   }
   return [...nombres]
+}
+
+/** Toda comanda tiene forma de pago: si no se eligió ninguna (o quedaron en $0), va Efectivo por el total */
+export function pagosConDefecto(pagos: Pago[], total: number): Pago[] {
+  const validos = pagos.filter(p => p.monto > 0)
+  if (validos.length || !(total > 0)) return validos
+  return [{ forma: 'efectivo', monto: total }]
 }

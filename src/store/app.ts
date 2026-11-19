@@ -1,4 +1,4 @@
-import { calcularTotales, ventasPorGrupo } from '../lib/caja'
+import { calcularTotales, pagosConDefecto, ventasPorGrupo } from '../lib/caja'
 import { create } from 'zustand'
 import { repo } from '../data'
 import type { Catalogo, MenuData } from '../data/repo'
@@ -71,7 +71,7 @@ interface AppState {
 }
 
 let toastSeq = 0
-let procesandoExternos = false
+let procesandoExternos = 0 // momento en que empezó la vuelta en curso (0 = libre)
 const avisados = new Set<string>()
 const menuVacio: MenuData = { categorias: [], productos: [], ajustes: [], ingredientes: [] }
 
@@ -245,7 +245,7 @@ export const useApp = create<AppState>((set, get) => {
         observaciones: p.observaciones.trim() || undefined,
         horaEntrega: p.horaEntrega || undefined,
         cobrada: p.cobrada,
-        pagos: p.pagos.filter(x => x.monto > 0),
+        pagos: pagosConDefecto(p.pagos, total),
         items: p.items,
       }
       try {
@@ -316,7 +316,12 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async marcarCobrada(c, cobrada) {
-      try { await repo.marcarCobrada(c.id, cobrada); await get().refrescar() } catch (e) { fallo(e) }
+      try {
+        // Si no tenía forma de pago, queda en Efectivo por el total
+        const faltan = !c.pagos.some(x => x.monto > 0)
+        await repo.marcarCobrada(c.id, cobrada, faltan ? pagosConDefecto([], c.total) : undefined)
+        await get().refrescar()
+      } catch (e) { fallo(e) }
     },
 
     async asignarRepartidor(c, repartidorId) {
@@ -340,7 +345,7 @@ export const useApp = create<AppState>((set, get) => {
 
     async entregar(c, pagos, cobrada) {
       try {
-        await repo.entregarComanda(c.id, pagos.filter(p => p.monto > 0), cobrada)
+        await repo.entregarComanda(c.id, pagosConDefecto(pagos, c.total), cobrada)
         get().avisar(`Comanda #${c.numero} entregada`)
         await get().refrescar()
         return true
@@ -397,8 +402,9 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async procesarExternos() {
-      if (procesandoExternos) return
-      procesandoExternos = true
+      // Si una vuelta anterior quedó colgada (red), no bloquea para siempre
+      if (procesandoExternos && Date.now() - procesandoExternos < 60_000) return
+      procesandoExternos = Date.now()
       try {
         await get().cargarExternos()
         const { caja, catalogo, pedidosExternos } = get()
@@ -428,7 +434,7 @@ export const useApp = create<AppState>((set, get) => {
         }
         if (importados) await get().refrescar()
         await get().cargarExternos()
-      } catch { /* sin conexión: se reintenta en el próximo ciclo */ } finally { procesandoExternos = false }
+      } catch { /* sin conexión: se reintenta en el próximo ciclo */ } finally { procesandoExternos = 0 }
     },
 
     avisar(texto, tipo = 'ok') {

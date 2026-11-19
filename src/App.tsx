@@ -56,7 +56,17 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     if (!cajaId) return
     procesarExternos()
     const t = setInterval(() => procesarExternos(), 15_000)
-    return () => clearInterval(t)
+    // Al volver a la pestaña o recuperar internet, importa enseguida (en segundo plano el navegador frena el reloj)
+    const ya = () => { if (document.visibilityState === 'visible') procesarExternos() }
+    document.addEventListener('visibilitychange', ya)
+    addEventListener('focus', ya)
+    addEventListener('online', ya)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', ya)
+      removeEventListener('focus', ya)
+      removeEventListener('online', ya)
+    }
   }, [cajaId, procesarExternos])
 
   if (cargando) return <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>

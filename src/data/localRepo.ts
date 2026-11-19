@@ -1045,10 +1045,11 @@ export const localRepo: Repo = {
     guardar()
   },
 
-  async marcarCobrada(id, cobrada) {
+  async marcarCobrada(id, cobrada, pagos) {
     const c = db().comandas.find(x => x.id === id)
     if (!c) return
     puedeLocal(c.sucursalId)
+    if (pagos?.length) c.pagos = clon(pagos)
     c.cobrada = cobrada; c.updatedAt = ahora()
     guardar()
   },
