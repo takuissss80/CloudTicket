@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { Comanda, TipoComanda } from '../types'
+import type { Categoria, Comanda, TipoComanda } from '../types'
 import { useApp, useCocinaActiva } from '../store/app'
 import { usePedido } from '../store/pedido'
 import { hora, minutosDesde, money, nombreConVariante } from '../lib/format'
+import { marcasDeLocales } from '../lib/caja'
 import { ComandaDetalle } from './ComandaDetalle'
 import { AsignarRepartidorModal, EntregarModal } from './Entrega'
 import { MINUTOS_ALERTA_DELIVERY, TEXTO_ACCION, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
@@ -19,7 +20,33 @@ function colorEstado(c: Comanda) {
 
 export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
 
-function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Comanda; onAbrir: () => void; onAccion: (a: AccionTablero) => void; onQuitarMoto: () => void; ahora: number }) {
+const colorMarca: Record<Categoria['color'], string> = {
+  blue: 'bg-pizarra text-white', red: 'bg-tomate text-white', amber: 'bg-muzza text-sobre-muzza', green: 'bg-albahaca text-sobre-albahaca',
+}
+
+/**
+ * Marcas de cada comanda (categorías contenedoras de lo que se pidió), para los locales que trabajan
+ * con más de una marca. Sin varias marcas visibles en el local devuelve null y no se muestra nada.
+ */
+function useMarcas() {
+  const menu = useApp(s => s.menu)
+  const visibles = new Set(marcasDeLocales([menu]))
+  if (visibles.size < 2) return null
+  const cat = new Map(menu.categorias.map(c => [c.id, c]))
+  const prodCat = new Map(menu.productos.map(p => [p.id, p.categoriaId]))
+  return (c: Comanda): Categoria[] => {
+    const monto = new Map<string, number>()
+    for (const it of c.items) {
+      let k = cat.get(prodCat.get(it.productoId ?? '') ?? '')
+      if (k?.padreId) k = cat.get(k.padreId)
+      if (!k || !visibles.has(k.nombre)) continue
+      monto.set(k.id, (monto.get(k.id) ?? 0) + it.precioUnit * it.cantidad + 0.001)
+    }
+    return [...monto].sort((a, b) => b[1] - a[1]).map(([id]) => cat.get(id)!)
+  }
+}
+
+function TarjetaComanda({ c, marcas, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Comanda; marcas?: Categoria[]; onAbrir: () => void; onAccion: (a: AccionTablero) => void; onQuitarMoto: () => void; ahora: number }) {
   const cocina = useCocinaActiva()
   const pasarACocina = useApp(s => s.pasarACocina)
   const [enviando, setEnviando] = useState(false)
@@ -33,6 +60,13 @@ function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Coma
   return (
     <article className={`ticket-edge relative bg-superficie shadow-sm transition ${cerrada ? 'opacity-55' : ''}`}>
       <button onClick={onAbrir} className="block w-full px-4 text-left">
+        {!!marcas?.length && (
+          <div className="mb-2 flex gap-1.5">
+            {marcas.map(m => (
+              <span key={m.id} className={`min-w-0 flex-1 truncate rounded-md px-2.5 py-1 text-center font-cond text-xl font-extrabold uppercase leading-tight tracking-wide ${colorMarca[m.color]}`}>{m.nombre}</span>
+            ))}
+          </div>
+        )}
         <div className="flex items-start gap-3">
           <span className={`font-cond text-5xl font-extrabold leading-[0.85] tabular-nums ${c.estado === 'anulada' ? 'line-through' : ''}`}>{c.numero}</span>
           <div className="min-w-0 flex-1 pt-0.5">
@@ -107,6 +141,7 @@ function TarjetaComanda({ c, onAbrir, onAccion, onQuitarMoto, ahora }: { c: Coma
 
 export function Tablero() {
   const { comandas, quitarRepartidor } = useApp()
+  const marcasDe = useMarcas()
   const nuevo = usePedido(s => s.nuevo)
   const [verCerradas, setVerCerradas] = useState(false)
   const [seleccion, setSeleccion] = useState<string | null>(null)
@@ -138,7 +173,7 @@ export function Tablero() {
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-          {lista.map(c => <TarjetaComanda key={c.id} c={c} ahora={ahora} onAbrir={() => setSeleccion(c.id)} onAccion={setAccion}
+          {lista.map(c => <TarjetaComanda key={c.id} c={c} marcas={marcasDe?.(c)} ahora={ahora} onAbrir={() => setSeleccion(c.id)} onAccion={setAccion}
             onQuitarMoto={async () => { if (await quitarRepartidor(c)) setAccion({ tipo: 'asignar', id: c.id }) }} />)}
         </div>
         {!lista.length && (
