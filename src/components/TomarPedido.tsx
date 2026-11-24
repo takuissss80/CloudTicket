@@ -8,14 +8,9 @@ import { Btn, Confirmar, Stepper, inputCls } from './ui'
 import { CategoriaModal } from './CategoriaModal'
 import { PromoModal } from './PromoModal'
 import { ClienteModal } from './ClienteModal'
+import { colorCategoria } from '../lib/colores'
 import { CobroModal } from './CobroModal'
 
-const colorTile: Record<Categoria['color'], string> = {
-  blue: 'border-t-pizarra',
-  red: 'border-t-tomate',
-  amber: 'border-t-muzza',
-  green: 'border-t-albahaca',
-}
 
 /** Pantalla completa para cargar un pedido */
 export function TomarPedido() {
@@ -209,7 +204,7 @@ export function TomarPedido() {
                 const contiene = c.id === grupoVisible?.id ? [] : hijas(c.id)
                 return (
                   <button key={c.id} onClick={() => (contiene.length ? setGrupo(c) : setCategoria(c))}
-                    className={`flex min-h-32 flex-col justify-between rounded-xl border border-linea border-t-[6px] bg-superficie p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${colorTile[c.color]} ${contiene.length ? 'ring-1 ring-linea' : ''}`}>
+                    className={`flex min-h-32 flex-col justify-between rounded-xl border border-linea border-t-[6px] bg-superficie p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${contiene.length ? 'ring-1 ring-linea' : ''}`} style={{ borderTopColor: colorCategoria(c.color).fondo }}>
                     <span>
                       <span className="block font-cond text-2xl font-bold leading-tight">{c.nombre}</span>
                       {contiene.length > 0 && <span className="text-sm text-gris">{contiene.length} categoría{contiene.length === 1 ? '' : 's'} ›</span>}

@@ -4,6 +4,7 @@ import { useApp, useCocinaActiva } from '../store/app'
 import { usePedido } from '../store/pedido'
 import { hora, minutosDesde, money, nombreConVariante } from '../lib/format'
 import { marcasDeLocales } from '../lib/caja'
+import { colorCategoria } from '../lib/colores'
 import { ComandaDetalle } from './ComandaDetalle'
 import { AsignarRepartidorModal, EntregarModal } from './Entrega'
 import { MINUTOS_ALERTA_DELIVERY, TEXTO_ACCION, accionPendiente, etiquetaEstado, minutosDelivery } from '../lib/estados'
@@ -20,9 +21,6 @@ function colorEstado(c: Comanda) {
 
 export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
 
-const colorMarca: Record<Categoria['color'], string> = {
-  blue: 'bg-pizarra text-white', red: 'bg-tomate text-white', amber: 'bg-muzza text-sobre-muzza', green: 'bg-albahaca text-sobre-albahaca',
-}
 
 /**
  * Marcas de cada comanda (categorías contenedoras de lo que se pidió), para los locales que trabajan
@@ -63,7 +61,7 @@ function TarjetaComanda({ c, marcas, onAbrir, onAccion, onQuitarMoto, ahora }: {
         {!!marcas?.length && (
           <div className="mb-2 flex gap-1.5">
             {marcas.map(m => (
-              <span key={m.id} className={`min-w-0 flex-1 truncate rounded-md px-2.5 py-1 text-center font-cond text-xl font-extrabold uppercase leading-tight tracking-wide ${colorMarca[m.color]}`}>{m.nombre}</span>
+              <span key={m.id} className={`min-w-0 flex-1 truncate rounded-md px-2.5 py-1 text-center font-cond text-xl font-extrabold uppercase leading-tight tracking-wide`} style={{ background: colorCategoria(m.color).fondo, color: colorCategoria(m.color).texto }}>{m.nombre}</span>
             ))}
           </div>
         )}

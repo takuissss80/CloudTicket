@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AjusteLocal, Categoria, ColorCategoria, Producto } from '../../types'
+import { COLORES_CATEGORIA, colorCategoria } from '../../lib/colores'
 import type { MenuData } from '../../data/repo'
 import { repo } from '../../data'
 import type { ModoCategoriaLocal } from '../../data/repo'
@@ -10,13 +11,6 @@ import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 import { ProductoEditor } from './ProductoEditor'
 import { CODIGO_ARMADO, esArmado } from '../../store/pedido'
 
-const COLORES: { key: ColorCategoria; label: string; cls: string }[] = [
-  { key: 'blue', label: 'Pizarra', cls: 'bg-pizarra' },
-  { key: 'red', label: 'Tomate', cls: 'bg-tomate' },
-  { key: 'amber', label: 'Muzza', cls: 'bg-muzza' },
-  { key: 'green', label: 'Albahaca', cls: 'bg-albahaca' },
-]
-const bordeColor: Record<ColorCategoria, string> = { blue: 'bg-pizarra', red: 'bg-tomate', amber: 'bg-muzza', green: 'bg-albahaca' }
 
 const numero = (v: string) => (v.trim() === '' ? undefined : Math.max(0, Number(v.replace(',', '.')) || 0))
 
@@ -196,7 +190,7 @@ export function MenuAdmin() {
                 <button key={c.id} aria-expanded={hijas ? abierta : undefined}
                   onClick={() => { setCatSel(c.id); setBusqueda(''); if (hijas) alternar(c.id) }}
                   className={`flex w-full items-center gap-3 rounded-lg py-2.5 pr-3 text-left ${nivel ? 'pl-8' : 'pl-3'} ${catSel === c.id && !busqueda ? 'bg-superficie shadow-sm ring-1 ring-linea' : 'hover:bg-superficie/60'} ${apagada ? 'opacity-50' : ''}`}>
-                  <span className={`${nivel ? 'h-5 w-1' : 'h-6 w-1.5'} rounded-full ${bordeColor[c.color]}`} />
+                  <span className={`${nivel ? 'h-5 w-1' : 'h-6 w-1.5'} rounded-full`} style={{ background: colorCategoria(c.color).fondo }} />
                   <span className={`min-w-0 flex-1 truncate ${nivel ? 'font-medium' : 'font-semibold'}`}>{c.nombre}{hijas > 0 && <span className="ml-1.5 text-xs font-normal text-gris">{hijas} cat.</span>}</span>
                   {hijas > 0 && <span aria-hidden className={`text-gris transition-transform ${abierta ? 'rotate-90' : ''}`}>›</span>}
                   {c.sucursalId && <span className="rounded bg-muzza-claro px-1.5 text-xs font-semibold">Propia</span>}
@@ -519,10 +513,10 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
         <div>
           <span className="mb-1 block text-sm font-medium text-gris">Color del botón</span>
           <div className="flex flex-wrap gap-2">
-            {COLORES.map(c => (
+            {COLORES_CATEGORIA.map(c => (
               <button key={c.key} type="button" onClick={() => setColor(c.key)} aria-pressed={color === c.key}
                 className={`flex h-10 items-center gap-2 rounded-lg px-3 ring-1 ${color === c.key ? 'bg-superficie ring-2 ring-tinta' : 'bg-superficie ring-linea'}`}>
-                <span className={`size-4 rounded-full ${c.cls}`} />{c.label}
+                <span className="size-4 rounded-full ring-1 ring-tinta/30" style={{ background: c.fondo }} />{c.label}
               </button>
             ))}
           </div>

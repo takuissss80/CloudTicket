@@ -113,7 +113,7 @@ export interface RecetaItem {
   cantidad: number
 }
 
-export type ColorCategoria = 'blue' | 'red' | 'amber' | 'green'
+export type ColorCategoria = 'blue' | 'red' | 'amber' | 'green' | 'orange' | 'pink' | 'violet' | 'sky' | 'teal' | 'lime' | 'brown' | 'gray' | 'black'
 
 export interface Categoria {
   id: string
