@@ -100,7 +100,7 @@ export function PantallaPublica({ codigo }: { codigo: string }) {
           <div className="flex min-h-full items-center justify-center p-8 text-center">
             <div>
               <h1 className="font-cond text-5xl font-bold">Pantalla de cocina apagada</h1>
-              <p className="mt-3 text-2xl text-gris">Se activa en Administración → Pantallas. Cuando la activen, esta tele se enciende sola.</p>
+              <p className="mt-3 text-2xl text-gris">Se activa en Administración → Pantallas. Cuando la activen, esta pantalla se enciende sola.</p>
             </div>
           </div>
         )}

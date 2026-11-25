@@ -257,7 +257,16 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       ok(await sb.rpc('pantalla_nuevo_codigo', { p_id: id }))
     },
     async eliminarPantalla(id) {
+      const p = ok(await sb.from('pantallas').select('sucursal_id, videos').eq('id', id).single()) as Row
       ok(await sb.rpc('pantalla_eliminar', { p_id: id }))
+      // Sus videos se borran del Storage (salvo los que use otra pantalla del local)
+      const otras = (ok(await sb.from('pantallas').select('videos').eq('sucursal_id', p.sucursal_id)) as Row[])
+      const enUso = new Set(otras.flatMap(o => (Array.isArray(o.videos) ? o.videos : []).map((v: Row) => v.path)))
+      const borrar = (Array.isArray(p.videos) ? p.videos : []).map((v: Row) => v.path as string).filter((x: string) => x && !enUso.has(x))
+      if (borrar.length) {
+        const r = await sb.storage.from('pantallas').remove(borrar)
+        if (r.error) throw new Error(`La pantalla se eliminó, pero no se pudieron borrar sus videos: ${r.error.message}`)
+      }
     },
     async pantallaDatos(codigo) {
       const d = ok(await sb.rpc('pantalla_datos', { p_codigo: codigo })) as unknown as Row

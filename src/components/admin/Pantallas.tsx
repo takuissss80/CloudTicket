@@ -20,7 +20,7 @@ export function Pantallas() {
     if (!local) return
     const n = (teles ?? []).filter(t => t.tipo === tipo).length + 1
     try {
-      await repo.crearPantalla(local.id, tipo, tipo === 'cocina' ? `Cocina ${n}` : `Tele mostrador ${n}`)
+      await repo.crearPantalla(local.id, tipo, tipo === 'cocina' ? `Cocina ${n}` : `Pantalla mostrador ${n}`)
       await cargar()
     } catch (e) { avisar(mensajeError(e), 'error') }
   }
@@ -31,18 +31,18 @@ export function Pantallas() {
       <Cocina />
       <div className="mx-auto max-w-3xl space-y-4 p-4 pt-0">
         <section className="rounded-xl bg-superficie p-5 ring-1 ring-linea">
-          <h2 className="font-cond text-3xl font-bold">Teles · {local.nombre}</h2>
+          <h2 className="font-cond text-3xl font-bold">Pantallas · {local.nombre}</h2>
           <p className="mt-1 text-gris">
-            Cada tele tiene su propia dirección: abrila en la tele y queda andando, sin usuario ni contraseña.
+            Cada pantalla tiene su propia dirección: abrila en la pantalla y queda andando, sin usuario ni contraseña.
             Se actualiza sola al instante cuando cambia un pedido. Si una dirección se filtra, generá una nueva y la anterior deja de andar.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Btn tono="albahaca" onClick={() => crear('clientes')}>+ Tele para clientes</Btn>
-            <Btn tono="albahaca" onClick={() => crear('cocina')}>+ Tele para cocina</Btn>
+            <Btn tono="albahaca" onClick={() => crear('clientes')}>+ Pantalla para clientes</Btn>
+            <Btn tono="albahaca" onClick={() => crear('cocina')}>+ Pantalla para cocina</Btn>
           </div>
         </section>
         {teles === null ? <p className="p-6 text-center text-gris">Cargando…</p>
-          : !teles.length ? <p className="rounded-xl bg-superficie p-6 text-center text-gris ring-1 ring-linea">Todavía no hay teles. Agregá una con los botones de arriba.</p>
+          : !teles.length ? <p className="rounded-xl bg-superficie p-6 text-center text-gris ring-1 ring-linea">Todavía no hay pantallas. Agregá una con los botones de arriba.</p>
           : teles.map(t => <Tele key={t.id} t={t} sucursalId={local.id} cocinaActiva={local.cocinaActiva} onCambio={cargar} />)}
       </div>
     </div>
@@ -134,7 +134,7 @@ function Tele({ t, sucursalId, cocinaActiva, onCambio }: { t: Pantalla; sucursal
         <span className={`rounded-full px-3 py-1 text-sm font-bold ${t.tipo === 'cocina' ? 'bg-muzza-claro text-tinta' : 'bg-pizarra-claro text-pizarra'}`}>
           {t.tipo === 'cocina' ? 'Cocina' : 'Clientes'}
         </span>
-        <input aria-label="Nombre de la tele" value={nombre} onChange={e => setNombre(e.target.value)}
+        <input aria-label="Nombre de la pantalla" value={nombre} onChange={e => setNombre(e.target.value)}
           onBlur={() => nombre.trim() !== t.nombre && guardar({ nombre: nombre.trim() })}
           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
           className={`${inputBase} h-10 min-w-0 flex-1 font-cond text-xl font-bold`} />
@@ -142,13 +142,13 @@ function Tele({ t, sucursalId, cocinaActiva, onCambio }: { t: Pantalla; sucursal
       </div>
 
       <div className="mt-4 rounded-xl bg-harina p-4 ring-1 ring-linea">
-        <div className="text-sm font-medium text-gris">Dirección para abrir en la tele</div>
+        <div className="text-sm font-medium text-gris">Dirección para abrir en la pantalla</div>
         <div className="mt-1 break-all font-mono text-2xl font-bold tracking-wide">{enlace.replace(/^https?:\/\//, '')}</div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Btn onClick={copiar}>Copiar</Btn>
           <a href={enlace} target="_blank" rel="noopener" className="inline-flex h-10 items-center rounded-lg bg-pizarra px-4 font-semibold text-white hover:brightness-110">Abrir</a>
           <Btn tono="fantasma" onClick={() => setConfirmar('codigo')}>Generar dirección nueva</Btn>
-          <Btn tono="fantasma" className="text-tomate" onClick={() => setConfirmar('eliminar')}>Eliminar tele</Btn>
+          <Btn tono="fantasma" className="text-tomate" onClick={() => setConfirmar('eliminar')}>Eliminar pantalla</Btn>
         </div>
         {t.tipo === 'cocina' && !cocinaActiva && (
           <p className="mt-3 text-sm font-semibold text-tomate">La pantalla de cocina está apagada en este local: activala arriba para que los pedidos pasen por cocina.</p>
@@ -172,7 +172,7 @@ function Tele({ t, sucursalId, cocinaActiva, onCambio }: { t: Pantalla; sucursal
           <h3 className="mt-5 font-cond text-xl font-bold">Videos</h3>
           <p className="text-[15px] text-gris">
             Uno detrás del otro, en loop y sin sonido, {t.orientacion === 'horizontal' ? 'a la izquierda' : 'arriba'} de los pedidos. MP4 de hasta {MAX_MB} MB.
-            La tele los baja una sola vez y los guarda.
+            La pantalla los baja una sola vez y los guarda.
           </p>
           {t.videos.length > 0 && (
             <ul className="mt-3 divide-y divide-linea overflow-hidden rounded-xl bg-harina ring-1 ring-linea">
@@ -196,12 +196,12 @@ function Tele({ t, sucursalId, cocinaActiva, onCambio }: { t: Pantalla; sucursal
       )}
 
       {confirmar === 'codigo' && (
-        <Confirmar texto="¿Generar una dirección nueva?" detalle="La dirección actual deja de andar en el momento: hay que abrir la nueva en la tele." accion="Generar nueva"
+        <Confirmar texto="¿Generar una dirección nueva?" detalle="La dirección actual deja de andar en el momento: hay que abrir la nueva en la pantalla." accion="Generar nueva"
           onNo={() => setConfirmar(null)} onSi={() => { setConfirmar(null); accion(() => repo.nuevoCodigoPantalla(t.id), 'Dirección nueva generada') }} />
       )}
       {confirmar === 'eliminar' && (
-        <Confirmar texto={`¿Eliminar ${t.nombre || 'esta tele'}?`} detalle="Su dirección deja de andar." accion="Eliminar"
-          onNo={() => setConfirmar(null)} onSi={() => { setConfirmar(null); accion(() => repo.eliminarPantalla(t.id), 'Tele eliminada') }} />
+        <Confirmar texto={`¿Eliminar ${t.nombre || 'esta pantalla'}?`} detalle="Su dirección deja de andar y se borran sus videos." accion="Eliminar"
+          onNo={() => setConfirmar(null)} onSi={() => { setConfirmar(null); accion(() => repo.eliminarPantalla(t.id), 'Pantalla eliminada') }} />
       )}
     </section>
   )

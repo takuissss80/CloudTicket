@@ -143,10 +143,6 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
                 PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
               </Btn>
             )}
-            {esPro && (
-              <a href="#mostrador" target="_blank" rel="noopener" title="Pantalla para los clientes del mostrador (en otra pestaña)"
-                className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Pantalla clientes</a>
-            )}
             {cocinaActiva && (
               <a href="#cocina" target="_blank" rel="noopener" title="Abre la pantalla de cocina en otra pestaña"
                 className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Cocina</a>
