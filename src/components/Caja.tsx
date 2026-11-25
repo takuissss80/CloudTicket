@@ -245,7 +245,7 @@ export function ResumenCaja({ caja, totales, comandas }: { caja: Caja; totales: 
               </li>
             ))}
             <li className="flex justify-between bg-harina px-4 py-2 font-bold">
-              <span>Total cobrado (todos los medios)</span>
+              <span>TOTAL</span>
               <span className="tabular-nums">{money([...porForma.values()].reduce((s, v) => s + v, 0))}</span>
             </li>
           </ul>

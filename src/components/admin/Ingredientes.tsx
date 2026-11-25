@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Ingrediente, Producto, UnidadIngrediente } from '../../types'
 import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
-import { unidadCosto } from '../../lib/menu'
 import { normalizar } from '../../lib/format'
 import { Btn, inputBase, inputCls } from '../ui'
 
@@ -67,7 +66,7 @@ export function Ingredientes() {
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="mr-auto">
           <h2 className="font-cond text-3xl font-bold">Ingredientes</h2>
-          <p className="text-[15px] text-gris">El costo se carga como lo comprás: por kilo, por litro o por unidad. Al cambiarlo se recalcula el costo de todos los productos que lo usan.</p>
+          <p className="text-[15px] text-gris">Lo que usan las recetas de los productos. El stock se descuenta solo al vender.</p>
         </div>
         <input id="ing-buscar" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Buscar ingrediente" className={`${inputBase} h-10 w-56`} />
       </div>
@@ -83,10 +82,6 @@ export function Ingredientes() {
             {UNIDADES.map(u => <option key={u.key} value={u.key}>{u.label}</option>)}
           </select>
         </label>
-        <label>
-          <span className="mb-1 block text-sm font-medium text-gris">Costo por {unidadCosto(nuevo.unidad)}</span>
-          <input id="ing-nuevo-costo" inputMode="decimal" value={nuevo.costo} onChange={e => setNuevo({ ...nuevo, costo: e.target.value })} className={`${inputBase} w-32 text-right`} placeholder="0" />
-        </label>
         <Btn tono="albahaca" className="h-11" disabled={!nuevo.nombre.trim()}>Agregar</Btn>
       </form>
 
@@ -96,7 +91,6 @@ export function Ingredientes() {
             <tr>
               <th className="px-3 py-2 font-medium">Ingrediente</th>
               <th className="px-3 py-2 font-medium">Se mide en</th>
-              <th className="px-3 py-2 text-right font-medium">Costo</th>
               <th className="px-3 py-2 font-medium">Se usa en</th>
               <th className="px-3 py-2 text-center font-medium">Activo</th>
               <th className="px-3 py-2"><span className="sr-only">Acciones</span></th>
@@ -115,13 +109,6 @@ export function Ingredientes() {
                       className="h-9 rounded-lg border border-linea bg-superficie px-2">
                       {UNIDADES.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
                     </select>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <CampoTexto valor={String(i.costo)} numerico etiqueta={`Costo de ${i.nombre}`}
-                        onGuardar={v => guardar(i, { costo: Number(v.replace(',', '.')) || 0 })} />
-                      <span className="w-14 text-left text-sm text-gris">por {unidadCosto(i.unidad)}</span>
-                    </div>
                   </td>
                   <td className="max-w-56 px-3 py-2 text-sm text-gris">
                     {u.length ? (
@@ -156,7 +143,7 @@ export function Ingredientes() {
                 </tr>
               )
             })}
-            {!visibles.length && <tr><td colSpan={6} className="px-3 py-10 text-center text-gris">{filtro ? `No hay ingredientes con “${filtro}”.` : 'Todavía no cargaste ingredientes.'}</td></tr>}
+            {!visibles.length && <tr><td colSpan={5} className="px-3 py-10 text-center text-gris">{filtro ? `No hay ingredientes con “${filtro}”.` : 'Todavía no cargaste ingredientes.'}</td></tr>}
           </tbody>
         </table>
       </div>

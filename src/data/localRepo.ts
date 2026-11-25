@@ -783,6 +783,8 @@ export const localRepo: Repo = {
     guardar()
   },
 
+  async cerrarCajasAuto() {},
+
   async cambiarDineroInicial(id, monto) {
     const c = db().cajas.find(x => x.id === id && x.estado === 'abierta')
     if (!c) throw new Error('Solo se puede cambiar el inicio de la caja abierta')
@@ -1048,7 +1050,7 @@ export const localRepo: Repo = {
     if (!c) return
     puedeLocal(c.sucursalId)
     if ((estado === 'anulada') !== (c.estado === 'anulada') && !ses().puedeDescontar) throw new Error('Solo el administrador o un encargado pueden anular comandas')
-    if (estado === 'anulada' && c.estado !== 'anulada') devolverComanda(c.id)
+    if (estado === 'anulada' && c.estado !== 'anulada') { devolverComanda(c.id); c.pagos = []; c.cobrada = false }
     if (estado !== c.estado && estado === 'en_preparacion') { c.cocinaAt = c.cocinaAt ?? ahora(); c.listoAt = undefined }
     if (estado !== c.estado && estado === 'listo') { c.listoAt = ahora(); c.cocinaAt = c.cocinaAt ?? ahora() }
     c.estado = estado; c.updatedAt = ahora()

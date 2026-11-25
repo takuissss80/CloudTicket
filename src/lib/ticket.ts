@@ -274,7 +274,7 @@ export function ticketCierre(d: DatosCierre, ancho: number): LineaTicket[] {
   if (porForma.size) {
     titulo('COBRADO POR FORMA DE PAGO')
     for (const [forma, monto] of porForma) dos(`  ${FORMAS_PAGO.find(f => f.key === forma)?.label ?? forma}`, money(monto))
-    dos('TOTAL COBRADO', money([...porForma.values()].reduce((s, v) => s + v, 0)), { bold: true })
+    dos('TOTAL', money([...porForma.values()].reduce((s, v) => s + v, 0)), { bold: true })
   }
 
   // Venta por marca (categorías contenedoras)

@@ -57,6 +57,10 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     if (!cajaId) return
     procesarExternos()
     const t = setInterval(() => procesarExternos(), 15_000)
+    // Respaldo del cierre automático de la base (por si no está programado)
+    const auto = () => repo.cerrarCajasAuto().then(() => refrescar()).catch(() => {})
+    const tAuto = setInterval(auto, 10 * 60_000)
+    const tAuto0 = setTimeout(auto, 5_000)
     // Al volver a la pestaña o recuperar internet, importa enseguida (en segundo plano el navegador frena el reloj)
     const ya = () => { if (document.visibilityState === 'visible') procesarExternos() }
     document.addEventListener('visibilitychange', ya)
@@ -64,11 +68,13 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     addEventListener('online', ya)
     return () => {
       clearInterval(t)
+      clearInterval(tAuto)
+      clearTimeout(tAuto0)
       document.removeEventListener('visibilitychange', ya)
       removeEventListener('focus', ya)
       removeEventListener('online', ya)
     }
-  }, [cajaId, procesarExternos])
+  }, [cajaId, procesarExternos, refrescar])
 
   if (cargando) return <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>
   if (error) return (

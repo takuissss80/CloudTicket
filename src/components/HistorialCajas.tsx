@@ -140,7 +140,9 @@ function DetalleCaja({ caja, esUltima, hayAbierta, onReabrir, delLocalActual }: 
         {caja.estado === 'cerrada' ? (
           <>
             <p>Cerrada {caja.cerradaAt ? <>el {fechaLarga(caja.cerradaAt)} a las <b>{hora(caja.cerradaAt)}</b></> : ''}{caja.cerradaPor ? ` por ${caja.cerradaPor}` : ''}.</p>
-            <p>Dinero real de cierre <b>{money(caja.dineroCierre ?? 0)}</b>. Diferencia <b className={colorDif(caja.diferencia)}>{textoDif(caja.diferencia)}</b></p>
+            {caja.dineroCierre != null
+              ? <p>Dinero real de cierre <b>{money(caja.dineroCierre)}</b>. Diferencia <b className={colorDif(caja.diferencia)}>{textoDif(caja.diferencia)}</b></p>
+              : <p className="font-semibold text-muzza">No se contó el efectivo al cerrar.</p>}
             {caja.observaciones && <p className="rounded-lg bg-muzza-claro p-2"><b>Obs:</b> {caja.observaciones}</p>}
           </>
         ) : <p className="font-semibold text-albahaca">La caja sigue abierta.</p>}

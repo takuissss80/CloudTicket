@@ -16,6 +16,10 @@ export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: stri
   const ocultas = new Set((menu.categoriasOcultas ?? []).flatMap(id => [id, ...cats.filter(c => c.padreId === id).map(c => c.id)]))
   const enLocal = (c: Categoria) => c.activa && !ocultas.has(c.id) && (!c.sucursalId || c.sucursalId === sucursalId)
   const padreVisible = (c: Categoria) => { const p = c.padreId ? porId.get(c.padreId) : undefined; return !p || enLocal(p) }
+  const envioGratis = (id: string) => {
+    const c = porId.get(id)
+    return !!c && (!!c.incluyeEnvio || !!(c.padreId && porId.get(c.padreId)?.incluyeEnvio))
+  }
   const productos = menu.productos
     .filter(p => p.activo && (!p.sucursalId || p.sucursalId === sucursalId) && !ocultas.has(p.categoriaId))
     .filter(p => !ajustes.get(p.id)?.oculto)
@@ -26,6 +30,8 @@ export function resolverCatalogo(menu: MenuData, zonas: Zona[], sucursalId: stri
         precio: a?.precio ?? p.precio,
         precioMitad: p.precioMitad == null ? undefined : a?.precioMitad ?? p.precioMitad,
         agotado: !!a?.agotado,
+        // Envío gratis: lo marca la promo o su categoría (o la categoría de afuera)
+        incluyeEnvio: p.incluyeEnvio || envioGratis(p.categoriaId),
       }
     })
   const conProductos = cats

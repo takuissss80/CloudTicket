@@ -4,7 +4,7 @@ import { FORMAS_PAGO } from '../types'
 import { repo } from '../data'
 import { mensajeError, useApp } from '../store/app'
 import { fecha, hora, money } from '../lib/format'
-import { formatCantidad, unidadCantidad, unidadCompra, valorStock } from '../lib/stock'
+import { formatCantidad, unidadCantidad } from '../lib/stock'
 import {
   PERIODOS_RAPIDOS, descargarCSV, isoDia, rangoISO, reporteConsumo, reporteDinero, reporteGastos,
   reporteIngresosMercaderia, reporteProductos, reporteVentas, resumenMovimientosStock, type Periodo,
@@ -272,15 +272,11 @@ function RepProductos({ d, archivo }: { d: Datos; archivo: string }) {
   const nombreCat = (id: string) => d.categorias?.find(c => c.id === id)?.nombre ?? ''
   const filas = reporteProductos(d.comandas ?? [], d.productos ?? [], nombreCat)
   const consumo = reporteConsumo(d.movStock ?? [], d.ingredientes ?? [])
-  const costoTotal = consumo.reduce((s, x) => s + x.costo, 0)
-  const ventas = (d.comandas ?? []).filter(c => c.estado !== 'anulada').reduce((s, c) => s + c.total, 0)
   if (!filas.length) return <Vacio>No hay ventas en este período.</Vacio>
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-3">
         <Tarjeta label="Unidades vendidas" valor={filas.reduce((s, f) => s + f.sueltas, 0).toLocaleString('es-AR')} detalle="Sin contar lo que va dentro de las promos" />
-        <Tarjeta label="Costo de la mercadería vendida" valor={money(costoTotal)} detalle={consumo.length ? 'Según recetas y costos actuales' : 'Sin recetas cargadas'} />
-        <Tarjeta label="Margen bruto" valor={ventas && costoTotal ? `${Math.round(((ventas - costoTotal) / ventas) * 100)}%` : '—'} detalle={`Sobre ventas de ${money(ventas)}`} />
       </div>
 
       <Seccion titulo="Productos vendidos" csv={() => descargarCSV(archivo, [
@@ -304,12 +300,12 @@ function RepProductos({ d, archivo }: { d: Datos; archivo: string }) {
 
       {consumo.length > 0 && (
         <Seccion titulo="Ingredientes consumidos" csv={() => descargarCSV(`${archivo}-ingredientes`, [
-          ['Ingrediente', 'Cantidad', 'Unidad', 'Costo'],
-          ...consumo.map(x => [x.ingrediente!.nombre, x.cantidad, unidadCantidad(x.ingrediente!.unidad), x.costo]),
+          ['Ingrediente', 'Cantidad', 'Unidad'],
+          ...consumo.map(x => [x.ingrediente!.nombre, x.cantidad, unidadCantidad(x.ingrediente!.unidad)]),
         ])}>
-          <Tabla cabecera={['Ingrediente', ['Cantidad', 'right'], ['Costo', 'right']]} ancho="min-w-[420px]">
+          <Tabla cabecera={['Ingrediente', ['Cantidad', 'right']]} ancho="min-w-[320px]">
             {consumo.map(x => (
-              <tr key={x.ingrediente!.id}><td className={td}>{x.ingrediente!.nombre}</td><td className={tdr}>{formatCantidad(x.cantidad, x.ingrediente!.unidad)}</td><td className={tdr}>{money(x.costo)}</td></tr>
+              <tr key={x.ingrediente!.id}><td className={td}>{x.ingrediente!.nombre}</td><td className={tdr}>{formatCantidad(x.cantidad, x.ingrediente!.unidad)}</td></tr>
             ))}
           </Tabla>
         </Seccion>
@@ -408,18 +404,17 @@ function RepMercaderia({ d, archivo, nombreLocal, varios }: { d: Datos; archivo:
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Tarjeta label="Total comprado" valor={money(r.total)} detalle={`${ingresos.length} ingresos`} />
-        <Tarjeta label="Pagado con la caja" valor={money(ingresos.filter(i => i.pagadoConCaja).reduce((s, i) => s + i.total, 0))} />
+        <Tarjeta label="Ingresos de mercadería" valor={ingresos.length} />
       </div>
       <Seccion titulo="Ingresos" csv={() => descargarCSV(archivo, [
-        ['Fecha', 'Hora', ...(varios ? ['Local'] : []), 'Proveedor', 'Comprobante', 'Ingrediente', 'Cantidad', 'Unidad', 'Costo', 'Usuario'],
+        ['Fecha', 'Hora', ...(varios ? ['Local'] : []), 'Proveedor', 'Comprobante', 'Ingrediente', 'Cantidad', 'Unidad', 'Usuario'],
         ...ingresos.flatMap(i => i.items.map(it => {
           const ing = nombreIng(it.ingredienteId)
           return [fecha(i.createdAt), hora(i.createdAt), ...(varios ? [nombreLocal(i.sucursalId)] : []), i.proveedor ?? '', i.comprobante ?? '',
-            ing?.nombre ?? '', it.cantidad, ing ? unidadCantidad(ing.unidad) : '', it.costo, i.creadoPor ?? '']
+            ing?.nombre ?? '', it.cantidad, ing ? unidadCantidad(ing.unidad) : '', i.creadoPor ?? '']
         })),
       ])}>
-        <Tabla cabecera={['Fecha', ...(varios ? ['Local'] : []), 'Proveedor', 'Comprobante', ['Ítems', 'right'], ['Total', 'right'], '']}>
+        <Tabla cabecera={['Fecha', ...(varios ? ['Local'] : []), 'Proveedor', 'Comprobante', ['Ítems', 'right'], '']}>
           {ingresos.map(i => (
             <Fragment key={i.id}>
               <tr onClick={() => setAbierto(abierto === i.id ? null : i.id)} className="cursor-pointer hover:bg-harina">
@@ -428,16 +423,15 @@ function RepMercaderia({ d, archivo, nombreLocal, varios }: { d: Datos; archivo:
                 <td className={`${td} font-semibold`}>{i.proveedor ?? '—'}</td>
                 <td className={td}>{i.comprobante ?? ''}</td>
                 <td className={tdr}>{i.items.length}</td>
-                <td className={`${tdr} font-semibold`}>{money(i.total)}</td>
-                <td className={`${td} text-sm text-gris`}>{i.pagadoConCaja ? 'Pagado con caja' : ''} {abierto === i.id ? '▲' : '▼'}</td>
+                <td className={`${td} text-sm text-gris`}>{abierto === i.id ? '▲' : '▼'}</td>
               </tr>
               {abierto === i.id && (
                 <tr className="bg-harina/60">
-                  <td colSpan={varios ? 7 : 6} className="px-6 py-2">
+                  <td colSpan={varios ? 6 : 5} className="px-6 py-2">
                     <ul className="space-y-1 text-[15px]">
                       {i.items.map((it, k) => {
                         const ing = nombreIng(it.ingredienteId)
-                        return <li key={k} className="flex justify-between gap-4"><span>{ing?.nombre}: {ing ? formatCantidad(it.cantidad, ing.unidad) : it.cantidad}</span><span className="tabular-nums">{money(it.costo)}</span></li>
+                        return <li key={k}>{ing?.nombre}: {ing ? formatCantidad(it.cantidad, ing.unidad) : it.cantidad}</li>
                       })}
                       {i.observaciones && <li className="text-gris">Obs: {i.observaciones}</li>}
                       {i.creadoPor && <li className="text-sm text-gris">Cargado por {i.creadoPor}</li>}
@@ -450,13 +444,11 @@ function RepMercaderia({ d, archivo, nombreLocal, varios }: { d: Datos; archivo:
         </Tabla>
       </Seccion>
       <Seccion titulo="Por ingrediente">
-        <Tabla cabecera={['Ingrediente', ['Cantidad', 'right'], ['Gastado', 'right'], ['Precio promedio', 'right']]} ancho="min-w-[520px]">
+        <Tabla cabecera={['Ingrediente', ['Cantidad', 'right']]} ancho="min-w-[320px]">
           {r.porIngrediente.map(x => (
             <tr key={x.ingrediente!.id}>
               <td className={`${td} font-semibold`}>{x.ingrediente!.nombre}</td>
               <td className={tdr}>{formatCantidad(x.cantidad, x.ingrediente!.unidad)}</td>
-              <td className={tdr}>{money(x.costo)}</td>
-              <td className={`${tdr} text-gris`}>{x.promedio ? `${money(x.promedio)} / ${unidadCompra(x.ingrediente!.unidad)}` : ''}</td>
             </tr>
           ))}
         </Tabla>
@@ -476,26 +468,24 @@ function RepStock({ d, archivo, locales, nombreLocal }: { d: Datos; archivo: str
     const porLocal = locales.map(l => stockDe(l, i.id)?.cantidad ?? 0)
     const total = porLocal.reduce((s, x) => s + x, 0)
     const minimo = locales.reduce((s, l) => s + (stockDe(l, i.id)?.minimo ?? 0), 0)
-    return { i, porLocal, total, minimo, bajo: total < 0 || (minimo > 0 && total <= minimo), valor: valorStock(total, i), m: movs.get(i.id) }
+    return { i, porLocal, total, minimo, bajo: total < 0 || (minimo > 0 && total <= minimo), m: movs.get(i.id) }
   })
   if (!ings.length) return <Vacio>No hay ingredientes cargados.</Vacio>
-  const valor = filas.reduce((s, f) => s + f.valor, 0)
   const varios = locales.length > 1
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Tarjeta label="Valor del stock" valor={money(valor)} detalle="Con los costos actuales" />
         <Tarjeta label="Bajo el mínimo o en negativo" valor={filas.filter(f => f.bajo).length} tono={filas.some(f => f.bajo) ? 'mal' : undefined} />
       </div>
       <Seccion titulo="Stock actual y movimientos del período" csv={() => descargarCSV(archivo, [
-        ['Ingrediente', 'Unidad', ...(varios ? locales.map(nombreLocal) : []), 'Stock', 'Mínimo', 'Ingresó', 'Vendido', 'Ajustes', 'Decomisos', 'Valor'],
+        ['Ingrediente', 'Unidad', ...(varios ? locales.map(nombreLocal) : []), 'Stock', 'Mínimo', 'Ingresó', 'Vendido', 'Ajustes', 'Decomisos'],
         ...filas.map(f => {
           const fc = 1
           return [f.i.nombre, unidadCantidad(f.i.unidad), ...(varios ? f.porLocal.map(x => x / fc) : []), f.total / fc, f.minimo / fc,
-            (f.m?.ingreso ?? 0) / fc, -(f.m?.venta ?? 0) / fc, (f.m?.ajuste ?? 0) / fc, -(f.m?.decomiso ?? 0) / fc, f.valor]
+            (f.m?.ingreso ?? 0) / fc, -(f.m?.venta ?? 0) / fc, (f.m?.ajuste ?? 0) / fc, -(f.m?.decomiso ?? 0) / fc]
         }),
       ])}>
-        <Tabla cabecera={['Ingrediente', ...(varios ? locales.map(l => [nombreLocal(l), 'right'] as [string, 'right']) : []), ['Stock', 'right'], ['Ingresó', 'right'], ['Vendido', 'right'], ['Ajustes y decomisos', 'right'], ['Valor', 'right']]}
+        <Tabla cabecera={['Ingrediente', ...(varios ? locales.map(l => [nombreLocal(l), 'right'] as [string, 'right']) : []), ['Stock', 'right'], ['Ingresó', 'right'], ['Vendido', 'right'], ['Ajustes y decomisos', 'right']]}
           ancho={varios ? 'min-w-[960px]' : 'min-w-[720px]'}>
           {filas.map(f => {
             const aj = (f.m?.ajuste ?? 0) + (f.m?.decomiso ?? 0)
@@ -507,7 +497,6 @@ function RepStock({ d, archivo, locales, nombreLocal }: { d: Datos; archivo: str
                 <td className={`${tdr} text-albahaca`}>{f.m?.ingreso ? `+${formatCantidad(f.m.ingreso, f.i.unidad)}` : ''}</td>
                 <td className={tdr}>{f.m?.venta ? formatCantidad(-f.m.venta, f.i.unidad) : ''}</td>
                 <td className={`${tdr} ${aj < 0 ? 'text-tomate' : ''}`}>{aj ? `${aj > 0 ? '+' : ''}${formatCantidad(aj, f.i.unidad)}` : ''}</td>
-                <td className={`${tdr} text-gris`}>{money(f.valor)}</td>
               </tr>
             )
           })}

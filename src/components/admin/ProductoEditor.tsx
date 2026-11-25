@@ -3,7 +3,7 @@ import type { Categoria, Ingrediente, Producto, PromoSlot, RecetaItem, PromoFijo
 import type { ProductoEdicion } from '../../data/repo'
 import { repo } from '../../data'
 import { mensajeError } from '../../store/app'
-import { costoProducto, divisorUnidad, margen, nombreCategoria, ordenArbol, unidadCorta } from '../../lib/menu'
+import { nombreCategoria, ordenArbol, unidadCorta } from '../../lib/menu'
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 
@@ -30,8 +30,6 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
   const [guardando, setGuardando] = useState(false)
   const set = (x: Partial<ProductoEdicion>) => setP(prev => ({ ...prev, ...x }))
 
-  const comoProducto = { ...p, id: p.id ?? 'nuevo', precioMitad: porMitad ? p.precioMitad : undefined } as Producto
-  const costo = costoProducto(comoProducto, productos, ingredientes)
   const vendibles = productos.filter(x => x.tipo !== 'promo' && x.activo && x.id !== p.id)
   const esPromo = p.tipo === 'promo'
 
@@ -147,7 +145,6 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
               <ul className="divide-y divide-linea overflow-hidden rounded-xl bg-superficie ring-1 ring-linea">
                 {p.receta.map((r, i) => {
                   const ing = ingredientes.find(x => x.id === r.ingredienteId)
-                  const c = ing ? (r.cantidad * ing.costo) / divisorUnidad(ing.unidad) : 0
                   return (
                     <li key={r.ingredienteId} className="flex items-center gap-3 px-3 py-2">
                       <span className="min-w-0 flex-1 truncate font-medium">{ing?.nombre ?? 'Ingrediente borrado'}</span>
@@ -155,7 +152,6 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
                         onChange={e => setReceta(p.receta.map((x, j) => j === i ? { ...x, cantidad: numero(e.target.value) ?? 0 } : x))}
                         className={`${inputBase} h-9 w-24 text-right`} />
                       <span className="w-6 text-sm text-gris">{ing ? unidadCorta(ing.unidad) : ''}</span>
-                      <span className="w-20 text-right text-sm tabular-nums text-gris">{money(c)}</span>
                       <button aria-label="Quitar ingrediente" onClick={() => setReceta(p.receta.filter((_, j) => j !== i))} className="size-8 rounded-full text-xl text-gris hover:bg-tomate-claro hover:text-tomate">×</button>
                     </li>
                   )
@@ -259,29 +255,6 @@ export function ProductoEditor({ producto, categoriaId, sucursalId, categorias, 
           </>
         )}
 
-        {/* ---- Costo y margen */}
-        <section className="grid gap-3 rounded-xl bg-superficie p-4 ring-1 ring-linea sm:grid-cols-3">
-          <div>
-            <div className="text-sm text-gris">{esPromo ? 'Costo aproximado' : 'Costo'}</div>
-            <div className="font-cond text-3xl font-bold tabular-nums">{money(costo)}</div>
-          </div>
-          <div>
-            <div className="text-sm text-gris">Margen {porMitad && !esPromo ? 'entera' : ''}</div>
-            <div className={`font-cond text-3xl font-bold tabular-nums ${margen(p.precio, costo) < 50 ? 'text-tomate' : 'text-albahaca'}`}>
-              {p.precio ? `${Math.round(margen(p.precio, costo))}%` : '—'}
-            </div>
-          </div>
-          {porMitad && !esPromo && p.precioMitad ? (
-            <div>
-              <div className="text-sm text-gris">Margen mitad</div>
-              <div className={`font-cond text-3xl font-bold tabular-nums ${margen(p.precioMitad, costo / 2) < 50 ? 'text-tomate' : 'text-albahaca'}`}>
-                {Math.round(margen(p.precioMitad, costo / 2))}%
-              </div>
-            </div>
-          ) : null}
-          {esPromo && p.slots.length > 0 && <p className="text-sm text-gris sm:col-span-3">En los grupos para elegir se toma el costo promedio de las opciones.</p>}
-          {!esPromo && !p.receta.length && <p className="text-sm text-gris sm:col-span-3">Cargá la receta para ver el costo y el margen.</p>}
-        </section>
       </div>
     </Modal>
   )

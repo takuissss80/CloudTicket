@@ -5,7 +5,7 @@ import type { MenuData } from '../../data/repo'
 import { repo } from '../../data'
 import type { ModoCategoriaLocal } from '../../data/repo'
 import { mensajeError, useApp } from '../../store/app'
-import { costoProducto, importarMenuEjemplo, margen, nombreCategoria, ordenArbol, precioEnLocal } from '../../lib/menu'
+import { importarMenuEjemplo, nombreCategoria, ordenArbol, precioEnLocal } from '../../lib/menu'
 import { money, normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 import { ProductoEditor } from './ProductoEditor'
@@ -246,8 +246,6 @@ export function MenuAdmin() {
                     <th className="px-3 py-2 font-medium">Producto</th>
                     {enLocal && <th className="px-3 py-2 text-right font-medium">Menú madre</th>}
                     <th className="px-3 py-2 text-right font-medium">{enLocal ? 'Precio en el local' : 'Precio'}</th>
-                    <th className="px-3 py-2 text-right font-medium">Costo</th>
-                    <th className="px-3 py-2 text-right font-medium">Margen</th>
                     {enLocal && <th className="px-3 py-2 text-center font-medium">Agotado</th>}
                     {enLocal && <th className="px-3 py-2 text-center font-medium">Visible</th>}
                     <th className="px-3 py-2" />
@@ -256,9 +254,6 @@ export function MenuAdmin() {
                 <tbody className="divide-y divide-linea">
                   {productos.map(p => {
                     const a = ajustes.get(p.id)
-                    const ef = precioEnLocal(p, a)
-                    const costo = costoProducto(p, menu.productos, menu.ingredientes)
-                    const m = margen(ef.precio, costo)
                     const propio = !!p.sucursalId
                     return (
                       <tr key={p.id} className={p.activo && !a?.oculto ? '' : 'bg-harina/60 text-gris'}>
@@ -310,10 +305,6 @@ export function MenuAdmin() {
                               {p.precioMitad != null && <div className="text-xs text-gris">½ {money(p.precioMitad)}</div>}
                             </>
                           )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-gris">{costo ? money(costo) : '—'}</td>
-                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${!costo ? 'text-gris' : m < 50 ? 'text-tomate' : 'text-albahaca'}`}>
-                          {costo ? `${Math.round(m)}%` : '—'}
                         </td>
                         {enLocal && (
                           <td className="px-3 py-2.5 text-center">
@@ -466,6 +457,7 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
     && (!c.padreId || c.padreId === categoria?.id)).sort((a, b) => a.orden - b.orden)
   const [adentro, setAdentro] = useState<Set<string>>(() => new Set(categoria ? todas.filter(c => c.padreId === categoria.id).map(c => c.id) : []))
   const [guardando, setGuardando] = useState(false)
+  const [envio, setEnvio] = useState(!!categoria?.incluyeEnvio)
   // Contenedora del menú madre: cómo se ve en cada local (agrupada, sueltas u oculta)
   const sucursales = useApp(s => s.sucursales)
   const [modos, setModos] = useState<Record<string, ModoCategoriaLocal>>({})
@@ -482,6 +474,7 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
       const c = await repo.guardarCategoria({
         id: categoria?.id, nombre: nombre.trim().toUpperCase(), color, orden: pos, activa,
         sucursalId: ambito,
+        ...(envio !== !!categoria?.incluyeEnvio ? { incluyeEnvio: envio } : {}),
         ...((padre || undefined) !== categoria?.padreId ? { padreId: padre || null } : {}),
       })
       if (!padre) {
@@ -527,6 +520,10 @@ function CategoriaEditor({ categoria, sucursalId, orden, menu, onClose, onGuarda
         {categoria && (
           <label className="flex items-center gap-2"><input type="checkbox" className="size-5 accent-albahaca" checked={activa} onChange={e => setActiva(e.target.checked)} /> Visible en la pantalla de pedidos</label>
         )}
+        <label className="flex items-start gap-2">
+          <input type="checkbox" className="mt-0.5 size-5 accent-albahaca" checked={envio} onChange={e => setEnvio(e.target.checked)} />
+          <span>Envío gratis <span className="block text-sm text-gris">En delivery, si el pedido tiene un producto de esta categoría (o de las de adentro), no se cobra el envío. Ej.: promos con envío incluido.</span></span>
+        </label>
         <Campo label="Dentro de">
           <select id="cat-padre" value={padre} disabled={tieneHijas} onChange={e => setPadre(e.target.value)} className={inputCls}>
             <option value="">Ninguna (va suelta en la pantalla de pedidos)</option>

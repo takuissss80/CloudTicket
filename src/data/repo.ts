@@ -156,6 +156,8 @@ export interface Repo {
   reabrirCaja(id: string): Promise<void>
   /** Corrige el dinero al inicio de la caja abierta (admin o encargado) */
   cambiarDineroInicial(id: string, monto: number): Promise<void>
+  /** Cierra las cajas que quedaron abiertas de un día para otro (también lo hace la base cada 10 min) */
+  cerrarCajasAuto(): Promise<void>
   /** Historial, de la más nueva a la más vieja */
   listCajas(sucursalId: string, limit?: number): Promise<Caja[]>
   listMovimientos(cajaId: string): Promise<MovimientoCaja[]>

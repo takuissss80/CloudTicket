@@ -119,20 +119,18 @@ export function HistorialIngresos({ sucursalId, nombreLocal, ingredientes, onClo
                       </span>
                       <span className="min-w-0 flex-1 truncate font-semibold">{e.titulo}{e.comprobante ? <span className="font-normal text-gris"> · {e.comprobante}</span> : ''}</span>
                       <span className="text-sm text-gris">{e.items.length} ítem{e.items.length === 1 ? '' : 's'}</span>
-                      {e.total != null && <b className="w-28 text-right tabular-nums">{money(e.total)}</b>}
                     </button>
                     {ab && (
                       <div className="border-t border-linea px-4 py-3">
                         <table className="w-full text-[15px]">
                           <thead className="text-sm text-gris">
-                            <tr><th className="py-1 text-left font-medium">Ingrediente / producto</th><th className="py-1 text-right font-medium">Cantidad</th>{e.origen === 'compra' && <th className="py-1 text-right font-medium">Costo</th>}</tr>
+                            <tr><th className="py-1 text-left font-medium">Ingrediente / producto</th><th className="py-1 text-right font-medium">Cantidad</th></tr>
                           </thead>
                           <tbody className="divide-y divide-linea">
                             {e.items.map((i, k) => (
                               <tr key={k}>
                                 <td className="py-1.5">{i.nombre}</td>
                                 <td className={`py-1.5 text-right tabular-nums ${i.falta ? 'font-semibold text-tomate' : ''}`}>{i.cantidad}</td>
-                                {e.origen === 'compra' && <td className="py-1.5 text-right tabular-nums text-gris">{i.costo ? money(i.costo) : '—'}</td>}
                               </tr>
                             ))}
                           </tbody>

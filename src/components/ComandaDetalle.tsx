@@ -83,7 +83,7 @@ export function ComandaDetalle({ comanda, onClose, onAccion }: { comanda: Comand
               <div>
                 <div className="font-cond text-3xl font-bold">{money(c.total)}</div>
                 <div className="text-sm text-gris">
-                  {c.pagos.map(p => `${FORMAS_PAGO.find(f => f.key === p.forma)?.label} ${money(p.monto)}`).join(' + ') || 'Sin forma de pago (al cobrarla queda en Efectivo)'}
+                  {anulada ? 'Anulada: no suma en la caja' : c.pagos.map(p => `${FORMAS_PAGO.find(f => f.key === p.forma)?.label} ${money(p.monto)}`).join(' + ') || 'Sin forma de pago (al cobrarla queda en Efectivo)'}
                 </div>
               </div>
               <label className="flex cursor-pointer items-center gap-2 font-semibold">

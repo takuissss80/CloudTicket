@@ -125,6 +125,8 @@ export interface Categoria {
   sucursalId?: string
   /** Con valor: va dentro de esa categoría (ej.: PIZZAS dentro de NAPOLES). Un solo nivel */
   padreId?: string
+  /** Sus productos (y los de las categorías de adentro) incluyen el envío: el delivery sale sin costo de envío */
+  incluyeEnvio?: boolean
 }
 
 export interface PromoFijo {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Ingrediente, StockItem } from '../../types'
+import type { Ingrediente, Producto, StockItem } from '../../types'
 import { repo } from '../../data'
 import { mensajeError, useApp } from '../../store/app'
-import { formatCantidad, unidadCantidad, valorStock } from '../../lib/stock'
-import { money, normalizar } from '../../lib/format'
+import { formatCantidad, unidadCantidad } from '../../lib/stock'
+import { normalizar } from '../../lib/format'
 import { Btn, Campo, Modal, inputBase, inputCls } from '../ui'
 import { HistorialIngresos } from './HistorialIngresos'
 
@@ -23,12 +23,15 @@ export function Stock() {
   const [verHistorial, setVerHistorial] = useState(false)
   // Todos, también los desactivados: para mostrar nombres en el historial
   const [todos, setTodos] = useState<Ingrediente[]>([])
+  // Productos con receta: al ingresarlos se suma el stock de sus ingredientes
+  const [productos, setProductos] = useState<Producto[]>([])
 
   const cargar = useCallback(async () => {
     if (!local) return
     try {
       const [m, s] = await Promise.all([repo.getMenu(null), repo.getStock(local)])
       setTodos(m.ingredientes)
+      setProductos(m.productos.filter(p => p.tipo !== 'promo' && p.receta.length > 0))
       setIngredientes(m.ingredientes.filter(i => i.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)))
       setStock(s)
     } catch (e) { avisar(mensajeError(e), 'error') }
@@ -40,10 +43,9 @@ export function Stock() {
     const s = de.get(i.id)
     const cantidad = s?.cantidad ?? 0
     const minimo = s?.minimo ?? 0
-    return { i, cantidad, minimo, bajo: cantidad < 0 || (minimo > 0 && cantidad <= minimo), valor: valorStock(cantidad, i) }
+    return { i, cantidad, minimo, bajo: cantidad < 0 || (minimo > 0 && cantidad <= minimo) }
   })
   const visibles = filas.filter(f => (!filtro || normalizar(f.i.nombre).includes(normalizar(filtro))) && (!soloBajos || f.bajo))
-  const valorTotal = filas.reduce((s, f) => s + f.valor, 0)
   const bajos = filas.filter(f => f.bajo).length
 
   const guardarMinimo = async (ing: Ingrediente, v: string) => {
@@ -68,8 +70,7 @@ export function Stock() {
         <Btn tono="albahaca" onClick={() => setVerIngreso(true)} disabled={!ingredientes.length}>Ingresar mercadería</Btn>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl bg-superficie p-4 ring-1 ring-linea"><div className="text-sm text-gris">Valor del stock</div><div className="font-cond text-3xl font-bold tabular-nums">{money(valorTotal)}</div></div>
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl bg-superficie p-4 ring-1 ring-linea"><div className="text-sm text-gris">Ingredientes</div><div className="font-cond text-3xl font-bold tabular-nums">{filas.length}</div></div>
         <button onClick={() => setSoloBajos(!soloBajos)} aria-pressed={soloBajos}
           className={`rounded-xl p-4 text-left ring-1 ${bajos ? 'bg-tomate-claro ring-tomate' : 'bg-superficie ring-linea'} ${soloBajos ? 'ring-2' : ''}`}>
@@ -85,13 +86,12 @@ export function Stock() {
         <p className="rounded-xl bg-superficie p-8 text-center text-gris ring-1 ring-linea">No hay ingredientes cargados. El administrador los carga en la pestaña Ingredientes y les arma la receta a los productos.</p>
       ) : (
         <div className="overflow-x-auto rounded-xl bg-superficie ring-1 ring-linea">
-          <table className="w-full min-w-[680px] text-left text-[15px]">
+          <table className="w-full min-w-[560px] text-left text-[15px]">
             <thead className="border-b border-linea text-sm text-gris">
               <tr>
                 <th className="px-3 py-2 font-medium">Ingrediente</th>
                 <th className="px-3 py-2 text-right font-medium">Stock</th>
                 <th className="px-3 py-2 text-right font-medium">Mínimo</th>
-                <th className="px-3 py-2 text-right font-medium">Valor</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -103,11 +103,10 @@ export function Stock() {
                   <td className="px-3 py-2 text-right">
                     <MinimoInput valor={f.minimo} unidad={unidadCantidad(f.i.unidad)} etiqueta={`Mínimo de ${f.i.nombre}`} onGuardar={v => guardarMinimo(f.i, v)} />
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-gris">{money(f.valor)}</td>
                   <td className="px-3 py-2 text-right"><Btn onClick={() => setAjustar(f.i)}>Ajustar</Btn></td>
                 </tr>
               ))}
-              {!visibles.length && <tr><td colSpan={5} className="px-3 py-8 text-center text-gris">Nada para mostrar con ese filtro.</td></tr>}
+              {!visibles.length && <tr><td colSpan={4} className="px-3 py-8 text-center text-gris">Nada para mostrar con ese filtro.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -117,7 +116,7 @@ export function Stock() {
         <HistorialIngresos sucursalId={local} nombreLocal={sucursales.find(s => s.id === local)?.nombre ?? ''} ingredientes={todos} onClose={() => setVerHistorial(false)} />
       )}
       {verIngreso && local && (
-        <IngresoModal sucursalId={local} ingredientes={ingredientes} onClose={() => setVerIngreso(false)}
+        <IngresoModal sucursalId={local} ingredientes={ingredientes} productos={productos} onClose={() => setVerIngreso(false)}
           onListo={async () => { setVerIngreso(false); avisar('Mercadería ingresada'); await cargar(); await refrescarMenu() }} />
       )}
       {ajustar && local && (
@@ -142,33 +141,39 @@ function MinimoInput({ valor, unidad, etiqueta, onGuardar }: { valor: number; un
   )
 }
 
-interface FilaIngreso { ingredienteId: string; cantidad: string; costo: string }
+/** Fila del ingreso: un ingrediente ('i:id') o un producto con receta ('p:id') */
+interface FilaIngreso { clave: string; cantidad: string }
 
-function IngresoModal({ sucursalId, ingredientes, onClose, onListo }: { sucursalId: string; ingredientes: Ingrediente[]; onClose: () => void; onListo: () => void }) {
-  const { avisar, caja, sucursalId: localActivo } = useApp()
-  const [filas, setFilas] = useState<FilaIngreso[]>([{ ingredienteId: '', cantidad: '', costo: '' }])
+function IngresoModal({ sucursalId, ingredientes, productos, onClose, onListo }: {
+  sucursalId: string; ingredientes: Ingrediente[]; productos: Producto[]; onClose: () => void; onListo: () => void
+}) {
+  const { avisar } = useApp()
+  const [filas, setFilas] = useState<FilaIngreso[]>([])
   const [proveedor, setProveedor] = useState('')
   const [comprobante, setComprobante] = useState('')
   const [obs, setObs] = useState('')
-  const [actualizarCosto, setActualizarCosto] = useState(true)
-  const [pagarConCaja, setPagarConCaja] = useState(false)
   const [enviando, setEnviando] = useState(false)
-  const hayCaja = sucursalId === localActivo && !!caja
-  const total = filas.reduce((s, f) => s + numero(f.costo), 0)
-  const validas = filas.filter(f => f.ingredienteId && numero(f.cantidad) > 0)
+  const ingDe = useMemo(() => new Map(ingredientes.map(i => [i.id, i])), [ingredientes])
+  const prodDe = useMemo(() => new Map(productos.map(p => [p.id, p])), [productos])
+  const validas = filas.filter(f => numero(f.cantidad) > 0)
 
-  const set = (i: number, x: Partial<FilaIngreso>) => setFilas(fs => {
-    const n = fs.map((f, j) => j === i ? { ...f, ...x } : f)
-    // siempre una fila vacía al final
-    return n[n.length - 1].ingredienteId ? [...n, { ingredienteId: '', cantidad: '', costo: '' }] : n
-  })
+  const agregar = (clave: string) => setFilas(fs => fs.some(f => f.clave === clave) ? fs : [...fs, { clave, cantidad: '' }])
+  const set = (i: number, cantidad: string) => setFilas(fs => fs.map((f, j) => j === i ? { ...f, cantidad } : f))
 
   const guardar = async () => {
+    // Los productos se pasan a sus ingredientes según la receta (ej.: 24 latas Pepsi = 24 u. del ingrediente Lata Pepsi)
+    const suma = new Map<string, number>()
+    for (const f of validas) {
+      const [tipo, id] = [f.clave.slice(0, 1), f.clave.slice(2)]
+      const n = numero(f.cantidad)
+      if (tipo === 'i') suma.set(id, (suma.get(id) ?? 0) + n)
+      else for (const r of prodDe.get(id)?.receta ?? []) suma.set(r.ingredienteId, (suma.get(r.ingredienteId) ?? 0) + r.cantidad * n)
+    }
     setEnviando(true)
     try {
       await repo.registrarIngreso(sucursalId, {
-        items: validas.map(f => ({ ingredienteId: f.ingredienteId, cantidad: numero(f.cantidad), costo: numero(f.costo) })),
-        proveedor, comprobante, observaciones: obs, actualizarCosto, pagarConCaja: hayCaja && pagarConCaja,
+        items: [...suma].map(([ingredienteId, cantidad]) => ({ ingredienteId, cantidad, costo: 0 })),
+        proveedor, comprobante, observaciones: obs, actualizarCosto: false, pagarConCaja: false,
       })
       onListo()
     } catch (e) { avisar(mensajeError(e), 'error') }
@@ -178,8 +183,7 @@ function IngresoModal({ sucursalId, ingredientes, onClose, onListo }: { sucursal
   return (
     <Modal titulo="Ingreso de mercadería" onClose={onClose} ancho="max-w-3xl" alto
       pie={
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="mr-auto font-cond text-3xl font-bold">Total {money(total)}</span>
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <Btn onClick={onClose}>Cancelar</Btn>
           <Btn tono="albahaca" disabled={enviando || !validas.length} onClick={guardar}>{enviando ? 'Guardando…' : 'Guardar ingreso'}</Btn>
         </div>
@@ -189,40 +193,85 @@ function IngresoModal({ sucursalId, ingredientes, onClose, onListo }: { sucursal
           <Campo label="Proveedor"><input id="ing-proveedor" value={proveedor} onChange={e => setProveedor(e.target.value)} className={inputCls} placeholder="Lácteos del Oeste" /></Campo>
           <Campo label="Remito o factura"><input id="ing-comprobante" value={comprobante} onChange={e => setComprobante(e.target.value)} className={inputCls} placeholder="R 0001-00012345" /></Campo>
         </div>
-        <div>
-          <div className="mb-1 grid grid-cols-[1fr_7rem_8rem_2rem] gap-2 text-sm font-medium text-gris">
-            <span>Ingrediente</span><span className="text-right">Cantidad</span><span className="text-right">Pagaste $</span><span />
+        <BuscarMercaderia ingredientes={ingredientes} productos={productos} elegidos={new Set(filas.map(f => f.clave))} onElegir={agregar} />
+        {filas.length > 0 && (
+          <div>
+            <div className="mb-1 grid grid-cols-[1fr_9rem_2rem] gap-2 text-sm font-medium text-gris">
+              <span>Producto o ingrediente</span><span className="text-right">Cantidad</span><span />
+            </div>
+            <div className="space-y-2">
+              {filas.map((f, i) => {
+                const esProd = f.clave.startsWith('p:')
+                const ing = esProd ? undefined : ingDe.get(f.clave.slice(2))
+                const prod = esProd ? prodDe.get(f.clave.slice(2)) : undefined
+                const nombre = prod?.nombre ?? ing?.nombre ?? '—'
+                return (
+                  <div key={f.clave} className="grid grid-cols-[1fr_9rem_2rem] items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold">{nombre}</div>
+                      {prod && <div className="truncate text-sm text-gris">Suma: {prod.receta.map(r => ingDe.get(r.ingredienteId)?.nombre).filter(Boolean).join(', ')}</div>}
+                    </div>
+                    <span className="relative">
+                      <input autoFocus={i === filas.length - 1} aria-label={`Cantidad de ${nombre}`} inputMode="decimal" value={f.cantidad} onChange={e => set(i, e.target.value)}
+                        className={`${inputBase} w-full pr-9 text-right`} />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gris">{prod ? 'u.' : ing ? unidadCantidad(ing.unidad) : ''}</span>
+                    </span>
+                    <button aria-label={`Quitar ${nombre}`} onClick={() => setFilas(fs => fs.filter((_, j) => j !== i))} className="size-8 rounded-full text-xl text-gris hover:bg-tomate-claro hover:text-tomate">×</button>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-sm text-gris">Los ingredientes van en su unidad: gramos, mililitros o unidades (25 kg de muzzarella = 25000). Los productos, en unidades.</p>
           </div>
-          <div className="space-y-2">
-            {filas.map((f, i) => {
-              const ing = ingredientes.find(x => x.id === f.ingredienteId)
-              return (
-                <div key={i} className="grid grid-cols-[1fr_7rem_8rem_2rem] items-center gap-2">
-                  <select aria-label={`Ingrediente ${i + 1}`} value={f.ingredienteId} onChange={e => set(i, { ingredienteId: e.target.value })} className={`${inputBase} min-w-0`}>
-                    <option value="">{i === filas.length - 1 ? '+ Agregar ingrediente' : 'Elegí'}</option>
-                    {ingredientes.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                  </select>
-                  <span className="relative">
-                    <input aria-label={`Cantidad ${i + 1}`} inputMode="decimal" value={f.cantidad} disabled={!ing} onChange={e => set(i, { cantidad: e.target.value })}
-                      className={`${inputBase} w-full pr-9 text-right`} />
-                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gris">{ing ? unidadCantidad(ing.unidad) : ''}</span>
-                  </span>
-                  <input aria-label={`Costo ${i + 1}`} inputMode="decimal" value={f.costo} disabled={!ing} onChange={e => set(i, { costo: e.target.value })} className={`${inputBase} w-full text-right`} />
-                  {ing ? <button aria-label="Quitar" onClick={() => setFilas(fs => fs.filter((_, j) => j !== i))} className="size-8 rounded-full text-xl text-gris hover:bg-tomate-claro hover:text-tomate">×</button> : <span />}
-                </div>
-              )
-            })}
-          </div>
-          <p className="mt-2 text-sm text-gris">La cantidad va en la unidad de cada ingrediente: gramos, mililitros o unidades (25 kg de muzzarella = 25000).</p>
-        </div>
-        <label className="flex items-center gap-2"><input type="checkbox" className="size-5 accent-pizarra" checked={actualizarCosto} onChange={e => setActualizarCosto(e.target.checked)} /> Actualizar el costo de los ingredientes con estos precios</label>
-        <label className={`flex items-center gap-2 ${hayCaja ? '' : 'text-gris'}`}>
-          <input type="checkbox" className="size-5 accent-pizarra" disabled={!hayCaja} checked={hayCaja && pagarConCaja} onChange={e => setPagarConCaja(e.target.checked)} />
-          Se pagó con la plata de la caja {hayCaja ? '(queda como gasto "Pago remito")' : '(necesita la caja de este local abierta)'}
-        </label>
+        )}
         <Campo label="Observaciones (opcional)"><input id="ing-obs" value={obs} onChange={e => setObs(e.target.value)} className={inputCls} /></Campo>
       </div>
     </Modal>
+  )
+}
+
+/** Buscador de ingredientes y productos para el ingreso de mercadería */
+function BuscarMercaderia({ ingredientes, productos, elegidos, onElegir }: {
+  ingredientes: Ingrediente[]; productos: Producto[]; elegidos: Set<string>; onElegir: (clave: string) => void
+}) {
+  const [q, setQ] = useState('')
+  const [activo, setActivo] = useState(0)
+  const t = normalizar(q.trim())
+  const opciones = useMemo(() => {
+    const todas = [
+      ...ingredientes.map(i => ({ clave: `i:${i.id}`, nombre: i.nombre, tipo: 'Ingrediente' })),
+      ...productos.map(p => ({ clave: `p:${p.id}`, nombre: p.nombre, tipo: 'Producto' })),
+    ]
+    return (t ? todas.filter(o => t.split(/\s+/).every(w => normalizar(o.nombre).includes(w))) : todas)
+      .sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === 'Ingrediente' ? -1 : 1) || a.nombre.localeCompare(b.nombre)).slice(0, 40)
+  }, [ingredientes, productos, t])
+  const elegir = (clave: string) => { onElegir(clave); setQ(''); setActivo(0) }
+  return (
+    <div>
+      <label htmlFor="ing-buscar" className="mb-1 block text-sm font-medium text-gris">Agregar producto o ingrediente</label>
+      <input id="ing-buscar" value={q} onChange={e => { setQ(e.target.value); setActivo(0) }} autoComplete="off"
+        placeholder="Buscá por nombre (ej.: muzzarella, pepsi, cajas)"
+        onKeyDown={e => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setActivo(a => Math.min(a + 1, opciones.length - 1)) }
+          if (e.key === 'ArrowUp') { e.preventDefault(); setActivo(a => Math.max(a - 1, 0)) }
+          if (e.key === 'Enter' && opciones[activo]) { e.preventDefault(); elegir(opciones[activo].clave) }
+        }}
+        className={`${inputBase} h-11 w-full`} />
+      {t && (
+        <ul role="listbox" aria-label="Resultados" className="mt-1 max-h-64 overflow-y-auto rounded-lg bg-superficie ring-1 ring-linea">
+          {opciones.map((o, i) => (
+            <li key={o.clave} role="option" aria-selected={i === activo}>
+              <button type="button" onClick={() => elegir(o.clave)} onMouseEnter={() => setActivo(i)}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left ${i === activo ? 'bg-albahaca-claro' : ''}`}>
+                <span className="font-semibold">{o.nombre}{elegidos.has(o.clave) && <span className="text-sm font-normal text-gris"> · ya agregado</span>}</span>
+                <span className="text-sm text-gris">{o.tipo}</span>
+              </button>
+            </li>
+          ))}
+          {!opciones.length && <li className="px-3 py-3 text-gris">No hay nada con ese nombre.</li>}
+        </ul>
+      )}
+    </div>
   )
 }
 

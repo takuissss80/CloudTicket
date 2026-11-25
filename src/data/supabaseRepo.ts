@@ -45,7 +45,7 @@ const mapCupon = (c: Row): Cupon => ({
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
 const mapCategoria = (c: Row): Categoria => ({
-  id: c.id, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa, sucursalId: opt(c.sucursal_id), padreId: opt(c.padre_id),
+  id: c.id, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa, sucursalId: opt(c.sucursal_id), padreId: opt(c.padre_id), incluyeEnvio: !!c.incluye_envio,
 })
 const mapRepartidor = (r: Row): Repartidor => ({
   id: r.id, nombre: r.nombre, dni: opt(r.dni), telefono: opt(r.telefono), activo: r.activo,
@@ -368,6 +368,8 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const row: Row = { cuenta_id: p!.cuenta_id, sucursal_id: c.sucursalId ?? null, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa }
       // Solo si se cambia: así sigue andando en una base sin la migración 0022
       if (c.padreId !== undefined) row.padre_id = c.padreId
+      // Ídem envío gratis (0031): solo se manda si se tocó
+      if (c.incluyeEnvio !== undefined) row.incluye_envio = c.incluyeEnvio
       const r = c.id
         ? ok(await sb.from('categorias').update(row).eq('id', c.id).select().single())
         : ok(await sb.from('categorias').insert(row).select().single())
@@ -532,6 +534,10 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     async cerrarCaja(id, dineroCierre, observaciones) {
       ok(await sb.rpc('cerrar_caja', { p_caja: id, p_dinero_cierre: dineroCierre, p_observaciones: observaciones ?? null }))
+    },
+    async cerrarCajasAuto() {
+      // sin la migración 0031 no existe: no pasa nada
+      await sb.rpc('cerrar_cajas_auto')
     },
     async cambiarDineroInicial(id, monto) {
       ok(await sb.rpc('cambiar_dinero_inicial', { p_caja: id, p_monto: monto }))
@@ -800,6 +806,8 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, () => onChange('menu'))
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sucursales' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_externos', ...deSuc }, () => onChange('externos'))
+        // si la caja se cierra (por ejemplo, el cierre automático) la pantalla se entera
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cajas', ...deSuc }, () => onChange('comandas'))
       ch.subscribe()
       // Aparte: si falta la migración 0021, este canal falla solo sin afectar al resto
       const ch2 = sb.channel('comandas-web-categorias')
