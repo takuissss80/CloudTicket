@@ -9,7 +9,7 @@ import { Stock } from './Stock'
 import { ImpresionPanel } from '../ColaImpresion'
 import { Delivery } from './Delivery'
 import { Cupones } from './Cupones'
-import { Cocina } from './Cocina'
+import { Pantallas } from './Pantallas'
 import { PedidoFabrica } from './PedidoFabrica'
 
 export type Pestana = 'menu' | 'caja' | 'stock' | 'ingredientes' | 'repartidores' | 'delivery' | 'cupones' | 'impresion' | 'cocina' | 'fabrica' | 'locales'
@@ -23,8 +23,8 @@ export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => v
   const [pestana, setPestana] = useState<Pestana>(inicial === 'menu' && !esEncargado ? 'caja' : inicial)
 
   const pestanas: { key: Pestana; label: string }[] = esAdmin
-    ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'fabrica', label: 'Pedido fábrica' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'delivery', label: 'Delivery' }, { key: 'cupones', label: 'Cupones' }, { key: 'impresion', label: 'Impresión' }, ...(esPro ? [{ key: 'cocina' as const, label: 'Cocina' }] : []), { key: 'locales', label: 'Locales y usuarios' }]
-    : [...(esEncargado ? [{ key: 'menu' as const, label: 'Menú del local' }] : []), { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'fabrica', label: 'Pedido fábrica' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }, ...(esEncargado && esPro ? [{ key: 'cocina' as const, label: 'Cocina' }] : [])]
+    ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'fabrica', label: 'Pedido fábrica' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'delivery', label: 'Delivery' }, { key: 'cupones', label: 'Cupones' }, { key: 'impresion', label: 'Impresión' }, ...(esPro ? [{ key: 'cocina' as const, label: 'Pantallas' }] : []), { key: 'locales', label: 'Locales y usuarios' }]
+    : [...(esEncargado ? [{ key: 'menu' as const, label: 'Menú del local' }] : []), { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'fabrica', label: 'Pedido fábrica' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }, ...(esEncargado && esPro ? [{ key: 'cocina' as const, label: 'Pantallas' }] : [])]
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
@@ -51,7 +51,7 @@ export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => v
         {pestana === 'delivery' && esAdmin && <Delivery />}
         {pestana === 'cupones' && esAdmin && <Cupones />}
         {pestana === 'impresion' && <ImpresionPanel />}
-        {pestana === 'cocina' && esEncargado && esPro && <Cocina />}
+        {pestana === 'cocina' && esEncargado && esPro && <Pantallas />}
         {pestana === 'fabrica' && <PedidoFabrica />}
         {pestana === 'locales' && esAdmin && <Locales />}
       </div>

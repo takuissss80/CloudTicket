@@ -55,7 +55,14 @@ export interface Sucursal {
   cierreCiegas: boolean
   /** Turnos de caja del local, ordenados por hora de inicio */
   turnos: TurnoCaja[]
+  /** Pantalla para clientes: cómo está colgada la tele */
+  pantallaOrientacion: OrientacionPantalla
+  /** Videos que se pasan en loop al costado de la pantalla para clientes */
+  pantallaVideos: VideoPantalla[]
 }
+
+export type OrientacionPantalla = 'horizontal' | 'vertical_izquierda' | 'vertical_derecha'
+export interface VideoPantalla { path: string; url: string; nombre: string }
 
 export interface TurnoCaja {
   nombre: string

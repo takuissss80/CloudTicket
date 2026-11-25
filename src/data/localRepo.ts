@@ -91,8 +91,8 @@ function guardar(tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' = 'coman
 }
 
 function baseVacia(): DB {
-  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false, turnos: TURNOS_DEFECTO }
-  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false, turnos: TURNOS_DEFECTO }
+  const principal: Sucursal = { id: uid(), nombre: 'Napoles Principal', esPrincipal: true, activa: true, recargoDelivery: 1500, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false, turnos: TURNOS_DEFECTO, pantallaOrientacion: 'horizontal', pantallaVideos: [] }
+  const benavidez: Sucursal = { id: uid(), nombre: 'Napoles Benavidez', esPrincipal: false, activa: true, recargoDelivery: 10, recargoDeliveryTipo: 'porc', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan: 'pro', cierreCiegas: false, turnos: TURNOS_DEFECTO, pantallaOrientacion: 'horizontal', pantallaVideos: [] }
   return {
     cuenta: { id: uid(), nombre: 'Napoles' },
     sucursales: [principal, benavidez],
@@ -277,7 +277,7 @@ export const localRepo: Repo = {
   async listSucursales() {
     const s = ses()
     return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
-      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro', cierreCiegas: !!x.cierreCiegas, turnos: normalizarTurnos(x.turnos) }))))
+      .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro', cierreCiegas: !!x.cierreCiegas, turnos: normalizarTurnos(x.turnos), pantallaOrientacion: x.pantallaOrientacion ?? 'horizontal', pantallaVideos: x.pantallaVideos ?? [] }))))
   },
 
   async listCupones() {
@@ -373,6 +373,23 @@ export const localRepo: Repo = {
     guardar('menu')
   },
   async horaServidor() { return ahora() },
+  async configPantallaClientes(sucursalId, c) {
+    const s = ses()
+    if ((db().sucursales.find(x => x.id === sucursalId)?.plan ?? 'pro') !== 'pro') throw new Error('La pantalla para clientes es del plan PRO')
+    if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar las pantallas')
+    const suc = db().sucursales.find(x => x.id === sucursalId)
+    if (suc) Object.assign(suc, { pantallaOrientacion: c.orientacion, pantallaVideos: clon(c.videos) })
+    guardar('menu')
+  },
+  // Demo: el video queda solo en esta pestaña (no se guarda)
+  async subirVideoPantalla(_sucursalId, archivo) {
+    return { path: `demo/${uid()}`, url: URL.createObjectURL(archivo), nombre: archivo.name }
+  },
+  async borrarVideoPantalla() {},
+  // Demo: para probar la alarma se puede guardar un aviso en localStorage ('demo-aviso-py' = fecha ISO)
+  async avisoPedidosYa() {
+    try { const at = localStorage.getItem('demo-aviso-py'); return at ? { at, texto: 'Atención: tenés el pedido 1 de PedidosYa sin confirmar' } : null } catch { return null }
+  },
 
   async actualizarSucursal(id, data) {
     soloAdmin()
@@ -457,7 +474,7 @@ export const localRepo: Repo = {
     soloSuper()
     if (!nombre.trim()) throw new Error('Poné el nombre del local')
     const d = db()
-    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, cierreCiegas: false, turnos: TURNOS_DEFECTO, vence: vence || undefined }
+    const suc: Sucursal = { id: uid(), nombre: nombre.trim(), esPrincipal: false, activa: true, recargoDelivery: 0, recargoDeliveryTipo: 'monto', cocinaActiva: false, cocinaAmarillo: 7, cocinaRojo: 15, plan, cierreCiegas: false, turnos: TURNOS_DEFECTO, pantallaOrientacion: 'horizontal', pantallaVideos: [], vence: vence || undefined }
     d.sucursales.push(suc)
     d.impresoras.push({ id: uid(), sucursalId: suc.id, nombre: 'Cocina', imprimeMostrador: true, imprimeDelivery: true, copias: 1, ancho: 48 })
     guardar('menu')
@@ -782,8 +799,6 @@ export const localRepo: Repo = {
     })
     guardar()
   },
-
-  async cerrarCajasAuto() {},
 
   async cambiarDineroInicial(id, monto) {
     const c = db().cajas.find(x => x.id === id && x.estado === 'abierta')

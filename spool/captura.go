@@ -137,7 +137,14 @@ func procesarCaptura(datos []byte) {
 		capEstado.Avisos++
 		capEstado.Ultimo = time.Now().Format("15:04:05")
 		capMu.Unlock()
-		registrarDetalle("Captura: aviso de GoWin de pedido sin confirmar (no se imprime)")
+		registrarDetalle("Captura: aviso de GoWin de pedido sin confirmar (no se imprime; se prende la alarma en la web)")
+		if c.Token != "" {
+			go func(token, t string) {
+				if err := apiAvisoPY(token, t); err != nil {
+					registrarDetalle("No se pudo avisar a la web del pedido sin confirmar: %v", err)
+				}
+			}(c.Token, texto)
+		}
 		return
 	}
 

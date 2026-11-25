@@ -18,6 +18,7 @@ import { PantallaCocina } from './components/PantallaCocina'
 import { PantallaMostrador } from './components/PantallaMostrador'
 import { Produccion } from './components/Produccion'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
+import { AlarmaPedidosYa, CajaSinCerrar } from './components/Alertas'
 
 function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: () => void }) {
   const { cargando, error, caja, sesion, sucursales, sucursalId, impresoras, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
@@ -37,6 +38,18 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     return () => removeEventListener('hashchange', f)
   }, [])
 
+  // Alarma de PedidosYa sin confirmar: al entrar, en tiempo real y cada 30 s por las dudas
+  const [avisoPY, setAvisoPY] = useState<{ at: string; texto?: string } | null>(null)
+  const revisarAvisoPY = useCallback(() => {
+    if (!sucursalId) return
+    repo.avisoPedidosYa(sucursalId).then(setAvisoPY).catch(() => {})
+  }, [sucursalId])
+  useEffect(() => {
+    revisarAvisoPY()
+    const t = setInterval(revisarAvisoPY, 30_000)
+    return () => clearInterval(t)
+  }, [revisarAvisoPY])
+
   // Cambios en tiempo real: otras PCs, el spool, cambios de menú (solo del local elegido)
   const idsImpresoras = impresoras.map(i => i.id).sort().join(',')
   useEffect(() => {
@@ -46,10 +59,11 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     const off = repo.subscribe(tabla => {
       if (tabla === 'menu') { clearTimeout(t2); t2 = setTimeout(() => refrescarMenu(), 300) }
       else if (tabla === 'externos') { clearTimeout(t3); t3 = setTimeout(() => procesarExternos(), 400) }
+      else if (tabla === 'aviso_py') revisarAvisoPY()
       else { clearTimeout(t1); t1 = setTimeout(() => refrescar(), 150) }
     }, { sucursalId: sucursalId ?? undefined, impresoraIds: idsImpresoras ? idsImpresoras.split(',') : [] })
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); off() }
-  }, [refrescar, refrescarMenu, procesarExternos, sucursalId, idsImpresoras])
+  }, [refrescar, refrescarMenu, procesarExternos, revisarAvisoPY, sucursalId, idsImpresoras])
 
   // Importación de PedidosYa: al abrir la caja y cada 15 s (por si se perdió un aviso en tiempo real)
   const cajaId = caja?.id
@@ -57,10 +71,6 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     if (!cajaId) return
     procesarExternos()
     const t = setInterval(() => procesarExternos(), 15_000)
-    // Respaldo del cierre automático de la base (por si no está programado)
-    const auto = () => repo.cerrarCajasAuto().then(() => refrescar()).catch(() => {})
-    const tAuto = setInterval(auto, 10 * 60_000)
-    const tAuto0 = setTimeout(auto, 5_000)
     // Al volver a la pestaña o recuperar internet, importa enseguida (en segundo plano el navegador frena el reloj)
     const ya = () => { if (document.visibilityState === 'visible') procesarExternos() }
     document.addEventListener('visibilitychange', ya)
@@ -68,13 +78,11 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     addEventListener('online', ya)
     return () => {
       clearInterval(t)
-      clearInterval(tAuto)
-      clearTimeout(tAuto0)
       document.removeEventListener('visibilitychange', ya)
       removeEventListener('focus', ya)
       removeEventListener('online', ya)
     }
-  }, [cajaId, procesarExternos, refrescar])
+  }, [cajaId, procesarExternos])
 
   if (cargando) return <div className="grid h-full place-items-center font-cond text-2xl text-gris">Cargando…</div>
   if (error) return (
@@ -104,7 +112,7 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
       {cocinaActiva ? <PantallaCocina onClose={() => { history.replaceState(null, '', location.pathname); setEnCocina(false) }} /> : (
         <div className="mx-auto mt-[20vh] max-w-lg px-4 text-center">
           <h1 className="font-cond text-4xl font-bold">La pantalla de cocina está apagada</h1>
-          <p className="mt-2 text-gris">Se activa en Administración → Cocina.</p>
+          <p className="mt-2 text-gris">Se activa en Administración → Pantallas.</p>
           <Btn className="mt-6" onClick={() => { history.replaceState(null, '', location.pathname); setEnCocina(false) }}>Ir a los pedidos</Btn>
         </div>
       )}
@@ -172,6 +180,8 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
 
       <AvisoVencimiento />
       {caja ? <Tablero /> : <CajaCerrada />}
+      {!verCierre && <CajaSinCerrar caja={caja} onAbrir={() => setVerCierre(true)} />}
+      <AlarmaPedidosYa aviso={avisoPY} />
 
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion inicial={verAdmin} onClose={() => setVerAdmin(null)} />}

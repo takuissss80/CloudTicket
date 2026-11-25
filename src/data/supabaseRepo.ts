@@ -37,6 +37,8 @@ const mapSucursal = (r: Row): Sucursal => ({
   plan: r.plan === 'principal' ? 'principal' : 'pro',
   cierreCiegas: !!r.cierre_ciegas,
   turnos: normalizarTurnos(r.turnos),
+  pantallaOrientacion: r.pantalla_orientacion ?? 'horizontal',
+  pantallaVideos: Array.isArray(r.pantalla_videos) ? r.pantalla_videos : [],
 })
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
@@ -227,6 +229,26 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     async horaServidor() {
       return ok(await sb.rpc('hora_servidor')) as unknown as string
+    },
+    async configPantallaClientes(sucursalId, c) {
+      ok(await sb.rpc('config_pantalla_clientes', { p_sucursal: sucursalId, p_orientacion: c.orientacion, p_videos: c.videos }))
+    },
+    async subirVideoPantalla(sucursalId, archivo) {
+      const p = await perfil()
+      const limpio = archivo.name.normalize('NFD').replace(/[^\w.-]+/g, '_').slice(-60)
+      const path = `${p!.cuenta_id}/${sucursalId}/${Date.now()}-${limpio}`
+      ok(await sb.storage.from('pantallas').upload(path, archivo, { cacheControl: '31536000', contentType: archivo.type || 'video/mp4' }))
+      const url = sb.storage.from('pantallas').getPublicUrl(path).data.publicUrl
+      return { path, url, nombre: archivo.name }
+    },
+    async borrarVideoPantalla(path) {
+      ok(await sb.storage.from('pantallas').remove([path]))
+    },
+    async avisoPedidosYa(sucursalId) {
+      // Sin la migración 0032 la tabla no existe: no hay aviso
+      const r = await sb.from('avisos_py').select('ultimo_at, texto').eq('sucursal_id', sucursalId).maybeSingle()
+      if (r.error || !r.data) return null
+      return { at: r.data.ultimo_at as string, texto: (r.data.texto as string | null) ?? undefined }
     },
     async actualizarSucursal(id, data) {
       const row: Row = {}
@@ -535,10 +557,6 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async cerrarCaja(id, dineroCierre, observaciones) {
       ok(await sb.rpc('cerrar_caja', { p_caja: id, p_dinero_cierre: dineroCierre, p_observaciones: observaciones ?? null }))
     },
-    async cerrarCajasAuto() {
-      // sin la migración 0031 no existe: no pasa nada
-      await sb.rpc('cerrar_cajas_auto')
-    },
     async cambiarDineroInicial(id, monto) {
       ok(await sb.rpc('cambiar_dinero_inicial', { p_caja: id, p_monto: monto }))
     },
@@ -809,11 +827,15 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         // si la caja se cierra (por ejemplo, el cierre automático) la pantalla se entera
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cajas', ...deSuc }, () => onChange('comandas'))
       ch.subscribe()
+      // Alarma de PedidosYa sin confirmar (0032): canal aparte por si la tabla no existe
+      const chAviso = suc ? sb.channel(`avisos-py-${suc}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'avisos_py', filter: `sucursal_id=eq.${suc}` }, () => onChange('aviso_py'))
+        .subscribe() : null
       // Aparte: si falta la migración 0021, este canal falla solo sin afectar al resto
       const ch2 = sb.channel('comandas-web-categorias')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categoria_sucursal' }, () => onChange('menu'))
         .subscribe()
-      return () => { sb.removeChannel(ch); sb.removeChannel(ch2) }
+      return () => { sb.removeChannel(ch); sb.removeChannel(ch2); if (chAviso) sb.removeChannel(chAviso) }
     },
   }
   return repo

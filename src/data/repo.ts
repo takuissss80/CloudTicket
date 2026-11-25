@@ -1,5 +1,5 @@
 import type {
-  AjusteLocal, Caja, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
+  AjusteLocal, Caja, OrientacionPantalla, VideoPantalla, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, TipoUsuario, Plan, SaCuenta,
 } from '../types'
 
@@ -78,6 +78,12 @@ export interface Repo {
   listSucursales(): Promise<Sucursal[]>
   /** Pantalla de cocina del local (admin o encargado del local) */
   configCocina(sucursalId: string, c: { activa: boolean; amarillo: number; rojo: number }): Promise<void>
+  /** Pantalla para clientes (PRO): orientación de la tele y videos en loop */
+  configPantallaClientes(sucursalId: string, c: { orientacion: OrientacionPantalla; videos: VideoPantalla[] }): Promise<void>
+  subirVideoPantalla(sucursalId: string, archivo: File): Promise<VideoPantalla>
+  borrarVideoPantalla(path: string): Promise<void>
+  /** Último recordatorio de GoWin de pedido sin confirmar (lo manda el programa de impresión) */
+  avisoPedidosYa(sucursalId: string): Promise<{ at: string; texto?: string } | null>
   /** Hora de la base, para corregir el reloj de la PC */
   horaServidor(): Promise<string>
   actualizarSucursal(id: string, data: Partial<Pick<Sucursal, 'nombre' | 'activa' | 'recargoDelivery' | 'recargoDeliveryTipo' | 'cierreCiegas' | 'turnos'>>): Promise<void>
@@ -156,8 +162,6 @@ export interface Repo {
   reabrirCaja(id: string): Promise<void>
   /** Corrige el dinero al inicio de la caja abierta (admin o encargado) */
   cambiarDineroInicial(id: string, monto: number): Promise<void>
-  /** Cierra las cajas que quedaron abiertas de un día para otro (también lo hace la base cada 10 min) */
-  cerrarCajasAuto(): Promise<void>
   /** Historial, de la más nueva a la más vieja */
   listCajas(sucursalId: string, limit?: number): Promise<Caja[]>
   listMovimientos(cajaId: string): Promise<MovimientoCaja[]>
@@ -223,5 +227,5 @@ export interface Repo {
 
   /** Cambios de comandas, cola o menú (realtime / otras pestañas) */
   /** filtro: solo los cambios de ese local y de sus comanderas */
-  subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos') => void, filtro?: { sucursalId?: string; impresoraIds?: string[] }): () => void
+  subscribe(onChange: (tabla: 'comandas' | 'print_jobs' | 'menu' | 'externos' | 'aviso_py') => void, filtro?: { sucursalId?: string; impresoraIds?: string[] }): () => void
 }

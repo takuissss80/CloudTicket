@@ -128,6 +128,11 @@ func apiConfirmar(token, job string, ok bool, msg string) error {
 	return rpc("spool_confirmar", map[string]any{"p_token": token, "p_job": job, "p_ok": ok, "p_error": msg}, nil)
 }
 
+// apiAvisoPY avisa a la web que GoWin imprimió un recordatorio de pedido sin confirmar (prende la alarma)
+func apiAvisoPY(token, texto string) error {
+	return rpc("spool_aviso_py", map[string]any{"p_token": token, "p_texto": recortar(texto, 300)}, nil)
+}
+
 func apiCapturar(token, texto, formato, canal string) (string, error) {
 	var res string
 	err := rpc("spool_capturar", map[string]any{"p_token": token, "p_texto": texto, "p_formato": formato, "p_canal": canal}, &res)

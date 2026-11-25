@@ -123,3 +123,12 @@ select optgroup {
   background-color: var(--c-superficie);
   color: var(--c-tinta);
 }
+
+/* Alarma de PedidosYa sin confirmar: luz que late en los bordes de la pantalla */
+.alarma-py-luz {
+  box-shadow: inset 0 0 0 10px #ff2d2d, inset 0 0 90px 30px rgba(255, 45, 45, .55);
+  animation: alarma-py 1s ease-in-out infinite;
+}
+.alarma-py-cartel { animation: alarma-py-cartel 1s ease-in-out infinite; }
+@keyframes alarma-py { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
+@keyframes alarma-py-cartel { 0%, 100% { background: #e01b1b; } 50% { background: #ff8a00; } }
