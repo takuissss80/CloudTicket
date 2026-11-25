@@ -15,7 +15,7 @@ const CLAVE_SONIDO = 'mostrador-sonido'
 const nombre = (c: Comanda) => c.clienteNombre?.trim() || `Pedido ${c.numero}`
 
 export function PantallaMostrador({ onClose }: { onClose?: () => void }) {
-  const { comandas, caja, refrescar } = useApp()
+  const { comandas, caja, refrescar, refrescarMenu } = useApp()
   const local = useLocalActivo()
   const [sonido, setSonido] = useState(() => { try { return localStorage.getItem(CLAVE_SONIDO) !== '0' } catch { return true } })
   const [ahora, setAhora] = useState(Date.now())
@@ -24,6 +24,8 @@ export function PantallaMostrador({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 15_000); return () => clearInterval(t) }, [])
   useEffect(() => { const t = setInterval(() => { refrescar().catch(() => {}) }, 20_000); return () => clearInterval(t) }, [refrescar])
+  // Videos y orientación: llegan en tiempo real; además se revisan cada minuto por si se perdió el aviso
+  useEffect(() => { const t = setInterval(() => { refrescarMenu().catch(() => {}) }, 60_000); return () => clearInterval(t) }, [refrescarMenu])
   // Los botones se esconden solos para que la pantalla quede limpia
   useEffect(() => {
     if (!controles) return

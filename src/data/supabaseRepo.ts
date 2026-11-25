@@ -824,9 +824,12 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, () => onChange('menu'))
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sucursales' }, () => onChange('menu'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_externos', ...deSuc }, () => onChange('externos'))
-        // si la caja se cierra (por ejemplo, el cierre automático) la pantalla se entera
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cajas', ...deSuc }, () => onChange('comandas'))
       ch.subscribe()
+      // Cajas del local (se cierra o se reabre desde otra PC). Canal aparte: si la tabla no está
+      // publicada en el tiempo real (falta la 0033), falla solo este y no el de las comandas
+      const chCajas = suc ? sb.channel(`cajas-${suc}`)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cajas', filter: `sucursal_id=eq.${suc}` }, () => onChange('comandas'))
+        .subscribe() : null
       // Alarma de PedidosYa sin confirmar (0032): canal aparte por si la tabla no existe
       const chAviso = suc ? sb.channel(`avisos-py-${suc}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'avisos_py', filter: `sucursal_id=eq.${suc}` }, () => onChange('aviso_py'))
@@ -835,7 +838,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const ch2 = sb.channel('comandas-web-categorias')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'categoria_sucursal' }, () => onChange('menu'))
         .subscribe()
-      return () => { sb.removeChannel(ch); sb.removeChannel(ch2); if (chAviso) sb.removeChannel(chAviso) }
+      return () => { sb.removeChannel(ch); sb.removeChannel(ch2); if (chAviso) sb.removeChannel(chAviso); if (chCajas) sb.removeChannel(chCajas) }
     },
   }
   return repo
