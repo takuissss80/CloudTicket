@@ -1,7 +1,7 @@
 import type { Repo, NuevoPrintJob, BusquedaCliente, MenuData, EstadoSesion } from './repo'
 import type {
   AjusteLocal, Caja, ItemComanda, Pago, Categoria, Cliente, Comanda, Cupon, MapeoExterno, NuevaComanda, PedidoExterno, UsoCupon, Impresora, Ingrediente, PrintJob, Producto,
-  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, Plan } from '../types'
+  IngresoMercaderia, MovimientoCaja, MovimientoReporte, Repartidor, StockItem, StockMovimiento, Sesion, Sucursal, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, Plan, Pantalla } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla } from './repo'
 import { calcularTotales, normalizarTurnos, turnoQueBloquea, TURNOS_DEFECTO } from '../lib/caja'
 import { consumoItem } from '../lib/stock'
@@ -55,7 +55,10 @@ interface DB {
   mapeos?: MapeoExterno[]
   planillaFabrica?: (string | PlanillaFabricaItem)[]
   pedidosFabrica?: PedidoFabrica[]
+  pantallas?: Pantalla[]
 }
+
+const codigoPantalla = () => Array.from({ length: 7 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('')
 
 const uid = () =>
   (globalThis.crypto && 'randomUUID' in globalThis.crypto)
@@ -373,13 +376,68 @@ export const localRepo: Repo = {
     guardar('menu')
   },
   async horaServidor() { return ahora() },
-  async configPantallaClientes(sucursalId, c) {
+  // ---- Teles con enlace (demo: andan en este mismo navegador)
+  async listPantallas(sucursalId) {
+    return pausa(clon((db().pantallas ?? []).filter(p => p.sucursalId === sucursalId)))
+  },
+  async crearPantalla(sucursalId, tipo, nombre) {
     const s = ses()
-    if ((db().sucursales.find(x => x.id === sucursalId)?.plan ?? 'pro') !== 'pro') throw new Error('La pantalla para clientes es del plan PRO')
     if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar las pantallas')
-    const suc = db().sucursales.find(x => x.id === sucursalId)
-    if (suc) Object.assign(suc, { pantallaOrientacion: c.orientacion, pantallaVideos: clon(c.videos) })
+    const d = db()
+    d.pantallas = [...(d.pantallas ?? []), { id: uid(), sucursalId, tipo, nombre: nombre.trim(), codigo: codigoPantalla(), orientacion: 'horizontal', videos: [] }]
     guardar('menu')
+  },
+  async guardarPantalla(id, c) {
+    const p = (db().pantallas ?? []).find(x => x.id === id)
+    if (p) Object.assign(p, { nombre: c.nombre.trim(), orientacion: c.orientacion, videos: clon(c.videos) })
+    guardar('menu')
+  },
+  async nuevoCodigoPantalla(id) {
+    const p = (db().pantallas ?? []).find(x => x.id === id)
+    if (p) p.codigo = codigoPantalla()
+    guardar('menu')
+  },
+  async eliminarPantalla(id) {
+    const d = db()
+    d.pantallas = (d.pantallas ?? []).filter(x => x.id !== id)
+    guardar('menu')
+  },
+  async pantallaDatos(codigo) {
+    const d = db()
+    const p = (d.pantallas ?? []).find(x => x.codigo === codigo.trim().toUpperCase())
+    if (!p) throw new Error('Este enlace no existe o se cambió por uno nuevo')
+    p.ultimoPing = ahora()
+    const sucursal = d.sucursales.find(s => s.id === p.sucursalId)!
+    const caja = d.cajas.find(c => c.sucursalId === p.sucursalId && c.estado === 'abierta') ?? null
+    const deCaja = caja ? d.comandas.filter(c => c.cajaId === caja.id) : []
+    const comandas = p.tipo === 'clientes'
+      ? deCaja.filter(c => c.tipo === 'mostrador' && c.canal !== 'pedidosya' && ['pendiente', 'en_preparacion', 'listo'].includes(c.estado))
+        .map(c => ({ ...c, clienteNombre: c.clienteNombre?.trim().split(/\s+/)[0], clienteTel: undefined, direccion: undefined, items: [], pagos: [], total: 0 }))
+      : deCaja.filter(c => c.estado === 'en_preparacion' || (c.listoAt && c.estado !== 'anulada' && Date.now() - new Date(c.listoAt).getTime() < 40 * 60_000))
+    return pausa(clon({
+      pantalla: { ...p, canal: p.id }, sucursal, caja: caja ? sinLocal(caja) : null, comandas: comandas.map(sinLocal),
+      impresoras: p.tipo === 'cocina' ? d.impresoras.filter(i => i.sucursalId === p.sucursalId).map(sinLocal) : [],
+      zonas: p.tipo === 'cocina' ? d.zonas.filter(z => z.sucursalId === p.sucursalId).map(sinLocal) : [],
+      armadoId: d.productos.find(x => x.codigo?.trim().toUpperCase() === 'ARMADO-MITAD')?.id,
+      hora: ahora(),
+    }))
+  },
+  async pantallaCocinaEstado(codigo, comandaId, estado, jobs) {
+    const d = db()
+    const p = (d.pantallas ?? []).find(x => x.codigo === codigo.trim().toUpperCase() && x.tipo === 'cocina')
+    if (!p) throw new Error('Este enlace no existe o se cambió por uno nuevo')
+    const c = d.comandas.find(x => x.id === comandaId && x.sucursalId === p.sucursalId)
+    if (!c) throw new Error('Pedido no encontrado')
+    if (!((estado === 'listo' && c.estado === 'en_preparacion') || (estado === 'en_preparacion' && c.estado === 'listo'))) throw new Error('El pedido ya cambió de estado')
+    c.estado = estado; c.updatedAt = ahora()
+    if (estado === 'listo') { c.listoAt = ahora(); c.cocinaAt = c.cocinaAt ?? ahora() } else c.listoAt = undefined
+    guardar('comandas')
+    if (estado === 'listo' && jobs.length) await this.encolarImpresion(jobs)
+  },
+  escucharPantalla(_canal, onCambio) {
+    const l = () => onCambio()
+    listeners.add(l)
+    return () => { listeners.delete(l) }
   },
   // Demo: el video queda solo en esta pestaña (no se guarda)
   async subirVideoPantalla(_sucursalId, archivo) {

@@ -62,6 +62,30 @@ export interface Sucursal {
 }
 
 export type OrientacionPantalla = 'horizontal' | 'vertical_izquierda' | 'vertical_derecha'
+
+/** Una tele del local, con su enlace propio (cloudticket.com.ar/p/CODIGO): no necesita iniciar sesión */
+export interface Pantalla {
+  id: string
+  sucursalId: string
+  tipo: 'clientes' | 'cocina'
+  nombre: string
+  codigo: string
+  orientacion: OrientacionPantalla
+  videos: VideoPantalla[]
+  ultimoPing?: string
+}
+
+/** Lo que recibe una tele al abrir su enlace */
+export interface DatosPantalla {
+  pantalla: Pantalla & { canal: string }
+  sucursal: Sucursal
+  caja: Caja | null
+  comandas: Comanda[]
+  impresoras: Impresora[]
+  zonas: Zona[]
+  armadoId?: string
+  hora: string
+}
 export interface VideoPantalla { path: string; url: string; nombre: string }
 
 export interface TurnoCaja {

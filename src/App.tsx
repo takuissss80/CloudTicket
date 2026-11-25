@@ -19,6 +19,7 @@ import { PantallaMostrador } from './components/PantallaMostrador'
 import { Produccion } from './components/Produccion'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
 import { CajaSinCerrar } from './components/Alertas'
+import { PantallaPublica, codigoDePantalla } from './components/PantallaPublica'
 
 function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: () => void }) {
   const { cargando, error, caja, sesion, sucursales, sucursalId, impresoras, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
@@ -57,7 +58,7 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
   useEffect(() => {
     if (!cajaId) return
     procesarExternos()
-    const t = setInterval(() => procesarExternos(), 15_000)
+    const t = setInterval(() => procesarExternos(), 60_000)
     // Al volver a la pestaña o recuperar internet, importa enseguida (en segundo plano el navegador frena el reloj)
     const ya = () => { if (document.visibilityState === 'visible') procesarExternos() }
     document.addEventListener('visibilitychange', ya)
@@ -212,6 +213,13 @@ function AvisoVencimiento() {
 }
 
 export default function App() {
+  // Tele con su enlace (/p/CODIGO): no necesita iniciar sesión
+  const [codigoTele] = useState(codigoDePantalla)
+  if (codigoTele) return <PantallaPublica codigo={codigoTele} />
+  return <AppConSesion />
+}
+
+function AppConSesion() {
   const [estado, setEstado] = useState<EstadoSesion | null>(null)
   const iniciar = useApp(s => s.iniciar)
 

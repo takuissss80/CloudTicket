@@ -76,7 +76,7 @@ func vinculoActual(token string) (Vinculo, bool) {
 const (
 	intervaloCola = 2 * time.Second // sin aviso instantáneo: como siempre
 	// Con aviso instantáneo igual se revisa la cola cada tanto, por si un aviso no llegó
-	intervaloRespaldo = 30 * time.Second
+	intervaloRespaldo = 60 * time.Second
 	// Después de un error de impresión se reintenta con calma (no gastar los 5 intentos de golpe)
 	intervaloReintento = 5 * time.Second
 )

@@ -73,8 +73,8 @@ export function Cocina() {
       <section className="rounded-xl bg-superficie p-5 text-[15px] ring-1 ring-linea">
         <h3 className="font-cond text-2xl font-bold">Cómo dejarla en la cocina</h3>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
-          <li>En la PC o tablet de la cocina, entrá a la web con un usuario del local (puede ser uno común).</li>
-          <li>Tocá <b>Cocina</b> arriba, o entrá directo a <b>{location.host}/#cocina</b> y guardala en favoritos.</li>
+          <li>Abajo, en <b>Teles</b>, agregá una <b>Tele para cocina</b>.</li>
+          <li>Abrí su dirección en la PC o tablet de la cocina: no hace falta iniciar sesión.</li>
           <li>Tocá <b>Pantalla completa</b> y dejá el sonido activado para escuchar cuando entra un pedido.</li>
         </ol>
         <p className="mt-2 text-gris">Los pedidos aparecen en el orden en que entraron a cocina. Si alguien marca "Pedido listo" por error, abajo aparece <b>Volver a cocina</b>.</p>

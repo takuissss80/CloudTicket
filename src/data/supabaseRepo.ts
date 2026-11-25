@@ -4,7 +4,7 @@ import { normalizarTurnos } from '../lib/caja'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta, Sesion } from '../types'
+  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta, Sesion , Pantalla } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla, type ModoCategoriaLocal } from './repo'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -43,6 +43,17 @@ const mapSucursal = (r: Row): Sucursal => ({
 const mapCupon = (c: Row): Cupon => ({
   id: c.id, codigo: c.codigo, descripcion: opt(c.descripcion), tipo: c.tipo, valor: num(c.valor),
   desde: opt(c.desde), hasta: opt(c.hasta), activo: c.activo, maxUsos: opt(c.max_usos), lote: opt(c.lote),
+})
+const mapImpresora = (i: Row): Impresora => ({
+  id: i.id, nombre: i.nombre, imprimeMostrador: i.imprime_mostrador, imprimeDelivery: i.imprime_delivery,
+  copias: i.copias, ancho: i.ancho, ultimoPing: opt(i.ultimo_ping), conToken: !!i.token_hash,
+  formato: i.formato ?? 'normal', mostrarPrecios: i.mostrar_precios ?? true,
+  impresoraWindows: opt(i.impresora_windows), pcNombre: opt(i.pc_nombre), versionPrograma: opt(i.version_programa),
+  vinculadaAt: opt(i.vinculada_at),
+})
+const mapPantalla = (p: Row): Pantalla => ({
+  id: p.id, sucursalId: p.sucursal_id, tipo: p.tipo, nombre: p.nombre ?? '', codigo: p.codigo,
+  orientacion: p.orientacion ?? 'horizontal', videos: Array.isArray(p.videos) ? p.videos : [], ultimoPing: opt(p.ultimo_ping),
 })
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
 const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
@@ -230,8 +241,46 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     async horaServidor() {
       return ok(await sb.rpc('hora_servidor')) as unknown as string
     },
-    async configPantallaClientes(sucursalId, c) {
-      ok(await sb.rpc('config_pantalla_clientes', { p_sucursal: sucursalId, p_orientacion: c.orientacion, p_videos: c.videos }))
+    async listPantallas(sucursalId) {
+      // Sin la migración 0034 la tabla no existe: sin teles
+      const r = await sb.from('pantallas').select('*').eq('sucursal_id', sucursalId).order('created_at')
+      if (r.error) return []
+      return (r.data as Row[]).map(mapPantalla)
+    },
+    async crearPantalla(sucursalId, tipo, nombre) {
+      ok(await sb.rpc('pantalla_crear', { p_sucursal: sucursalId, p_tipo: tipo, p_nombre: nombre }))
+    },
+    async guardarPantalla(id, c) {
+      ok(await sb.rpc('pantalla_guardar', { p_id: id, p_nombre: c.nombre, p_orientacion: c.orientacion, p_videos: c.videos }))
+    },
+    async nuevoCodigoPantalla(id) {
+      ok(await sb.rpc('pantalla_nuevo_codigo', { p_id: id }))
+    },
+    async eliminarPantalla(id) {
+      ok(await sb.rpc('pantalla_eliminar', { p_id: id }))
+    },
+    async pantallaDatos(codigo) {
+      const d = ok(await sb.rpc('pantalla_datos', { p_codigo: codigo })) as unknown as Row
+      return {
+        pantalla: { ...mapPantalla({ ...d.pantalla, sucursal_id: d.sucursal.id, codigo }), canal: d.pantalla.canal },
+        sucursal: mapSucursal(d.sucursal),
+        caja: d.caja ? mapCaja(d.caja) : null,
+        comandas: ((d.comandas ?? []) as Row[]).map(c => mapComanda({ ...c, sucursal_id: c.sucursal_id ?? d.sucursal.id })),
+        impresoras: ((d.impresoras ?? []) as Row[]).map(mapImpresora),
+        zonas: ((d.zonas ?? []) as Row[]).map(mapZona),
+        armadoId: opt(d.armado_id),
+        hora: d.hora,
+      }
+    },
+    async pantallaCocinaEstado(codigo, comandaId, estado, jobs) {
+      ok(await sb.rpc('pantalla_cocina_estado', {
+        p_codigo: codigo, p_comanda: comandaId, p_estado: estado,
+        p_jobs: jobs.map(j => ({ impresora_id: j.impresoraId, contenido: j.contenido, copias: j.copias })),
+      }))
+    },
+    escucharPantalla(canal, onCambio) {
+      const ch = sb.channel(`pantalla:${canal}`).on('broadcast', { event: 'cambio' }, () => onCambio()).subscribe()
+      return () => { sb.removeChannel(ch) }
     },
     async subirVideoPantalla(sucursalId, archivo) {
       const p = await perfil()
@@ -508,13 +557,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
     },
     async listImpresoras(sucursalId) {
       const r = ok(await sb.from('impresoras').select('*').eq('sucursal_id', sucursalId).eq('activa', true).order('created_at'))
-      return (r as Row[]).map((i): Impresora => ({
-        id: i.id, nombre: i.nombre, imprimeMostrador: i.imprime_mostrador, imprimeDelivery: i.imprime_delivery,
-        copias: i.copias, ancho: i.ancho, ultimoPing: opt(i.ultimo_ping), conToken: !!i.token_hash,
-        formato: i.formato ?? 'normal', mostrarPrecios: i.mostrar_precios ?? true,
-        impresoraWindows: opt(i.impresora_windows), pcNombre: opt(i.pc_nombre), versionPrograma: opt(i.version_programa),
-        vinculadaAt: opt(i.vinculada_at),
-      }))
+      return (r as Row[]).map(mapImpresora)
     },
     async guardarImpresora(sucursalId, i) {
       if (!i.nombre.trim()) throw new Error('Poné un nombre para la comandera (ej: Cocina).')

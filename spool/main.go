@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	version            = "1.7.2"
+	version            = "1.7.3"
 	servidorPorDefecto = "https://cloudticket.com.ar"
 )
 

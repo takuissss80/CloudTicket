@@ -49,7 +49,8 @@ export function usePantallaEncendida() {
   }, [])
 }
 
-export function PantallaCocina({ onClose }: { onClose?: () => void }) {
+/** publica: tele abierta con su enlace (las revisiones las maneja PantallaPublica) */
+export function PantallaCocina({ onClose, publica }: { onClose?: () => void; publica?: boolean }) {
   const { comandas, caja, marcarListo, volverACocina, refrescar, catalogo } = useApp()
   const idArmado = catalogo.productos.find(x => esArmado(x))?.id
   const local = useLocalActivo()
@@ -64,11 +65,16 @@ export function PantallaCocina({ onClose }: { onClose?: () => void }) {
   // Reloj de la base: así los minutos no dependen de la hora de esta PC
   useEffect(() => {
     const t0 = Date.now()
+    if (publica) return // sin sesión: se usa la hora de la tele
     repo.horaServidor().then(h => { const t1 = Date.now(); setDesfase(new Date(h).getTime() - (t0 + t1) / 2) }).catch(() => {})
-  }, [])
+  }, [publica])
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 1000); return () => clearInterval(t) }, [])
   // Por si se pierde algún aviso en tiempo real
-  useEffect(() => { const t = setInterval(() => { refrescar().catch(() => {}) }, 20_000); return () => clearInterval(t) }, [refrescar])
+  useEffect(() => {
+    if (publica) return
+    const t = setInterval(() => { refrescar().catch(() => {}) }, 60_000)
+    return () => clearInterval(t)
+  }, [refrescar, publica])
 
   usePantallaEncendida()
 

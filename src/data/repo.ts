@@ -1,5 +1,5 @@
 import type {
-  AjusteLocal, Caja, OrientacionPantalla, VideoPantalla, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
+  AjusteLocal, Caja, OrientacionPantalla, VideoPantalla, Pantalla, DatosPantalla, Categoria, Cliente, Comanda, Cupon, ImportacionPedido, MapeoExterno, PedidoExterno, CuponAplicado, UsoCupon, EstadoComanda, Impresora, Ingrediente, NuevaComanda,
   IngresoMercaderia, MovimientoCaja, MovimientoReporte, NuevoIngreso, Pago, PrintJob, StockItem, StockMovimiento, TipoMovStock, Producto, Repartidor, TipoGasto, Sesion, Sucursal, TipoPrintJob, LineaTicket, Usuario, Zona, PedidoFabrica, PlanillaFabricaItem, TipoUsuario, Plan, SaCuenta,
 } from '../types'
 
@@ -78,8 +78,18 @@ export interface Repo {
   listSucursales(): Promise<Sucursal[]>
   /** Pantalla de cocina del local (admin o encargado del local) */
   configCocina(sucursalId: string, c: { activa: boolean; amarillo: number; rojo: number }): Promise<void>
-  /** Pantalla para clientes (PRO): orientación de la tele y videos en loop */
-  configPantallaClientes(sucursalId: string, c: { orientacion: OrientacionPantalla; videos: VideoPantalla[] }): Promise<void>
+  /** Teles del local (PRO), cada una con su enlace */
+  listPantallas(sucursalId: string): Promise<Pantalla[]>
+  crearPantalla(sucursalId: string, tipo: Pantalla['tipo'], nombre: string): Promise<void>
+  guardarPantalla(id: string, c: { nombre: string; orientacion: OrientacionPantalla; videos: VideoPantalla[] }): Promise<void>
+  nuevoCodigoPantalla(id: string): Promise<void>
+  eliminarPantalla(id: string): Promise<void>
+  /** Sin iniciar sesión: lo que muestra la tele del código */
+  pantallaDatos(codigo: string): Promise<DatosPantalla>
+  /** Sin iniciar sesión: la cocina marca listo (con los tickets a imprimir) o devuelve a cocina */
+  pantallaCocinaEstado(codigo: string, comandaId: string, estado: 'listo' | 'en_preparacion', jobs: NuevoPrintJob[]): Promise<void>
+  /** Avisos instantáneos para la tele (devuelve cómo dejar de escuchar) */
+  escucharPantalla(canal: string, onCambio: () => void): () => void
   subirVideoPantalla(sucursalId: string, archivo: File): Promise<VideoPantalla>
   borrarVideoPantalla(path: string): Promise<void>
   /** Último recordatorio de GoWin de pedido sin confirmar (lo manda el programa de impresión) */
