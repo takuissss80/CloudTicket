@@ -132,3 +132,12 @@ select optgroup {
 .alarma-py-cartel { animation: alarma-py-cartel 1s ease-in-out infinite; }
 @keyframes alarma-py { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
 @keyframes alarma-py-cartel { 0%, 100% { background: #e01b1b; } 50% { background: #ff8a00; } }
+
+/* PedidosYa con pedidos sin cargar: luz roja intermitente en el botón */
+.luz-py { animation: luz-py-borde 1s ease-in-out infinite; }
+.luz-py-punto { animation: luz-py-punto 1s ease-in-out infinite; }
+@keyframes luz-py-borde {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 45, 45, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 45, 45, .55), 0 0 18px 4px rgba(255, 45, 45, .6); }
+}
+@keyframes luz-py-punto { 0%, 100% { opacity: 1; box-shadow: 0 0 8px 3px rgba(255, 45, 45, .9); } 50% { opacity: .15; box-shadow: none; } }

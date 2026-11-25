@@ -18,7 +18,7 @@ import { PantallaCocina } from './components/PantallaCocina'
 import { PantallaMostrador } from './components/PantallaMostrador'
 import { Produccion } from './components/Produccion'
 import { BotonTema, Btn, Confirmar, Toasts } from './components/ui'
-import { AlarmaPedidosYa, CajaSinCerrar } from './components/Alertas'
+import { CajaSinCerrar } from './components/Alertas'
 
 function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: () => void }) {
   const { cargando, error, caja, sesion, sucursales, sucursalId, impresoras, printJobs, pedidosExternos, cambiarLocal, refrescar, refrescarMenu, salir, procesarExternos } = useApp()
@@ -38,18 +38,6 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     return () => removeEventListener('hashchange', f)
   }, [])
 
-  // Alarma de PedidosYa sin confirmar: al entrar, en tiempo real y cada 30 s por las dudas
-  const [avisoPY, setAvisoPY] = useState<{ at: string; texto?: string } | null>(null)
-  const revisarAvisoPY = useCallback(() => {
-    if (!sucursalId) return
-    repo.avisoPedidosYa(sucursalId).then(setAvisoPY).catch(() => {})
-  }, [sucursalId])
-  useEffect(() => {
-    revisarAvisoPY()
-    const t = setInterval(revisarAvisoPY, 30_000)
-    return () => clearInterval(t)
-  }, [revisarAvisoPY])
-
   // Cambios en tiempo real: otras PCs, el spool, cambios de menú (solo del local elegido)
   const idsImpresoras = impresoras.map(i => i.id).sort().join(',')
   useEffect(() => {
@@ -59,11 +47,10 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
     const off = repo.subscribe(tabla => {
       if (tabla === 'menu') { clearTimeout(t2); t2 = setTimeout(() => refrescarMenu(), 300) }
       else if (tabla === 'externos') { clearTimeout(t3); t3 = setTimeout(() => procesarExternos(), 400) }
-      else if (tabla === 'aviso_py') revisarAvisoPY()
       else { clearTimeout(t1); t1 = setTimeout(() => refrescar(), 150) }
     }, { sucursalId: sucursalId ?? undefined, impresoraIds: idsImpresoras ? idsImpresoras.split(',') : [] })
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); off() }
-  }, [refrescar, refrescarMenu, procesarExternos, revisarAvisoPY, sucursalId, idsImpresoras])
+  }, [refrescar, refrescarMenu, procesarExternos, sucursalId, idsImpresoras])
 
   // Importación de PedidosYa: al abrir la caja y cada 15 s (por si se perdió un aviso en tiempo real)
   const cajaId = caja?.id
@@ -149,7 +136,9 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
               <button onClick={() => setVerReset(true)} className="h-10 rounded-lg bg-muzza-claro px-3 text-sm font-semibold hover:bg-muzza hover:text-sobre-muzza">Modo demo</button>
             )}
             {pedidosExternos !== null && (
-              <Btn onClick={() => setVerPY(true)} className={erroresPY ? '!border-tomate !text-tomate' : ''}>
+              <Btn onClick={() => setVerPY(true)} className={erroresPY ? 'luz-py !border-tomate !text-tomate' : ''}
+                title={erroresPY ? 'Hay pedidos de PedidosYa que no se pudieron cargar: tocá para completarlos' : undefined}>
+                {erroresPY > 0 && <span aria-hidden className="luz-py-punto size-3 rounded-full bg-tomate" />}
                 PedidosYa{erroresPY ? <span className="rounded-full bg-tomate px-2 text-sm text-white">{erroresPY}</span> : null}
               </Btn>
             )}
@@ -181,7 +170,6 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
       <AvisoVencimiento />
       {caja ? <Tablero /> : <CajaCerrada />}
       {!verCierre && <CajaSinCerrar caja={caja} onAbrir={() => setVerCierre(true)} />}
-      <AlarmaPedidosYa aviso={avisoPY} />
 
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion inicial={verAdmin} onClose={() => setVerAdmin(null)} />}
