@@ -10,9 +10,9 @@ import { Toasts } from './ui'
 /** Revisión de respaldo: la tele se entera al instante por aviso; esto es por si se corta internet */
 const RESPALDO_MS = 2 * 60_000
 
-/** El código de una tele en la dirección: /p/K7M2QX9 (o ?p=K7M2QX9) */
+/** El código de una pantalla en la dirección: /K7M2QX9 (también /p/K7M2QX9 o ?p=K7M2QX9) */
 export function codigoDePantalla(): string | null {
-  const m = location.pathname.match(/^\/p\/([A-Za-z0-9]{5,12})\/?$/)
+  const m = location.pathname.match(/^\/(?:p\/)?([A-Za-z0-9]{7})\/?$/)
   return m?.[1] ?? new URLSearchParams(location.search).get('p')
 }
 

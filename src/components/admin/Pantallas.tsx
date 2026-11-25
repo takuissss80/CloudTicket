@@ -86,7 +86,7 @@ function Tele({ t, sucursalId, cocinaActiva, onCambio }: { t: Pantalla; sucursal
   const [confirmar, setConfirmar] = useState<'codigo' | 'eliminar' | null>(null)
   const archivo = useRef<HTMLInputElement>(null)
   useEffect(() => setNombre(t.nombre), [t.nombre])
-  const enlace = `${location.origin}/p/${t.codigo}`
+  const enlace = `${location.origin.replace('://www.', '://')}/${t.codigo}`
   const con = conexion(t.ultimoPing)
 
   const guardar = async (c: Partial<{ nombre: string; orientacion: OrientacionPantalla; videos: VideoPantalla[] }>, aviso?: string) => {

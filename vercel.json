@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/p/:codigo", "destination": "/index.html" }
+    { "source": "/p/:codigo", "destination": "/index.html" },
+    { "source": "/:codigo([A-Za-z0-9]{7})", "destination": "/index.html" }
   ]
 }
