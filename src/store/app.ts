@@ -422,7 +422,12 @@ export const useApp = create<AppState>((set, get) => {
         const { caja, catalogo, pedidosExternos } = get()
         if (!caja || !pedidosExternos) return
         const limite = Date.now() - 24 * 3600_000
-        const pendientes = pedidosExternos.filter(p => p.estado === 'pendiente' && new Date(p.createdAt).getTime() > limite).reverse()
+        // Los importa el servidor al instante (0035); la web solo toma los que siguen pendientes después de 45 s
+        const espera = Date.now() - 45_000
+        const pendientes = pedidosExternos.filter(p => {
+          const t = new Date(p.createdAt).getTime()
+          return p.estado === 'pendiente' && t > limite && t < espera
+        }).reverse()
         if (!pendientes.length) return
         const mapeos = await repo.listMapeos()
         let importados = 0

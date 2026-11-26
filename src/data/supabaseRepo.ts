@@ -4,7 +4,7 @@ import { normalizarTurnos } from '../lib/caja'
 import type { Repo, NuevoPrintJob, BusquedaCliente, EstadoSesion, MenuData } from './repo'
 import type {
   AjusteLocal, Caja, Categoria, Cliente, Comanda, Impresora, Ingrediente, ItemComanda, NuevaComanda,
-  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta, Sesion , Pantalla } from '../types'
+  Cupon, UsoCupon, MapeoExterno, PedidoExterno, IngresoMercaderia, MovimientoCaja, MovimientoReporte, Pago, PrintJob, StockItem, StockMovimiento, Producto, Repartidor, TipoGasto, Sucursal, Usuario, Zona, PedidoFabrica, SaCuenta, Sesion , Pantalla , ImportacionPedido } from '../types'
 import { PREFIJO_PRODUCTO, productoDePlanilla, type ModoCategoriaLocal } from './repo'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -56,8 +56,8 @@ const mapPantalla = (p: Row): Pantalla => ({
   orientacion: p.orientacion ?? 'horizontal', videos: Array.isArray(p.videos) ? p.videos : [], ultimoPing: opt(p.ultimo_ping),
 })
 const mapZona = (z: Row): Zona => ({ id: z.id, nombre: z.nombre, costo: num(z.costo) })
-const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
-const mapCategoria = (c: Row): Categoria => ({
+export const mapIngrediente = (r: Row): Ingrediente => ({ id: r.id, nombre: r.nombre, unidad: r.unidad, costo: num(r.costo), activo: r.activo })
+export const mapCategoria = (c: Row): Categoria => ({
   id: c.id, nombre: c.nombre, orden: c.orden, color: c.color, activa: c.activa, sucursalId: opt(c.sucursal_id), padreId: opt(c.padre_id), incluyeEnvio: !!c.incluye_envio,
 })
 const mapRepartidor = (r: Row): Repartidor => ({
@@ -68,7 +68,7 @@ const mapCliente = (c: Row): Cliente => ({
   entreCalles: opt(c.entre_calles), zonaId: opt(c.zona_id),
 })
 
-function mapProducto(p: Row): Producto {
+export function mapProducto(p: Row): Producto {
   return {
     id: p.id,
     categoriaId: p.categoria_id,
@@ -125,7 +125,16 @@ const comandaRow = (d: NuevaComanda) => ({
 })
 
 const SELECT_COMANDA = '*, comanda_items(*), pagos(*), repartidores(nombre)'
-const SELECT_PRODUCTO = '*, recetas(*), promo_fijos!promo_fijos_promo_id_fkey(*), promo_slots(*)'
+/** Lo que recibe importar_pedido_externo (lo usa también la importación del servidor) */
+export const datosImportacion = (d: ImportacionPedido) => ({
+  tipo: d.tipo, cliente_nombre: d.clienteNombre ?? null, cliente_tel: d.clienteTel ?? null, direccion: d.direccion ?? null,
+  observaciones: d.observaciones ?? null, numero_externo: d.numeroExterno ?? null, subtotal: d.subtotal, costo_envio: d.costoEnvio,
+  descuento: d.descuento, adicional: d.adicional, total: d.total, cobrada: d.cobrada,
+  items: d.items.map(i => ({ producto_id: i.productoId ?? null, descripcion: i.descripcion, variante: i.variante ?? null, cantidad: i.cantidad, precio_unit: i.precioUnit, nota: i.nota ?? null })),
+  pagos: d.pagos.map(p => ({ forma: p.forma, monto: p.monto })),
+})
+
+export const SELECT_PRODUCTO = '*, recetas(*), promo_fijos!promo_fijos_promo_id_fkey(*), promo_slots(*)'
 
 export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { headers?: Record<string, string>; storageKey?: string }): Repo & { client: SupabaseClient } {
   // storageKey: la app del celular guarda una sesión aparte por cada cuenta
@@ -811,14 +820,7 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       }))
     },
     async importarPedidoExterno(id, d) {
-      const datos = {
-        tipo: d.tipo, cliente_nombre: d.clienteNombre ?? null, cliente_tel: d.clienteTel ?? null, direccion: d.direccion ?? null,
-        observaciones: d.observaciones ?? null, numero_externo: d.numeroExterno ?? null, subtotal: d.subtotal, costo_envio: d.costoEnvio,
-        descuento: d.descuento, adicional: d.adicional, total: d.total, cobrada: d.cobrada,
-        items: d.items.map(i => ({ producto_id: i.productoId ?? null, descripcion: i.descripcion, variante: i.variante ?? null, cantidad: i.cantidad, precio_unit: i.precioUnit, nota: i.nota ?? null })),
-        pagos: d.pagos.map(p => ({ forma: p.forma, monto: p.monto })),
-      }
-      return (ok(await sb.rpc('importar_pedido_externo', { p_id: id, p_datos: datos })) as unknown as string | null) ?? null
+      return (ok(await sb.rpc('importar_pedido_externo', { p_id: id, p_datos: datosImportacion(d) })) as unknown as string | null) ?? null
     },
     async marcarPedidoExterno(id, estado, error, datos) {
       const fila: Row = { estado, error: error ?? null }
