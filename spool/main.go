@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	version            = "1.7.3"
+	version            = "1.7.4"
 	servidorPorDefecto = "https://cloudticket.com.ar"
 )
 
@@ -35,6 +35,7 @@ func main() {
 
 	cargarConfig()
 	registrar("info", "CloudTicket Impresión v%s iniciado en %s", version, nombrePC())
+	asegurarInicioConWindows()
 	go func() {
 		if err := asegurarServidor(); err != nil {
 			registrar("error", "Servidor: %v", err)
@@ -49,4 +50,25 @@ func main() {
 		abrirNavegador(url)
 	}
 	select {}
+}
+
+// asegurarInicioConWindows: el inicio con Windows viene activado. La primera vez se activa solo;
+// si después lo desactivan desde el panel, se respeta. Si está activo, se actualiza la ruta del
+// programa (por si se descargó una versión nueva en otra carpeta).
+func asegurarInicioConWindows() {
+	cfgMu.Lock()
+	decidido := cfg.InicioDecidido
+	if !decidido {
+		cfg.InicioDecidido = true
+		_ = guardarConfig()
+	}
+	cfgMu.Unlock()
+	if decidido && !inicioConWindows() {
+		return
+	}
+	if err := setInicioConWindows(true); err != nil {
+		registrar("error", "No se pudo activar el inicio con Windows: %v", err)
+	} else if !decidido {
+		registrar("info", "Inicio con Windows activado: el programa arranca solo al prender la PC")
+	}
 }

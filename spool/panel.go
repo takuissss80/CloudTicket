@@ -267,6 +267,10 @@ func iniciarPanel() (net.Listener, error) {
 		if err := leer(r, &p); err != nil {
 			return nil, err
 		}
+		cfgMu.Lock()
+		cfg.InicioDecidido = true
+		_ = guardarConfig()
+		cfgMu.Unlock()
 		return map[string]bool{"ok": true}, setInicioConWindows(p.Activo)
 	})
 

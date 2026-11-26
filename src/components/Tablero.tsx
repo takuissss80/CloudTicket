@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Categoria, Comanda, TipoComanda } from '../types'
 import { useApp, useCocinaActiva } from '../store/app'
 import { usePedido } from '../store/pedido'
-import { hora, minutosDesde, money, nombreConVariante } from '../lib/format'
+import { hora, minutosDesde, money, nombreConVariante, normalizar } from '../lib/format'
 import { marcasDeLocales } from '../lib/caja'
 import { colorCategoria } from '../lib/colores'
 import { ComandaDetalle } from './ComandaDetalle'
@@ -20,6 +20,22 @@ function colorEstado(c: Comanda) {
 }
 
 export type AccionTablero = { tipo: 'asignar' | 'entregar'; id: string }
+
+/** ¿La comanda coincide con lo buscado? Número (#12 o 12), nombre, teléfono, dirección, moto, Nº de PedidosYa o lo pedido */
+function coincide(c: Comanda, q: string) {
+  const crudo = normalizar(q.trim())
+  const t = crudo.replace(/^#/, '')
+  if (!t) return true
+  if (/^\d+$/.test(t)) {
+    if (String(c.numero) === t) return true
+    // "#12" o pocos dígitos: solo el número de comanda; con 4 o más también teléfono y Nº de PedidosYa
+    if (crudo.startsWith('#') || t.length < 4) return false
+    if ((c.clienteTel ?? '').replace(/\D/g, '').includes(t) || (c.externoId ?? '').includes(t)) return true
+  }
+  const texto = normalizar([c.clienteNombre, c.clienteTel, c.direccion, c.repartidorNombre, c.externoId,
+    ...c.items.map(i => i.descripcion)].filter(Boolean).join(' '))
+  return t.split(/\s+/).every(w => texto.includes(w))
+}
 
 
 /**
@@ -145,6 +161,7 @@ export function Tablero() {
   const [seleccion, setSeleccion] = useState<string | null>(null)
   const [accion, setAccion] = useState<AccionTablero | null>(null)
   const [ahora, setAhora] = useState(Date.now())
+  const [busqueda, setBusqueda] = useState<Record<TipoComanda, string>>({ mostrador: '', delivery: '' })
 
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 15000); return () => clearInterval(t) }, [])
 
@@ -156,8 +173,12 @@ export function Tablero() {
   const accionSel = comandas.find(c => c.id === accion?.id)
 
   const columna = (tipo: TipoComanda) => {
-    const lista = visibles.filter(c => c.tipo === tipo)
-    const abiertas = lista.filter(c => c.estado !== 'entregado' && c.estado !== 'anulada').length
+    const q = busqueda[tipo]
+    // Buscando, también aparecen las entregadas y anuladas de la caja
+    const lista = q.trim()
+      ? comandas.filter(c => c.tipo === tipo && coincide(c, q)).sort((a, b) => b.numero - a.numero)
+      : visibles.filter(c => c.tipo === tipo)
+    const abiertas = visibles.filter(c => c.tipo === tipo && c.estado !== 'entregado' && c.estado !== 'anulada').length
     return (
       <section className="min-w-0">
         <div className="mb-3 flex items-center gap-3">
@@ -165,8 +186,18 @@ export function Tablero() {
             {tipo === 'delivery' ? 'Delivery' : 'Mostrador'}
           </h2>
           <span className="font-cond text-2xl font-bold text-gris tabular-nums">{abiertas}</span>
+          <span className="relative ml-auto min-w-0 max-w-64 flex-1">
+            <input type="search" value={q} aria-label={`Buscar pedido de ${tipo}`}
+              onChange={e => setBusqueda(b => ({ ...b, [tipo]: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Escape') setBusqueda(b => ({ ...b, [tipo]: '' })) }}
+              placeholder="Buscar pedido"
+              className="h-12 w-full rounded-xl border border-linea bg-superficie pl-10 pr-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-pizarra" />
+            <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gris" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            </svg>
+          </span>
           <button onClick={() => nuevo(tipo)}
-            className={`ml-auto h-12 rounded-xl px-5 font-cond text-xl font-bold shadow-sm ${tipo === 'delivery' ? 'bg-tomate text-white' : 'bg-pizarra text-white'} hover:brightness-110`}>
+            className={`shrink-0 h-12 rounded-xl px-5 font-cond text-xl font-bold shadow-sm ${tipo === 'delivery' ? 'bg-tomate text-white' : 'bg-pizarra text-white'} hover:brightness-110`}>
             + Tomar pedido
           </button>
         </div>
@@ -174,7 +205,10 @@ export function Tablero() {
           {lista.map(c => <TarjetaComanda key={c.id} c={c} marcas={marcasDe?.(c)} ahora={ahora} onAbrir={() => setSeleccion(c.id)} onAccion={setAccion}
             onQuitarMoto={async () => { if (await quitarRepartidor(c)) setAccion({ tipo: 'asignar', id: c.id }) }} />)}
         </div>
-        {!lista.length && (
+        {!lista.length && q.trim() && (
+          <p className="rounded-xl border-2 border-dashed border-linea py-10 text-center text-gris">Ningún pedido de {tipo} coincide con “{q.trim()}”.</p>
+        )}
+        {!lista.length && !q.trim() && (
           <button onClick={() => nuevo(tipo)} className="w-full rounded-xl border-2 border-dashed border-linea py-10 text-center text-gris hover:border-gris">
             No hay pedidos de {tipo} en curso. Tocá para cargar uno.
           </button>

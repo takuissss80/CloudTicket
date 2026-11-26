@@ -36,7 +36,9 @@ type Config struct {
 	AnonKey     string    `json:"anonKey"`
 	Vinculos    []Vinculo `json:"vinculos"`
 	Captura     Captura   `json:"captura"`
-	PrimeraVez  bool      `json:"-"`
+	// InicioDecidido: el usuario ya eligió (o se activó solo la primera vez) si arranca con Windows
+	InicioDecidido bool `json:"inicioDecidido,omitempty"`
+	PrimeraVez     bool `json:"-"`
 }
 
 var (
