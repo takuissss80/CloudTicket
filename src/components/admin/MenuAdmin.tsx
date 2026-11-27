@@ -18,10 +18,12 @@ const numero = (v: string) => (v.trim() === '' ? undefined : Math.max(0, Number(
  * Menú madre (admin) o menú de un local: precio propio, agotado, oculto y productos propios.
  */
 export function MenuAdmin() {
-  const { sesion, sucursales, refrescarMenu, avisar } = useApp()
+  const { sesion, sucursales, sucursalId, refrescarMenu, avisar } = useApp()
   const esAdmin = sesion?.rol === 'admin'
+  // El encargado general edita el menú de cualquier local, nunca el madre
+  const esGeneral = sesion?.rol === 'general'
   // null = menú madre
-  const [vista, setVista] = useState<string | null>(esAdmin ? null : sesion?.sucursalId ?? null)
+  const [vista, setVista] = useState<string | null>(esAdmin ? null : esGeneral ? sucursalId ?? sesion?.sucursalId ?? null : sesion?.sucursalId ?? null)
   const [menu, setMenu] = useState<MenuData | null>(null)
   const [catSel, setCatSel] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -149,10 +151,10 @@ export function MenuAdmin() {
     <div className="mx-auto max-w-[1400px] p-4">
       {/* ---- Qué menú se edita */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {esAdmin ? (
+        {esAdmin || (esGeneral && sucursales.length > 1) ? (
           <div className="flex flex-wrap gap-1 rounded-xl bg-superficie p-1 ring-1 ring-linea" role="tablist" aria-label="Menú a editar">
-            <button role="tab" aria-selected={vista === null} onClick={() => setVista(null)}
-              className={`h-10 rounded-lg px-4 font-semibold ${vista === null ? 'bg-primario text-sobre-primario' : 'hover:bg-harina'}`}>Menú madre</button>
+            {esAdmin && <button role="tab" aria-selected={vista === null} onClick={() => setVista(null)}
+              className={`h-10 rounded-lg px-4 font-semibold ${vista === null ? 'bg-primario text-sobre-primario' : 'hover:bg-harina'}`}>Menú madre</button>}
             {sucursales.map(s => (
               <button key={s.id} role="tab" aria-selected={vista === s.id} onClick={() => setVista(s.id)}
                 className={`h-10 rounded-lg px-4 font-semibold ${vista === s.id ? 'bg-primario text-sobre-primario' : 'hover:bg-harina'}`}>{s.nombre}</button>
@@ -396,7 +398,7 @@ export function MenuAdmin() {
         />
       )}
       {copiando && (
-        <CopiarCategoriaModal categoria={copiando} menu={menu} vista={vista} esAdmin={esAdmin} sucursales={sucursales}
+        <CopiarCategoriaModal categoria={copiando} menu={menu} vista={vista} esAdmin={esAdmin} sucursales={esAdmin || esGeneral ? sucursales : sucursales.filter(s => s.id === vista)}
           onClose={() => setCopiando(null)}
           onListo={async (c, n) => {
             setCopiando(null)
@@ -641,7 +643,7 @@ function CopiarCategoriaModal({ categoria, menu, vista, esAdmin, sucursales, onC
   const [copiando, setCopiando] = useState('')
   const productos = menu.productos.filter(p => p.categoriaId === categoria.id).sort((a, b) => a.orden - b.orden)
   const ajustes = new Map((menu.ajustes ?? []).map(a => [a.productoId, a]))
-  const opciones = esAdmin ? [{ id: '', nombre: 'Menú madre (todos los locales)' }, ...sucursales] : sucursales.filter(s => s.id === vista)
+  const opciones = esAdmin ? [{ id: '', nombre: 'Menú madre (todos los locales)' }, ...sucursales] : sucursales
 
   const copiar = async () => {
     if (!nombre.trim()) return

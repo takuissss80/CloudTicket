@@ -31,7 +31,7 @@ export function Cuentas({ onAgregar, onElegida }: { onAgregar: () => void; onEle
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-[16px] font-semibold text-tinta">{c.nombre || 'Sin nombre'}</span>
-                      <span className="block truncate text-[13px] text-gris">{c.usuario} · {c.rol === 'admin' ? 'Administrador' : 'Local'}</span>
+                      <span className="block truncate text-[13px] text-gris">{c.usuario} · {c.rol === 'admin' ? 'Administrador' : c.rol === 'general' ? 'Encargado general' : 'Local'}</span>
                     </span>
                   </button>
                   {activa

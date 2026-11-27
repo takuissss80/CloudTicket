@@ -7,7 +7,8 @@ export type FormaPago = 'efectivo' | 'mercado_pago' | 'tarjeta' | 'transferencia
 /** Por dónde entró el pedido */
 export type CanalVenta = 'propio' | 'pedidosya'
 
-export type Rol = 'admin' | 'local'
+/** admin: toda la cuenta. local: un local. general: encargado general (todos los locales, sin caja ni reportes) */
+export type Rol = 'admin' | 'local' | 'general'
 
 /** Plan de la cuenta: Principal (sin pantallas de cocina y de clientes) o PRO (todo) */
 export type Plan = 'principal' | 'pro'
@@ -21,7 +22,7 @@ export interface Sesion {
   cuentaNombre: string
   /** Plan de la cuenta (el que toma un local nuevo). Lo que vale es el plan de cada local */
   plan: Plan
-  /** Solo usuarios de local */
+  /** Usuarios de local (para el encargado general: el local con el que arranca) */
   sucursalId?: string
   /** Admin o encargado: puede cargar descuentos y adicionales a mano */
   puedeDescontar: boolean
@@ -29,7 +30,7 @@ export interface Sesion {
   esProduccion?: boolean
 }
 
-export type TipoUsuario = 'comun' | 'encargado' | 'produccion'
+export type TipoUsuario = 'comun' | 'encargado' | 'produccion' | 'general'
 
 /** Un valor que puede ser un monto fijo o un porcentaje */
 export type TipoValor = 'monto' | 'porc'

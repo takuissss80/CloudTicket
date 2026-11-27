@@ -109,6 +109,8 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
 
   const conError = printJobs.filter(j => j.estado === 'error').length
   const esAdmin = sesion?.rol === 'admin'
+  // Encargado general: recorre todos los locales, pero no toca la caja ni ve reportes
+  const esGeneral = sesion?.rol === 'general'
   // Encargado o admin: reportes y menú. El usuario común solo opera.
   const esEncargado = !!sesion?.puedeDescontar
   const erroresPY = (pedidosExternos ?? []).filter(p => p.estado === 'error').length
@@ -119,7 +121,7 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
       <header className="sticky top-0 z-20 border-b border-linea bg-papel/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
-            {esAdmin && sucursales.length > 1 ? (
+            {(esAdmin || esGeneral) && sucursales.length > 1 ? (
               <label className="flex items-center">
                 <span className="sr-only">Local</span>
                 <select id="local-activo" value={sucursalId ?? ''} onChange={e => cambiarLocal(e.target.value)}
@@ -130,7 +132,7 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
             ) : (
               <span className="truncate font-cond text-2xl font-extrabold">{local?.nombre}</span>
             )}
-            {caja && <span className="hidden text-[15px] text-gris sm:inline">Caja {caja.turno.toLowerCase()} desde las {hora(caja.abiertaAt)}</span>}
+            {caja && !esGeneral && <span className="hidden text-[15px] text-gris sm:inline">Caja {caja.turno.toLowerCase()} desde las {hora(caja.abiertaAt)}</span>}
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {repo.modo === 'demo' && (
@@ -147,14 +149,14 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
               <a href="#cocina" target="_blank" rel="noopener" title="Abre la pantalla de cocina en otra pestaña"
                 className="inline-flex h-10 items-center rounded-lg border border-linea bg-superficie px-3 font-semibold hover:bg-harina">Cocina</a>
             )}
-            {esEncargado && <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>}
-            <Btn onClick={() => setVerAdmin(esEncargado ? 'menu' : 'caja')}>{esAdmin ? 'Administración' : 'Administración del local'}</Btn>
+            {esEncargado && !esGeneral && <Btn onClick={() => setVerReportes(true)}>Reportes</Btn>}
+            <Btn onClick={() => setVerAdmin(esEncargado ? 'menu' : 'caja')}>{esAdmin ? 'Administración' : esGeneral ? 'Menú del local' : 'Administración del local'}</Btn>
             {conError > 0 && (
               <button onClick={() => setVerAdmin('impresion')} className="h-10 rounded-lg bg-tomate px-3 font-semibold text-white">
                 Impresión: {conError} con error
               </button>
             )}
-            {caja && <Btn onClick={() => setVerCierre(true)}>Caja</Btn>}
+            {caja && !esGeneral && <Btn onClick={() => setVerCierre(true)}>Caja</Btn>}
             <BotonTema />
             {onGeneral && <Btn onClick={onGeneral} title="Volver al panel del administrador general">Administración general</Btn>}
             <Btn tono="fantasma" title={`Usuario: ${sesion?.usuario}`} onClick={async () => { await salir(); onSalir() }}>
@@ -165,14 +167,14 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
       </header>
 
       <AvisoVencimiento />
-      {caja ? <Tablero /> : <CajaCerrada />}
-      {!verCierre && <CajaSinCerrar caja={caja} onAbrir={() => setVerCierre(true)} />}
+      {caja ? <Tablero /> : esGeneral ? <EsperandoCaja local={local?.nombre} /> : <CajaCerrada />}
+      {!verCierre && !esGeneral && <CajaSinCerrar caja={caja} onAbrir={() => setVerCierre(true)} />}
 
       {pedidoAbierto && <TomarPedido />}
       {verAdmin && <Administracion inicial={verAdmin} onClose={() => setVerAdmin(null)} />}
-      {verReportes && esEncargado && <Reportes onClose={() => setVerReportes(false)} />}
+      {verReportes && esEncargado && !esGeneral && <Reportes onClose={() => setVerReportes(false)} />}
       {verPY && <PedidosYa onClose={() => setVerPY(false)} />}
-      {verCierre && <CajaPanel onClose={() => setVerCierre(false)} />}
+      {verCierre && !esGeneral && <CajaPanel onClose={() => setVerCierre(false)} />}
       {verReset && (
         <Confirmar
           texto="Estás en modo demo"
@@ -186,12 +188,25 @@ function Principal({ onSalir, onGeneral }: { onSalir: () => void; onGeneral?: ()
   )
 }
 
+/** El encargado general no abre la caja: espera a que la abra alguien del local */
+function EsperandoCaja({ local }: { local?: string }) {
+  return (
+    <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <h2 className="font-cond text-3xl font-bold">La caja de {local ?? 'este local'} está cerrada</h2>
+      <p className="mt-3 text-[17px] text-gris">
+        Para tomar pedidos acá, alguien del local tiene que abrir la caja. Apenas la abran, los pedidos aparecen solos.
+        Mientras tanto podés cambiar de local arriba o editar el menú.
+      </p>
+    </div>
+  )
+}
+
 /** Aviso de suscripción: vencida o por vencer (el admin ve todos sus locales, el local solo el suyo) */
 function AvisoVencimiento() {
   const { sesion, sucursales } = useApp()
   const [cerrado, setCerrado] = useState(false)
   const avisos = sucursales
-    .filter(s => s.activa && (sesion?.rol === 'admin' || s.id === sesion?.sucursalId))
+    .filter(s => s.activa && (sesion?.rol === 'admin' || sesion?.rol === 'general' || s.id === sesion?.sucursalId))
     .map(s => ({ s, v: estadoVence(s.vence) }))
     .filter(x => x.v.tono === 'vencido' || x.v.tono === 'pronto')
   if (!avisos.length || cerrado) return null
@@ -200,7 +215,7 @@ function AvisoVencimiento() {
     <div role="alert" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[15px] ${vencido ? 'bg-tomate text-white' : 'bg-muzza-claro text-tinta'}`}>
       <b>Suscripción</b>
       <span className="flex-1">
-        {avisos.map(x => `${avisos.length > 1 || sesion?.rol === 'admin' ? `${x.s.nombre}: ` : ''}${x.v.texto.charAt(0).toLowerCase()}${x.v.texto.slice(1)}`).join(' · ')}.
+        {avisos.map(x => `${avisos.length > 1 || sesion?.rol !== 'local' ? `${x.s.nombre}: ` : ''}${x.v.texto.charAt(0).toLowerCase()}${x.v.texto.slice(1)}`).join(' · ')}.
         {' '}Para renovarla, comunicate con CloudTicket.
       </span>
       <button onClick={() => setCerrado(true)} className="rounded px-2 font-semibold underline">Cerrar</button>

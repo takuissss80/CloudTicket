@@ -11,7 +11,7 @@ import { NOMBRE_TIPO, TipoUsuario } from './admin/Locales'
 
 type Filtro = '' | 'vencidos' | 'pronto' | 'principal' | 'pro'
 const CLASE_PLAN: Record<Plan, string> = { pro: 'bg-albahaca-claro text-albahaca', principal: 'bg-harina text-gris ring-1 ring-linea' }
-const tipoDe = (u: Usuario): TipoUsuarioT => (u.esProduccion ? 'produccion' : u.puedeDescontar ? 'encargado' : 'comun')
+const tipoDe = (u: Usuario): TipoUsuarioT => (u.rol === 'general' ? 'general' : u.esProduccion ? 'produccion' : u.puedeDescontar ? 'encargado' : 'comun')
 /** El vencimiento más próximo (o ya pasado) de los locales activos */
 const peorVence = (c: SaCuenta) => c.locales.filter(l => l.activa).map(l => estadoVence(l.vence)).sort((a, b) => a.dias - b.dias)[0]
 const sumarMeses = (base: string | undefined, meses: number) => {
@@ -274,7 +274,7 @@ function FilaUsuario({ u, intentar }: { u: Usuario; intentar: Intentar }) {
     <li className="rounded-lg bg-harina px-3 py-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="mr-auto font-semibold">{u.usuario}</span>
-        {u.rol === 'local' ? (
+        {u.rol !== 'admin' ? (
           <TipoUsuario valor={tipoDe(u)} etiqueta={`Tipo de ${u.usuario}`}
             onChange={t => intentar(() => repo.setTipoUsuario(u.userId, t), `${u.usuario} ahora es ${NOMBRE_TIPO[t].toLowerCase()}`)} />
         ) : <span className="rounded bg-pizarra-claro px-2 py-0.5 text-sm font-semibold text-pizarra">Administrador</span>}

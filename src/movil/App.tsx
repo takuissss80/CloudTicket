@@ -54,8 +54,8 @@ export default function App() {
     return <Login onCancelar={reingresar && cuentas.length > 1 ? cancelarReingreso : undefined} />
   }
 
-  // La app del celular es para ver números: solo admin y encargados
-  if (!sesion.puedeDescontar) return <SinPermiso />
+  // La app del celular es para ver números: solo admin y encargados (no el encargado general)
+  if (!sesion.puedeDescontar || sesion.rol === 'general') return <SinPermiso />
 
   const titulo = MENU.find(m => m.key === pantalla)!.label
 
@@ -125,7 +125,9 @@ function SinPermiso() {
       <Logo className="size-16" />
       <h1 className="mt-3 font-cond text-[26px] font-bold text-tinta">Tu usuario no tiene acceso</h1>
       <p className="mt-2 max-w-xs text-[15px] text-gris">
-        <b>{sesion?.usuario}</b> es un usuario común: puede tomar pedidos en la web, pero los números del negocio solo los ven el administrador y los encargados.
+        {sesion?.rol === 'general'
+          ? <><b>{sesion.usuario}</b> es encargado general: trabaja en la web en todos los locales, pero los números del negocio solo los ven el administrador y los encargados.</>
+          : <><b>{sesion?.usuario}</b> es un usuario común: puede tomar pedidos en la web, pero los números del negocio solo los ven el administrador y los encargados.</>}
       </p>
       <div className="mt-6 w-full max-w-xs space-y-2">
         {otra && (

@@ -219,8 +219,8 @@ export function crearSupabaseRepo(url: string, anonKey: string, opciones?: { hea
       const sesion = (): Sesion | undefined => p ? ({
           userId: p.user_id, usuario: p.usuario, rol: p.rol, cuentaId: p.cuenta_id,
           cuentaNombre: p.cuentas?.nombre ?? '', plan: p.cuentas?.plan === 'principal' ? 'principal' : 'pro', sucursalId: opt(p.sucursal_id),
-          puedeDescontar: p.rol === 'admin' || !!p.puede_descontar,
-          esProduccion: p.rol !== 'admin' && !!p.es_produccion,
+          puedeDescontar: p.rol === 'admin' || p.rol === 'general' || !!p.puede_descontar,
+          esProduccion: p.rol === 'local' && !!p.es_produccion,
       }) : undefined
       if (sa.data === true) return { estado: 'superadmin', usuario: data.session.user.email ?? '', cuenta: sesion() }
       if (!p) return { estado: 'sin_cuenta', email: data.session.user.email ?? '' }

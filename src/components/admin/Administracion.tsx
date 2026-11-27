@@ -18,11 +18,13 @@ export type Pestana = 'menu' | 'caja' | 'stock' | 'ingredientes' | 'repartidores
 export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => void; inicial?: Pestana }) {
   const sesion = useApp(s => s.sesion)
   const esAdmin = sesion?.rol === 'admin'
+  const esGeneral = sesion?.rol === 'general'
   const esEncargado = !!sesion?.puedeDescontar
   const esPro = useLocalPro()
-  const [pestana, setPestana] = useState<Pestana>(inicial === 'menu' && !esEncargado ? 'caja' : inicial)
+  const [pestana, setPestana] = useState<Pestana>(esGeneral ? 'menu' : inicial === 'menu' && !esEncargado ? 'caja' : inicial)
 
-  const pestanas: { key: Pestana; label: string }[] = esAdmin
+  // El encargado general solo edita el menú de cada local
+  const pestanas: { key: Pestana; label: string }[] = esGeneral ? [{ key: 'menu', label: 'Menú del local' }] : esAdmin
     ? [{ key: 'menu', label: 'Menú' }, { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'fabrica', label: 'Pedido fábrica' }, { key: 'ingredientes', label: 'Ingredientes' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'delivery', label: 'Delivery' }, { key: 'cupones', label: 'Cupones' }, { key: 'impresion', label: 'Impresión' }, ...(esPro ? [{ key: 'cocina' as const, label: 'Pantallas' }] : []), { key: 'locales', label: 'Locales y usuarios' }]
     : [...(esEncargado ? [{ key: 'menu' as const, label: 'Menú del local' }] : []), { key: 'caja', label: 'Caja' }, { key: 'stock', label: 'Stock' }, { key: 'fabrica', label: 'Pedido fábrica' }, { key: 'repartidores', label: 'Repartidores' }, { key: 'impresion', label: 'Impresión' }, ...(esEncargado && esPro ? [{ key: 'cocina' as const, label: 'Pantallas' }] : [])]
 
@@ -30,7 +32,7 @@ export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => v
     <div className="fixed inset-0 z-30 flex flex-col bg-harina">
       <header className="flex flex-wrap items-center gap-3 bg-barra px-4 py-3 text-white">
         <button onClick={onClose} className="h-10 rounded-lg bg-white/15 px-3 font-semibold hover:bg-white/25">Volver</button>
-        <h1 className="font-cond text-3xl font-bold leading-none">{esAdmin ? `Administración de ${sesion?.cuentaNombre}` : 'Administración del local'}</h1>
+        <h1 className="font-cond text-3xl font-bold leading-none">{esAdmin ? `Administración de ${sesion?.cuentaNombre}` : esGeneral ? 'Menú del local' : 'Administración del local'}</h1>
         {pestanas.length > 1 && (
           <nav className="flex flex-wrap gap-1 rounded-lg bg-white/10 p-1 sm:ml-auto" aria-label="Secciones">
             {pestanas.map(p => (
@@ -44,15 +46,15 @@ export function Administracion({ onClose, inicial = 'menu' }: { onClose: () => v
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {pestana === 'menu' && esEncargado && <MenuAdmin />}
-        {pestana === 'caja' && <CajasAdmin />}
-        {pestana === 'stock' && <Stock />}
+        {!esGeneral && pestana === 'caja' && <CajasAdmin />}
+        {!esGeneral && pestana === 'stock' && <Stock />}
         {pestana === 'ingredientes' && esAdmin && <Ingredientes />}
-        {pestana === 'repartidores' && <Repartidores />}
+        {!esGeneral && pestana === 'repartidores' && <Repartidores />}
         {pestana === 'delivery' && esAdmin && <Delivery />}
         {pestana === 'cupones' && esAdmin && <Cupones />}
-        {pestana === 'impresion' && <ImpresionPanel />}
-        {pestana === 'cocina' && esEncargado && esPro && <Pantallas />}
-        {pestana === 'fabrica' && <PedidoFabrica />}
+        {!esGeneral && pestana === 'impresion' && <ImpresionPanel />}
+        {pestana === 'cocina' && esEncargado && !esGeneral && esPro && <Pantallas />}
+        {!esGeneral && pestana === 'fabrica' && <PedidoFabrica />}
         {pestana === 'locales' && esAdmin && <Locales />}
       </div>
     </div>

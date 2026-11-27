@@ -155,7 +155,7 @@ function sesionActual(): Sesion | null {
   const id = id0 === SUPERADMIN.id ? db().usuarios.find(x => x.rol === 'admin')?.userId : id0
   const u = db().usuarios.find(x => x.userId === id)
   if (!u) return null
-  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, plan: db().cuenta.plan ?? 'pro', sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || !!u.puedeDescontar, esProduccion: u.rol !== 'admin' && !!u.esProduccion }
+  return { userId: u.userId, usuario: u.usuario, rol: u.rol, cuentaId: db().cuenta.id, cuentaNombre: db().cuenta.nombre, plan: db().cuenta.plan ?? 'pro', sucursalId: u.sucursalId, puedeDescontar: u.rol === 'admin' || u.rol === 'general' || !!u.puedeDescontar, esProduccion: u.rol === 'local' && !!u.esProduccion }
 }
 function ses(): Sesion {
   const s = sesionActual()
@@ -200,11 +200,16 @@ function validarDescuentos(data: NuevaComanda, anterior?: Comanda) {
 
 function puedeLocal(sucursalId: string) {
   const s = ses()
-  if (s.rol !== 'admin' && s.sucursalId !== sucursalId) throw new Error('No tenés acceso a ese local')
+  if (s.rol !== 'admin' && s.rol !== 'general' && s.sucursalId !== sucursalId) throw new Error('No tenés acceso a ese local')
+}
+/** El encargado general no abre, cierra ni ve la caja */
+function sinGeneral() {
+  if (ses().rol === 'general') throw new Error('El encargado general no puede abrir, cerrar ni ver la caja')
 }
 function puedeEditarProducto(sucursalId?: string) {
   const s = ses()
   if (s.rol === 'admin') return
+  if (s.rol === 'general' && sucursalId) return
   if (!sucursalId || sucursalId !== s.sucursalId) throw new Error('Los productos del menú madre los cambia el administrador')
 }
 const sinLocal = <T extends { sucursalId: string }>(x: T) => { const { sucursalId: _, ...resto } = x; void _; return resto }
@@ -279,7 +284,7 @@ export const localRepo: Repo = {
   // ---- Locales y usuarios
   async listSucursales() {
     const s = ses()
-    return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || x.id === s.sucursalId)
+    return pausa(clon(db().sucursales.filter(x => s.rol === 'admin' || s.rol === 'general' || x.id === s.sucursalId)
       .map(x => ({ ...x, recargoDelivery: x.recargoDelivery ?? 0, recargoDeliveryTipo: x.recargoDeliveryTipo ?? 'monto', cocinaActiva: !!x.cocinaActiva, cocinaAmarillo: x.cocinaAmarillo ?? 7, cocinaRojo: x.cocinaRojo ?? 15, plan: x.plan ?? 'pro', cierreCiegas: !!x.cierreCiegas, turnos: normalizarTurnos(x.turnos), pantallaOrientacion: x.pantallaOrientacion ?? 'horizontal', pantallaVideos: x.pantallaVideos ?? [] }))))
   },
 
@@ -369,7 +374,7 @@ export const localRepo: Repo = {
   async configCocina(sucursalId, c) {
     const s = ses()
     if (c.activa && (db().sucursales.find(x => x.id === sucursalId)?.plan ?? 'pro') !== 'pro') throw new Error('La pantalla de cocina es del plan PRO')
-    if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar la cocina')
+    if (!(s.rol === 'admin' || (s.rol === 'local' && s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar la cocina')
     if (c.amarillo < 1 || c.rojo <= c.amarillo) throw new Error('Los minutos de rojo tienen que ser más que los de amarillo')
     const suc = db().sucursales.find(x => x.id === sucursalId)
     if (suc) Object.assign(suc, { cocinaActiva: c.activa, cocinaAmarillo: c.amarillo, cocinaRojo: c.rojo })
@@ -382,7 +387,7 @@ export const localRepo: Repo = {
   },
   async crearPantalla(sucursalId, tipo, nombre) {
     const s = ses()
-    if (!(s.rol === 'admin' || (s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar las pantallas')
+    if (!(s.rol === 'admin' || (s.rol === 'local' && s.puedeDescontar && s.sucursalId === sucursalId))) throw new Error('Solo el administrador o el encargado del local pueden configurar las pantallas')
     const d = db()
     d.pantallas = [...(d.pantallas ?? []), { id: uid(), sucursalId, tipo, nombre: nombre.trim(), codigo: codigoPantalla(), orientacion: 'horizontal', videos: [] }]
     guardar('menu')
@@ -463,9 +468,10 @@ export const localRepo: Repo = {
 
   async setTipoUsuario(userId, tipo) {
     if (!esSuper()) soloAdmin()
-    const u = db().usuarios.find(x => x.userId === userId && x.rol === 'local')
+    const u = db().usuarios.find(x => x.userId === userId && (x.rol === 'local' || x.rol === 'general'))
     if (!u) throw new Error('Ese usuario no es de tu cuenta')
-    u.puedeDescontar = tipo === 'encargado'
+    u.rol = tipo === 'general' ? 'general' : 'local'
+    u.puedeDescontar = tipo === 'encargado' || tipo === 'general'
     u.esProduccion = tipo === 'produccion'
     guardar('menu')
   },
@@ -484,7 +490,7 @@ export const localRepo: Repo = {
     if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(u)) throw new Error('El usuario debe tener entre 3 y 40 caracteres: letras, números, punto, guion o guion bajo.')
     if (password.length < 4) throw new Error('La contraseña debe tener al menos 4 caracteres.')
     if (db().usuarios.some(x => x.usuario === u)) throw new Error(`El usuario "${u}" ya existe. Probá con otro nombre.`)
-    db().usuarios.push({ userId: uid(), usuario: u, password, rol: 'local', sucursalId, nombre, puedeDescontar: tipo ? tipo === 'encargado' : !!puedeDescontar, esProduccion: tipo === 'produccion' })
+    db().usuarios.push({ userId: uid(), usuario: u, password, rol: tipo === 'general' ? 'general' : 'local', sucursalId, nombre, puedeDescontar: tipo ? tipo === 'encargado' || tipo === 'general' : !!puedeDescontar, esProduccion: tipo === 'produccion' })
     guardar('menu')
   },
 
@@ -557,7 +563,7 @@ export const localRepo: Repo = {
     if (u === SUPERADMIN.usuario || db().usuarios.some(x => x.usuario === u)) throw new Error(`El usuario "${u}" ya existe. Probá con otro nombre.`)
     db().usuarios.push(tipo === 'admin'
       ? { userId: uid(), usuario: u, password, rol: 'admin' }
-      : { userId: uid(), usuario: u, password, rol: 'local', sucursalId, puedeDescontar: tipo === 'encargado', esProduccion: tipo === 'produccion' })
+      : { userId: uid(), usuario: u, password, rol: tipo === 'general' ? 'general' : 'local', sucursalId, puedeDescontar: tipo === 'encargado' || tipo === 'general', esProduccion: tipo === 'produccion' })
     guardar('menu')
   },
 
@@ -832,6 +838,7 @@ export const localRepo: Repo = {
 
   async abrirCaja(sucursalId, turno, dineroInicial) {
     puedeLocal(sucursalId)
+    sinGeneral()
     const d = db()
     if (d.cajas.some(c => c.sucursalId === sucursalId && c.estado === 'abierta')) throw new Error('Ya hay una caja abierta en este local.')
     const bloquea = turnoQueBloquea(turno, d.cajas.filter(c => c.sucursalId === sucursalId), d.sucursales.find(s => s.id === sucursalId)?.turnos)
@@ -850,6 +857,7 @@ export const localRepo: Repo = {
     const c = d.cajas.find(x => x.id === id && x.estado === 'abierta')
     if (!c) throw new Error('La caja no está abierta')
     puedeLocal(c.sucursalId)
+    sinGeneral()
     const totales = calcularTotales(c, d.comandas.filter(x => x.cajaId === id), (d.movimientos ?? []).filter(m => m.cajaId === id))
     Object.assign(c, {
       estado: 'cerrada', cerradaAt: ahora(), cerradaPor: ses().usuario, observaciones: observaciones?.trim() || undefined,
@@ -862,6 +870,7 @@ export const localRepo: Repo = {
     const c = db().cajas.find(x => x.id === id && x.estado === 'abierta')
     if (!c) throw new Error('Solo se puede cambiar el inicio de la caja abierta')
     puedeLocal(c.sucursalId)
+    sinGeneral()
     const s = ses()
     if (s.rol !== 'admin' && !s.puedeDescontar) throw new Error('Solo el administrador o el encargado del local pueden cambiar el dinero al inicio')
     c.dineroInicial = Math.max(0, monto)
@@ -872,6 +881,7 @@ export const localRepo: Repo = {
     const d = db()
     const c = d.cajas.find(x => x.id === id && x.estado === 'cerrada')
     if (!c) throw new Error('Esa caja no está cerrada')
+    sinGeneral()
     puedeLocal(c.sucursalId)
     if (d.cajas.some(x => x.sucursalId === c.sucursalId && x.estado === 'abierta')) throw new Error('Ya hay una caja abierta en este local')
     if (d.cajas.some(x => x.sucursalId === c.sucursalId && x.abiertaAt > c.abiertaAt)) throw new Error('Solo se puede reabrir la última caja del local')
@@ -881,13 +891,14 @@ export const localRepo: Repo = {
 
   async listCajas(sucursalId, limit = 60) {
     puedeLocal(sucursalId)
+    sinGeneral()
     return pausa(clon(db().cajas.filter(c => c.sucursalId === sucursalId)
       .sort((a, b) => b.abiertaAt.localeCompare(a.abiertaAt)).slice(0, limit).map(sinLocal)))
   },
 
   async listMovimientos(cajaId) {
     const caja = db().cajas.find(c => c.id === cajaId)
-    if (!caja) return []
+    if (!caja || ses().rol === 'general') return []
     puedeLocal(caja.sucursalId)
     return pausa(clon((db().movimientos ?? []).filter(m => m.cajaId === cajaId)))
   },
@@ -1054,10 +1065,12 @@ export const localRepo: Repo = {
   // ---- Reportes
   async reporteComandas(sucursalIds, desde, hasta) {
     sucursalIds.forEach(puedeLocal)
+    sinGeneral()
     return pausa(clon(db().comandas.filter(c => sucursalIds.includes(c.sucursalId) && enRango(c.createdAt, desde, hasta))))
   },
   async reporteMovimientosCaja(sucursalIds, desde, hasta) {
     sucursalIds.forEach(puedeLocal)
+    sinGeneral()
     const d = db()
     const out: MovimientoReporte[] = []
     for (const m of d.movimientos ?? []) {
@@ -1080,7 +1093,7 @@ export const localRepo: Repo = {
 
   async listComandas(cajaId) {
     const caja = db().cajas.find(c => c.id === cajaId)
-    if (!caja) return []
+    if (!caja || ses().rol === 'general') return []
     puedeLocal(caja.sucursalId)
     return pausa(clon(db().comandas.filter(c => c.cajaId === cajaId).map(sinLocal)))
   },
