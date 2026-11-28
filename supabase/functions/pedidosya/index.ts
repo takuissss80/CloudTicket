@@ -27,6 +27,7 @@ function parsearMonto(s) {
 var MONTO = String.raw`-?\$?\s*-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|-?\$?\s*-?\d+(?:[.,]\d{1,2})?`;
 var reMontoFinal = new RegExp(String.raw`\s+(${MONTO})\s*$`);
 var reItem = /^\s*(\d{1,3}(?:[.,]5)?)\s*(?:x|X|×|u\.?|un\.?|uds?\.?)?\s+(.+)$/;
+var reItemXPegada = /^\s*(\d{1,3})\s*[xX×](?=\p{Lu}\p{Ll})(.+)$/u;
 var reItemXAlFinal = /^\s*(.+?)\s+[xX×]\s?(\d{1,3})\s*$/;
 var reCierre = /^\s*(sub\s*-?\s*total|total|env[ií]o|costo de (env[ií]o|entrega)|delivery|descuento|cup[oó]n|bonificaci[oó]n|promoci[oó]n|propina|forma de pago|m[eé]todo de pago|medio de pago|pago|abona|paga con|vuelto|cargo|tarifa|recargo)\b/i;
 var reExtra = /^\s*([-+*•>·]|\s{2,})\s*\S/;
@@ -43,16 +44,23 @@ function parsearTicket(texto) {
     else lineas.push(l);
   }
   const todo = lineas.join("\n");
-  const t = { items: [], retiro: false };
+  const t = { items: [], retiro: false, origen: esMercadoPago(todo) ? "mercadopago" : "pedidosya" };
   const num2 = todo.match(/(?:pedido|orden|order|n[°ºo]\.?\s*de\s*pedido)\s*(?:n[°ºo.]*|nro\.?|n[uú]mero|id)?\s*[:#]?\s*#?\s*(\d{4,})/i) ?? todo.match(/#\s*(\d{4,})/);
   if (num2) t.numero = num2[1];
+  if (!t.numero && t.origen === "mercadopago") {
+    const iRec = lineas.findIndex((l) => /^\s*recibido\s*:/i.test(l));
+    const suelto = lineas.slice(0, iRec > 0 ? iRec : 4).map((l) => l.trim()).find((l) => /^#?\d{3,8}$/.test(l));
+    if (suelto) t.numero = suelto.replace("#", "");
+  }
   const campo = (re) => todo.match(re)?.[1]?.trim();
   t.cliente = campo(/^\s*(?:cliente|nombre|a nombre de|para)\s*[:\-]\s*(.+)$/im);
   t.telefono = campo(/(?:tel[eé]fono|tel\.?|cel(?:ular)?|whats?app)\s*[:\-]?\s*([+\d][\d\s\-()]{6,}\d)/i)?.replace(/\s+/g, " ");
   t.direccion = campo(/^\s*(?:direcci[oó]n(?: de entrega)?|domicilio|entregar en|entrega en)\s*[:\-]\s*(.+)$/im);
   t.notas = campo(/^\s*(?:notas?|observaciones?|comentarios?|aclaraci[oó]n(?:es)?|indicaciones)\s*[:\-]\s*(.+)$/im);
+  if (t.origen === "mercadopago") leerClienteMercadoPago(lineas, t);
   if (!t.cliente) leerBloqueCliente(lineas, t);
   t.retiro = /retir[ao] en (el )?local|retiro en|para retirar|take\s?away|pick\s?up|retira el cliente/i.test(todo);
+  if (/pedido abonado|ya abonado/i.test(todo)) t.pago = "online";
   if (/pag(ad)?o (con )?(online|en l[ií]nea|tarjeta|mercado ?pago)|ya pagad|pagado|pago online|online|medio de pago\s*:\s*(visa|master|amex|american|cabal|naranja|maestro|d[eé]bito|cr[eé]dito|tarjeta|mercado ?pago|pago online)/i.test(todo)) t.pago = "online";
   if (/efectivo|abona con|paga con|cash/i.test(todo) && !/no (abona|paga) en efectivo/i.test(todo)) t.pago = t.pago === "online" && /pagado/i.test(todo) ? "online" : "efectivo";
   for (const l of lineas) {
@@ -82,7 +90,60 @@ function parsearTicket(texto) {
       empezo = true;
     }
   }
+  if (t.origen === "mercadopago") preciosSueltos(lineas, t);
   return t;
+}
+function esMercadoPago(todo) {
+  if (/pedidos ?ya|nro\.? ?orden/i.test(todo)) return false;
+  return /mercado ?pago/i.test(todo) || /^\s*recibido\s*:/im.test(todo) && /entrega prevista|^\s*enviar a\s*$|retir[ao] en/im.test(todo);
+}
+var reEtiquetaMP = /^\s*(enviar a|retira|direcci\S{0,3}n|referencia|ciudad|tel[eé]fono|tel\.?|notas?|comentarios?)\s*:?\s*(.*)$/i;
+function leerClienteMercadoPago(lineas, t) {
+  const bloques = [];
+  const iEnvio = lineas.findIndex((l) => /^\s*(enviar a|retira)\b/i.test(l));
+  if (iEnvio < 0) return;
+  for (const l of lineas.slice(iEnvio)) {
+    const s = l.trim();
+    if (!s) continue;
+    const m = s.match(reEtiquetaMP);
+    if (m) bloques.push({ etiqueta: m[1].toLowerCase(), valor: m[2] ? [m[2]] : [] });
+    else if (bloques.length) bloques[bloques.length - 1].valor.push(s);
+  }
+  const junto = (b) => b.valor.join(" ").replace(/\s+/g, " ").trim();
+  const nombre = bloques.find((b) => b.etiqueta === "enviar a" || b.etiqueta === "retira");
+  if (nombre?.valor.length) {
+    const n = nombre.valor[0];
+    t.cliente = n === n.toUpperCase() ? n.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()) : n;
+  }
+  const dir = bloques.filter((b) => b.etiqueta.startsWith("direcci")).map(junto).filter(Boolean);
+  const ciudad = bloques.filter((b) => b.etiqueta === "ciudad").map(junto).filter(Boolean);
+  if (dir.length) t.direccion = [...dir, ...ciudad].join(", ");
+  const notas = bloques.filter((b) => b.etiqueta === "referencia" || b.etiqueta.startsWith("nota") || b.etiqueta.startsWith("comentario")).map(junto).filter(Boolean);
+  if (notas.length) t.notas = notas.join(" \xB7 ");
+  const tel = bloques.find((b) => b.etiqueta.startsWith("tel"));
+  if (tel && !t.telefono) t.telefono = junto(tel) || void 0;
+  if (/^\s*retira\b/im.test(lineas.join("\n"))) t.retiro = true;
+}
+function preciosSueltos(lineas, t) {
+  if (!t.items.length || t.items.some((i) => i.precio != null)) return;
+  const montos = [];
+  const iTotal = lineas.findIndex((l) => /^\s*total\b/i.test(l));
+  for (let i = iTotal + 1; i < lineas.length && iTotal >= 0; i++) {
+    const s = lineas[i].trim();
+    if (/^(enviar a|retira|direcci)/i.test(s)) break;
+    const solo = s === "$" && /^\s*[\d.,]+\s*$/.test(lineas[i + 1] ?? "") ? "$" + lineas[++i].trim() : s;
+    if (/^\$\s*[\d.,]+$/.test(solo)) {
+      const m = parsearMonto(solo);
+      if (m != null) montos.push(m);
+    }
+  }
+  if (montos.length !== t.items.length) return;
+  const suma = montos.reduce((a, b) => a + b, 0);
+  const esperado = (t.total ?? suma) - (t.envio ?? 0) + (t.descuento ?? 0);
+  if (Math.abs(suma - esperado) > 1) return;
+  t.items.forEach((it, i) => {
+    it.precio = montos[i];
+  });
 }
 var reSeparador = /^[\s\-=_*.·~]{5,}$/;
 var reTelLinea = /^\s*(?:tel[eé]fono|tel\.?|cel(?:ular)?|whats?app)\s*[:.\-]?\s*[+\d]/i;
@@ -125,7 +186,8 @@ function leerItem(linea) {
     resto = resto.slice(0, m.index).trim();
   }
   let cantidad, nombre;
-  const a = resto.match(reItem);
+  const pegada = resto.match(reItemXPegada);
+  const a = pegada ?? resto.match(reItem);
   if (a) {
     cantidad = Number(a[1].replace(",", "."));
     nombre = a[2];
@@ -204,7 +266,7 @@ function armarImportacion(t, items) {
     clienteNombre: t.cliente,
     clienteTel: t.telefono,
     direccion: t.direccion,
-    observaciones: ["PedidosYa" + (t.numero ? ` #${t.numero}` : ""), t.notas].filter(Boolean).join(" \xB7 "),
+    observaciones: [(t.origen === "mercadopago" ? "Mercado Pago" : "PedidosYa") + (t.numero ? ` #${t.numero}` : ""), t.notas].filter(Boolean).join(" \xB7 "),
     numeroExterno: t.numero,
     subtotal,
     costoEnvio: envio,
@@ -213,7 +275,7 @@ function armarImportacion(t, items) {
     total,
     cobrada: online,
     items: lineas,
-    pagos: [{ forma: online ? "pedidosya" : "efectivo", monto: total }]
+    pagos: [{ forma: online ? t.origen === "mercadopago" ? "mercado_pago" : "pedidosya" : "efectivo", monto: total }]
   };
 }
 function interpretarPedido(texto, productos2, mapeos) {

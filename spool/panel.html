@@ -40,7 +40,16 @@
   .eventos .t-error { color:var(--rojo); } .eventos .t-ok { color:var(--acento); }
   .cont { display:flex; gap:14px; flex-wrap:wrap; font-size:14px; color:var(--gris); margin-top:8px; } .cont b { color:var(--tinta); }
   details summary { cursor:pointer; color:var(--gris); }
-  .papeles { display:flex; gap:16px; overflow-x:auto; padding:8px 2px 12px; align-items:flex-start; }
+  .papeles { display:flex; flex-direction:column; gap:6px; padding:8px 0 4px; max-height:420px; overflow-y:auto; }
+  .imp { border:1px solid var(--linea, #333); border-radius:8px; }
+  .imp-fila { display:flex; align-items:center; gap:12px; width:100%; padding:9px 12px; background:none; border:0; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+  .imp-fila:hover { background:rgba(127,127,127,.12); }
+  .imp-hora { font-variant-numeric:tabular-nums; color:var(--gris); width:62px; flex:none; }
+  .imp-titulo { flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .imp-dest { color:var(--gris); font-size:13px; flex:none; max-width:35%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .imp-flecha { color:var(--gris); flex:none; transition:transform .15s; }
+  .imp.abierto .imp-flecha { transform:rotate(90deg); }
+  .imp-papel { padding:4px 12px 14px; overflow-x:auto; }
   .papel { flex:none; width:calc(48ch + 28px); background:#fff; color:#111; padding:14px; border-radius:2px;
            box-shadow:0 2px 10px rgba(0,0,0,.25); font:14px/1.25 Consolas, "Courier New", monospace; }
   .papel .ln { white-space:pre; min-height:1.25em; overflow:hidden; }
@@ -67,7 +76,7 @@
 
   <section>
     <h2>Lo último que se imprimió</h2>
-    <p class="ayuda">Así salen en el papel de 80 mm. Para probar sin comandera, en <b>Cambiar impresora</b> elegí <b>★ Vista previa en pantalla</b>: se ven acá y no se imprime nada.</p>
+    <p class="ayuda">Tocá una impresión para ver cómo salió en el papel de 80 mm. Para probar sin comandera, en <b>Cambiar impresora</b> elegí <b>★ Vista previa en pantalla</b>: se ven acá y no se imprime nada.</p>
     <div class="botones" style="margin-top:0"><button id="vista-limpiar">Limpiar</button></div>
     <div class="papeles" id="papeles"><p class="ayuda" style="margin:8px 0">Todavía no se imprimió nada desde que se abrió el programa.</p></div>
   </section>
@@ -273,18 +282,50 @@ $('inicio').onchange = async e => { try { await api('/api/inicio', { activo: e.t
 $('srv-guardar').onclick = async () => { try { await api('/api/servidor', { servidor: $('srv').value }); msg('msg-srv', 'Conectado.', true); await refrescar(); } catch (e) { msg('msg-srv', e.message) } };
 
 let firmaVistas = '';
-async function refrescarVistas() {
-  let v; try { v = await api('/api/vistas'); } catch { return; }
-  const firma = v.map(t => t.hora + t.bytes + t.impresora).join('|'); if (firma === firmaVistas) return; firmaVistas = firma;
-  if (!v.length) { $('papeles').innerHTML = '<p class="ayuda" style="margin:8px 0">Todavía no se imprimió nada desde que se abrió el programa.</p>'; return; }
-  $('papeles').innerHTML = v.map(t => `<div><div class="papel-cab">${esc(t.hora)} · ${esc(t.documento.replace('CloudTicket ', ''))} → ${esc(t.impresora.startsWith('★') ? 'solo pantalla' : t.impresora)}${t.error ? ` · <b style="color:var(--rojo)">no se pudo imprimir</b>` : ''}</div><div class="papel">` +
-    (t.imagen ? '<div class="ln">[el ticket es una imagen]</div>' : '') +
+const abiertas = new Set();
+const claveVista = t => t.hora + '|' + t.bytes + '|' + t.impresora;
+const textoLinea = l => (l.s || []).map(sg => sg.t).join('').replace(/\s+/g, ' ').trim();
+// Lo que se lee en la lista: los renglones grandes del ticket ("COMANDA #17 · DELIVERY")
+function tituloVista(t) {
+  if (t.imagen) return 'Ticket como imagen';
+  const grandes = t.lineas.filter(l => !l.corte && (l.s || []).some(sg => (sg.w || 1) > 1 || (sg.h || 1) > 1)).map(textoLinea).filter(Boolean);
+  if (grandes.length) return grandes.slice(0, 2).join(' · ');
+  const primera = t.lineas.map(textoLinea).find(Boolean);
+  return primera || t.documento.replace('CloudTicket ', '');
+}
+function papelVista(t) {
+  return '<div class="papel">' + (t.imagen ? '<div class="ln">[el ticket es una imagen]</div>' : '') +
     t.lineas.map(l => l.corte ? '<div class="corte"></div>' :
       `<div class="ln" style="text-align:${l.a || 'left'}">` + (l.s || []).map(sg => {
         const w = sg.w || 1, h = sg.h || 1;
         const estilo = h > 1 || w > 1 ? `font-size:${h}em;line-height:1.1;${w !== h ? `transform:scaleX(${w / h});` : ''}` : '';
-        return `<span class="seg${sg.b ? '' : ''}${sg.i ? ' inv' : ''}" style="${sg.b ? 'font-weight:700;' : ''}${estilo}">${esc(sg.t)}</span>`;
-      }).join('') + '</div>').join('') + '</div></div>').join('');
+        return `<span class="seg${sg.i ? ' inv' : ''}" style="${sg.b ? 'font-weight:700;' : ''}${estilo}">${esc(sg.t)}</span>`;
+      }).join('') + '</div>').join('') + '</div>';
+}
+let ultimasVistas = [];
+function pintarVistas() {
+  const v = ultimasVistas;
+  if (!v.length) { $('papeles').innerHTML = '<p class="ayuda" style="margin:8px 0">Todavía no se imprimió nada desde que se abrió el programa.</p>'; return; }
+  $('papeles').innerHTML = v.map((t, i) => {
+    const k = claveVista(t), abierto = abiertas.has(k);
+    const destino = t.impresora.startsWith('★') ? 'solo pantalla' : t.impresora;
+    return `<div class="imp${abierto ? ' abierto' : ''}"><button class="imp-fila" data-i="${i}" aria-expanded="${abierto}">` +
+      `<span class="imp-hora">${esc(t.hora)}</span><span class="imp-titulo">${esc(tituloVista(t))}</span>` +
+      `<span class="imp-dest">${t.error ? '<b style="color:var(--rojo)">no se pudo imprimir</b> · ' : ''}${esc(destino)}</span><span class="imp-flecha">›</span></button>` +
+      (abierto ? `<div class="imp-papel">${papelVista(t)}</div>` : '') + '</div>';
+  }).join('');
+  $('papeles').querySelectorAll('.imp-fila').forEach(b => b.onclick = () => {
+    const k = claveVista(ultimasVistas[+b.dataset.i]);
+    abiertas.has(k) ? abiertas.delete(k) : abiertas.add(k);
+    pintarVistas();
+  });
+}
+async function refrescarVistas() {
+  let v; try { v = await api('/api/vistas'); } catch { return; }
+  const firma = v.map(claveVista).join('#'); if (firma === firmaVistas) return; firmaVistas = firma;
+  ultimasVistas = v;
+  const vivas = new Set(v.map(claveVista)); for (const k of [...abiertas]) if (!vivas.has(k)) abiertas.delete(k);
+  pintarVistas();
 }
 $('vista-limpiar').onclick = async () => { await api('/api/vistas/limpiar', {}); firmaVistas = '-'; refrescarVistas(); };
 $('salir').onclick = async () => {
